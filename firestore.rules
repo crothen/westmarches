@@ -12,7 +12,10 @@ service cloud.firestore {
       return isAuthenticated() && getUserRole() == 'admin';
     }
     function isDm() {
-      return isAuthenticated() && (getUserRole() == 'dm' || getUserRole() == 'admin');
+      return isAuthenticated() && getUserRole() == 'dm';
+    }
+    function isDmOrAdmin() {
+      return isDm() || isAdmin();
     }
 
     // Users

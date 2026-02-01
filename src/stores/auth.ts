@@ -11,7 +11,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!firebaseUser.value)
   const isAdmin = computed(() => appUser.value?.role === 'admin')
-  const isDm = computed(() => appUser.value?.role === 'dm' || isAdmin.value)
+  const isDm = computed(() => appUser.value?.role === 'dm')
   const role = computed(() => appUser.value?.role || 'player')
 
   function init() {
