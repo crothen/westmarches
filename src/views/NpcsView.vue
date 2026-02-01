@@ -216,6 +216,7 @@ async function saveNote(npcId: string) {
       authorName: auth.appUser?.displayName || 'Unknown',
       content: newNoteContent.value.trim(),
       isPrivate: newNotePrivate.value,
+      replies: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     }

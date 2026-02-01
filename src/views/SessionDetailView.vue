@@ -17,6 +17,8 @@ const newNoteContent = ref('')
 const newNotePrivate = ref(false)
 const editingNoteId = ref<string | null>(null)
 const editContent = ref('')
+const replyingTo = ref<string | null>(null)
+const replyContent = ref('')
 let unsubNotes: (() => void) | null = null
 
 const sessionId = computed(() => route.params.id as string)
@@ -114,6 +116,50 @@ async function generateSessionArt() {
     await updateDoc(doc(db, 'sessions', session.value.id), { imageUrl: url })
     session.value = { ...session.value, imageUrl: url } as any
   }
+}
+
+async function addReply(noteId: string) {
+  if (!replyContent.value.trim() || !auth.firebaseUser) return
+  const note = notes.value.find(n => n.id === noteId)
+  if (!note) return
+
+  const newReply = {
+    id: crypto.randomUUID(),
+    userId: auth.firebaseUser.uid,
+    authorName: auth.appUser?.displayName || 'Unknown',
+    content: replyContent.value.trim(),
+    createdAt: Timestamp.now()
+  }
+
+  const currentReplies = note.replies || []
+  await updateDoc(doc(db, 'sessionNotes', noteId), {
+    replies: [...currentReplies, newReply],
+    updatedAt: Timestamp.now()
+  })
+  replyContent.value = ''
+  replyingTo.value = null
+}
+
+async function deleteReply(noteId: string, replyId: string) {
+  const note = notes.value.find(n => n.id === noteId)
+  if (!note) return
+  const updatedReplies = (note.replies || []).map(r =>
+    r.id === replyId ? { ...r, content: '', deleted: true } : r
+  )
+  await updateDoc(doc(db, 'sessionNotes', noteId), {
+    replies: updatedReplies,
+    updatedAt: Timestamp.now()
+  })
+}
+
+function canDeleteReply(reply: any): boolean {
+  return (reply.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin) && !reply.deleted
+}
+
+function formatDate(date: any): string {
+  if (!date) return ''
+  const d = date.toDate ? date.toDate() : new Date(date)
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
 /** Only author can edit their own notes */
@@ -233,6 +279,35 @@ function canDeleteNote(note: SessionNote): boolean {
 
               <!-- Display mode -->
               <p v-else class="text-zinc-300 text-sm whitespace-pre-wrap">{{ note.content }}</p>
+
+              <!-- Replies -->
+              <div v-if="note.replies?.length" class="mt-2 pl-3 border-l border-white/[0.06] space-y-2">
+                <div v-for="reply in note.replies" :key="reply.id" class="text-sm">
+                  <div v-if="reply.deleted" class="text-zinc-600 text-xs italic">🗑️ This reply was deleted</div>
+                  <template v-else>
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-[#ef233c]/80 text-xs font-medium">{{ reply.authorName }}</span>
+                        <span class="text-zinc-600 text-[0.65rem]">{{ formatDate(reply.createdAt) }}</span>
+                      </div>
+                      <button v-if="canDeleteReply(reply)" @click="deleteReply(note.id, reply.id)" class="text-zinc-500 hover:text-red-400 text-xs transition-colors">Delete</button>
+                    </div>
+                    <p class="text-zinc-400 text-sm">{{ reply.content }}</p>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Reply button / form -->
+              <div v-if="auth.isAuthenticated" class="mt-2">
+                <button v-if="replyingTo !== note.id" @click="replyingTo = note.id" class="text-zinc-600 hover:text-[#ef233c] text-xs transition-colors">Reply</button>
+                <div v-else class="mt-1.5">
+                  <textarea v-model="replyContent" rows="2" placeholder="Write a reply..." class="input w-full text-sm" />
+                  <div class="flex gap-2 mt-1.5 justify-end">
+                    <button @click="replyingTo = null; replyContent = ''" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">Cancel</button>
+                    <button @click="addReply(note.id)" :disabled="!replyContent.trim()" class="btn !text-xs !py-1 !px-3">Reply</button>
+                  </div>
+                </div>
+              </div>
             </template>
           </div>
         </div>

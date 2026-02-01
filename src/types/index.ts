@@ -11,13 +11,24 @@ export interface AppUser {
   createdAt: Date
 }
 
+export interface NoteReply {
+  id: string
+  userId: string
+  authorName: string
+  content: string
+  deleted?: boolean
+  createdAt: Date
+}
+
 export interface NpcNote {
   id: string
   npcId: string
   userId: string
   authorName: string
   content: string
-  isPrivate: boolean  // private = only visible to author and DMs
+  isPrivate: boolean
+  deleted?: boolean
+  replies: NoteReply[]
   createdAt: Date
   updatedAt: Date
 }
@@ -164,7 +175,9 @@ export interface SessionNote {
   userId: string
   authorName: string
   content: string
-  isPrivate: boolean  // private = only visible to author and DMs
+  isPrivate: boolean
+  deleted?: boolean
+  replies: NoteReply[]
   createdAt: Date
   updatedAt: Date
 }
