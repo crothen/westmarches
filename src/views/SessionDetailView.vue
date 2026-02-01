@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { doc, getDoc, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore'
+import { doc, getDoc, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
@@ -95,7 +95,13 @@ async function saveEdit(noteId: string) {
 
 async function deleteNote(noteId: string) {
   if (!confirm('Delete this note?')) return
-  await deleteDoc(doc(db, 'sessionNotes', noteId))
+  // Soft delete
+  await updateDoc(doc(db, 'sessionNotes', noteId), {
+    content: '',
+    deleted: true,
+    deletedBy: auth.firebaseUser?.uid,
+    updatedAt: Timestamp.now()
+  })
 }
 
 async function generateSessionArt() {
@@ -110,8 +116,14 @@ async function generateSessionArt() {
   }
 }
 
+/** Only author can edit their own notes */
 function canEditNote(note: SessionNote): boolean {
-  return note.userId === auth.firebaseUser?.uid || auth.isDm
+  return note.userId === auth.firebaseUser?.uid && !(note as any).deleted
+}
+
+/** Author, DMs, and admins can delete notes */
+function canDeleteNote(note: SessionNote): boolean {
+  return (note.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin) && !(note as any).deleted
 }
 </script>
 
@@ -193,29 +205,35 @@ function canEditNote(note: SessionNote): boolean {
 
         <div v-for="note in visibleNotes" :key="note.id" class="card p-4 mb-3 relative z-10">
           <div class="relative z-10">
-            <div class="flex items-center justify-between mb-2">
-              <div class="flex items-center gap-2">
-                <span class="text-[#ef233c] font-medium text-sm">{{ note.authorName }}</span>
-                <span v-if="note.isPrivate" class="text-xs bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded-md border border-red-500/20">🔒 Private</span>
-                <span class="text-zinc-700 text-xs">{{ (note.createdAt as any)?.toDate ? new Date((note.createdAt as any).toDate()).toLocaleDateString() : '' }}</span>
-              </div>
-              <div v-if="canEditNote(note)" class="flex gap-2">
-                <button @click="startEdit(note)" class="text-zinc-600 hover:text-[#ef233c] text-xs transition-colors">Edit</button>
-                <button @click="deleteNote(note.id)" class="text-zinc-600 hover:text-red-400 text-xs transition-colors">Delete</button>
-              </div>
+            <!-- Deleted placeholder -->
+            <div v-if="(note as any).deleted" class="text-zinc-600 text-sm italic">
+              🗑️ This note was deleted
             </div>
-
-            <!-- Edit mode -->
-            <div v-if="editingNoteId === note.id">
-              <textarea v-model="editContent" rows="3" class="input w-full text-sm mb-2" />
-              <div class="flex gap-2 justify-end">
-                <button @click="cancelEdit" class="btn-ghost text-sm !py-1 !px-3">Cancel</button>
-                <button @click="saveEdit(note.id)" class="btn text-sm !py-1 !px-3">Save</button>
+            <template v-else>
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-[#ef233c] font-medium text-sm">{{ note.authorName }}</span>
+                  <span v-if="note.isPrivate" class="text-xs bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded-md border border-red-500/20">🔒 Private</span>
+                  <span class="text-zinc-600 text-xs">{{ (note.createdAt as any)?.toDate ? new Date((note.createdAt as any).toDate()).toLocaleDateString() : '' }}</span>
+                </div>
+                <div class="flex gap-2">
+                  <button v-if="canEditNote(note)" @click="startEdit(note)" class="text-zinc-500 hover:text-[#ef233c] text-xs transition-colors">Edit</button>
+                  <button v-if="canDeleteNote(note)" @click="deleteNote(note.id)" class="text-zinc-500 hover:text-red-400 text-xs transition-colors">Delete</button>
+                </div>
               </div>
-            </div>
 
-            <!-- Display mode -->
-            <p v-else class="text-zinc-300 text-sm whitespace-pre-wrap">{{ note.content }}</p>
+              <!-- Edit mode -->
+              <div v-if="editingNoteId === note.id">
+                <textarea v-model="editContent" rows="3" class="input w-full text-sm mb-2" />
+                <div class="flex gap-2 justify-end">
+                  <button @click="cancelEdit" class="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
+                  <button @click="saveEdit(note.id)" class="btn text-sm !py-1 !px-3">Save</button>
+                </div>
+              </div>
+
+              <!-- Display mode -->
+              <p v-else class="text-zinc-300 text-sm whitespace-pre-wrap">{{ note.content }}</p>
+            </template>
           </div>
         </div>
 

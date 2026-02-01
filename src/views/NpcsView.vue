@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore'
+import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
@@ -29,6 +29,8 @@ const newNoteNpc = ref<string | null>(null)
 const newNoteContent = ref('')
 const newNotePrivate = ref(false)
 const savingNote = ref(false)
+const editingNoteId = ref<string | null>(null)
+const editingNoteContent = ref('')
 
 onMounted(async () => {
   try {
@@ -189,22 +191,54 @@ async function saveNote(npcId: string) {
   }
 }
 
+function startEditNote(note: NpcNote) {
+  editingNoteId.value = note.id
+  editingNoteContent.value = note.content
+}
+
+function cancelEditNote() {
+  editingNoteId.value = null
+  editingNoteContent.value = ''
+}
+
+async function saveEditNote(note: NpcNote) {
+  if (!editingNoteContent.value.trim()) return
+  try {
+    await updateDoc(doc(db, 'npcNotes', note.id), {
+      content: editingNoteContent.value.trim(),
+      updatedAt: new Date(),
+    })
+    note.content = editingNoteContent.value.trim()
+    editingNoteId.value = null
+    editingNoteContent.value = ''
+  } catch (e) {
+    console.error('Failed to edit note:', e)
+  }
+}
+
 async function deleteNote(note: NpcNote) {
   if (!confirm('Delete this note?')) return
   try {
-    await deleteDoc(doc(db, 'npcNotes', note.id))
-    const arr = npcNotes.value[note.npcId]
-    if (arr) {
-      const idx = arr.findIndex(n => n.id === note.id)
-      if (idx >= 0) arr.splice(idx, 1)
-    }
+    // Soft delete — mark as deleted, keep placeholder
+    await updateDoc(doc(db, 'npcNotes', note.id), {
+      content: '',
+      deleted: true,
+      deletedBy: auth.firebaseUser?.uid,
+      updatedAt: new Date(),
+    })
+    ;(note as any).deleted = true
+    note.content = ''
   } catch (e) {
     console.error('Failed to delete note:', e)
   }
 }
 
+function canEditNote(note: NpcNote) {
+  return note.userId === auth.firebaseUser?.uid && !(note as any).deleted
+}
+
 function canDeleteNote(note: NpcNote) {
-  return note.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin
+  return (note.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin) && !(note as any).deleted
 }
 
 function formatDate(date: any): string {
@@ -349,20 +383,36 @@ async function generatePortrait(npc: Npc) {
                 <h4 class="label text-xs">Notes</h4>
                 <div
                   v-for="note in npcNotes[npc.id]" :key="note.id"
-                  :class="['p-2.5 rounded-lg text-sm', note.isPrivate ? 'bg-amber-500/5 border border-amber-500/10' : 'bg-white/[0.03]']"
+                  :class="['p-2.5 rounded-lg text-sm', (note as any).deleted ? 'bg-white/[0.01]' : note.isPrivate ? 'bg-amber-500/5 border border-amber-500/10' : 'bg-white/[0.03]']"
                   @click.stop
                 >
-                  <div class="flex items-center justify-between mb-1">
-                    <div class="flex items-center gap-2">
-                      <span class="text-zinc-400 text-xs font-medium">{{ note.authorName }}</span>
-                      <span v-if="note.isPrivate" class="text-[0.6rem] text-amber-500/70">🔒 Private</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <span class="text-zinc-600 text-[0.65rem]">{{ formatDate(note.createdAt) }}</span>
-                      <button v-if="canDeleteNote(note)" @click.stop="deleteNote(note)" class="text-zinc-700 hover:text-red-400 text-xs transition-colors">✕</button>
-                    </div>
+                  <!-- Deleted placeholder -->
+                  <div v-if="(note as any).deleted" class="text-zinc-600 text-xs italic">
+                    <span>🗑️ This note was deleted</span>
                   </div>
-                  <p class="text-zinc-400 text-sm whitespace-pre-wrap">{{ note.content }}</p>
+                  <!-- Normal note -->
+                  <template v-else>
+                    <div class="flex items-center justify-between mb-1">
+                      <div class="flex items-center gap-2">
+                        <span class="text-zinc-400 text-xs font-medium">{{ note.authorName }}</span>
+                        <span v-if="note.isPrivate" class="text-[0.6rem] text-amber-500/70">🔒 Private</span>
+                        <span class="text-zinc-600 text-[0.65rem]">{{ formatDate(note.createdAt) }}</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button v-if="canEditNote(note)" @click.stop="startEditNote(note)" class="text-zinc-500 hover:text-[#ef233c] text-xs transition-colors">Edit</button>
+                        <button v-if="canDeleteNote(note)" @click.stop="deleteNote(note)" class="text-zinc-500 hover:text-red-400 text-xs transition-colors">Delete</button>
+                      </div>
+                    </div>
+                    <!-- Edit mode -->
+                    <div v-if="editingNoteId === note.id" class="space-y-2">
+                      <textarea v-model="editingNoteContent" class="input w-full text-sm" rows="2" />
+                      <div class="flex gap-2 justify-end">
+                        <button @click.stop="cancelEditNote" class="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
+                        <button @click.stop="saveEditNote(note)" class="btn !text-xs !py-1 !px-3">Save</button>
+                      </div>
+                    </div>
+                    <p v-else class="text-zinc-400 text-sm whitespace-pre-wrap">{{ note.content }}</p>
+                  </template>
                 </div>
               </div>
             </div>

@@ -236,6 +236,7 @@ export interface HexNoteReply {
   userId: string
   authorName: string
   content: string
+  deleted?: boolean
   createdAt: Date
 }
 

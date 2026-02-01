@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, getDocs } from 'firebase/firestore'
+import { collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, doc, Timestamp, getDocs } from 'firebase/firestore'
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '../../firebase/config'
 import { useAuthStore } from '../../stores/auth'
@@ -191,13 +191,63 @@ async function addReply(noteId: string) {
   replyingTo.value = null
 }
 
+// Edit note
+const editingHexNoteId = ref<string | null>(null)
+const editingHexNoteContent = ref('')
+
+function startEditHexNote(note: HexNote) {
+  editingHexNoteId.value = note.id
+  editingHexNoteContent.value = note.content
+}
+
+function cancelEditHexNote() {
+  editingHexNoteId.value = null
+  editingHexNoteContent.value = ''
+}
+
+async function saveEditHexNote(noteId: string) {
+  if (!editingHexNoteContent.value.trim()) return
+  await updateDoc(doc(db, 'hexNotes', noteId), {
+    content: editingHexNoteContent.value.trim(),
+    updatedAt: Timestamp.now()
+  })
+  editingHexNoteId.value = null
+  editingHexNoteContent.value = ''
+}
+
 async function deleteNote(noteId: string) {
-  if (!confirm('Delete this note and all replies?')) return
-  await deleteDoc(doc(db, 'hexNotes', noteId))
+  if (!confirm('Delete this note?')) return
+  // Soft delete
+  await updateDoc(doc(db, 'hexNotes', noteId), {
+    content: '',
+    deleted: true,
+    deletedBy: auth.firebaseUser?.uid,
+    updatedAt: Timestamp.now()
+  })
+}
+
+async function deleteReply(noteId: string, replyId: string) {
+  const note = notes.value.find(n => n.id === noteId)
+  if (!note) return
+  const updatedReplies = (note.replies || []).map(r =>
+    r.id === replyId ? { ...r, content: '', deleted: true } : r
+  )
+  await updateDoc(doc(db, 'hexNotes', noteId), {
+    replies: updatedReplies,
+    updatedAt: Timestamp.now()
+  })
+}
+
+function canEditNote(note: HexNote): boolean {
+  return note.userId === auth.firebaseUser?.uid && !(note as any).deleted
 }
 
 function canDelete(note: HexNote): boolean {
-  return note.userId === auth.firebaseUser?.uid || auth.isDm
+  return (note.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin) && !(note as any).deleted
+}
+
+function canDeleteReply(reply: any): boolean {
+  return (reply.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin) && !reply.deleted
 }
 
 function formatDate(date: any): string {
@@ -365,31 +415,52 @@ async function removeDetailMap() {
         <div v-if="visibleNotes.length === 0" class="text-zinc-700 text-sm">No notes on this hex yet.</div>
 
         <div v-for="note in visibleNotes" :key="note.id" class="card-flat !rounded-lg p-3 mb-2">
-          <!-- Note header -->
-          <div class="flex items-center justify-between mb-1.5">
-            <div class="flex items-center gap-1.5">
-              <span class="text-[#ef233c] text-xs font-medium">{{ note.authorName }}</span>
-              <span v-if="note.isPrivate" class="text-[0.6rem] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded-full">🔒</span>
-              <span class="text-zinc-700 text-[0.65rem]">{{ formatDate(note.createdAt) }}</span>
-            </div>
-            <button v-if="canDelete(note)" @click="deleteNote(note.id)" class="text-zinc-700 hover:text-red-400 transition-colors">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </button>
+          <!-- Deleted placeholder -->
+          <div v-if="(note as any).deleted" class="text-zinc-600 text-xs italic">
+            🗑️ This note was deleted
           </div>
-
-          <!-- Note content -->
-          <p class="text-zinc-300 text-sm whitespace-pre-wrap">{{ note.content }}</p>
-
-          <!-- Replies -->
-          <div v-if="note.replies?.length" class="mt-2 pl-3 border-l border-white/[0.06] space-y-2">
-            <div v-for="reply in note.replies" :key="reply.id" class="text-sm">
+          <template v-else>
+            <!-- Note header -->
+            <div class="flex items-center justify-between mb-1.5">
               <div class="flex items-center gap-1.5">
-                <span class="text-[#ef233c]/80 text-xs font-medium">{{ reply.authorName }}</span>
-                <span class="text-zinc-700 text-[0.65rem]">{{ formatDate(reply.createdAt) }}</span>
+                <span class="text-[#ef233c] text-xs font-medium">{{ note.authorName }}</span>
+                <span v-if="note.isPrivate" class="text-[0.6rem] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded-full">🔒</span>
+                <span class="text-zinc-600 text-[0.65rem]">{{ formatDate(note.createdAt) }}</span>
               </div>
-              <p class="text-zinc-500 text-sm">{{ reply.content }}</p>
+              <div class="flex items-center gap-2">
+                <button v-if="canEditNote(note)" @click="startEditHexNote(note)" class="text-zinc-500 hover:text-[#ef233c] text-xs transition-colors">Edit</button>
+                <button v-if="canDelete(note)" @click="deleteNote(note.id)" class="text-zinc-500 hover:text-red-400 text-xs transition-colors">Delete</button>
+              </div>
             </div>
-          </div>
+
+            <!-- Edit mode -->
+            <div v-if="editingHexNoteId === note.id" class="space-y-2">
+              <textarea v-model="editingHexNoteContent" class="input w-full text-sm" rows="2" />
+              <div class="flex gap-2 justify-end">
+                <button @click="cancelEditHexNote" class="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
+                <button @click="saveEditHexNote(note.id)" class="btn !text-xs !py-1 !px-3">Save</button>
+              </div>
+            </div>
+            <!-- Note content -->
+            <p v-else class="text-zinc-300 text-sm whitespace-pre-wrap">{{ note.content }}</p>
+
+            <!-- Replies -->
+            <div v-if="note.replies?.length" class="mt-2 pl-3 border-l border-white/[0.06] space-y-2">
+              <div v-for="reply in note.replies" :key="reply.id" class="text-sm">
+                <div v-if="reply.deleted" class="text-zinc-600 text-xs italic">🗑️ This reply was deleted</div>
+                <template v-else>
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[#ef233c]/80 text-xs font-medium">{{ reply.authorName }}</span>
+                      <span class="text-zinc-600 text-[0.65rem]">{{ formatDate(reply.createdAt) }}</span>
+                    </div>
+                    <button v-if="canDeleteReply(reply)" @click="deleteReply(note.id, reply.id)" class="text-zinc-500 hover:text-red-400 text-xs transition-colors">Delete</button>
+                  </div>
+                  <p class="text-zinc-400 text-sm">{{ reply.content }}</p>
+                </template>
+              </div>
+            </div>
+          </template>
 
           <!-- Reply button / form -->
           <div class="mt-2">

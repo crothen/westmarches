@@ -75,7 +75,9 @@ service cloud.firestore {
     match /npcNotes/{noteId} {
       allow read: if isAuthenticated() && (!resource.data.isPrivate || isDmOrAdmin() || resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
+      // Author can edit content; DMs/admins can soft-delete (set deleted=true)
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
     }
 
     // Organizations
