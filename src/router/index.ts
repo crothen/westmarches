@@ -1,0 +1,42 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+
+const routes = [
+  { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
+  { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guest: true } },
+  { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guest: true } },
+  { path: '/characters', name: 'characters', component: () => import('../views/CharactersView.vue'), meta: { auth: true } },
+  { path: '/characters/:id', name: 'character-detail', component: () => import('../views/CharacterDetailView.vue'), meta: { auth: true } },
+  { path: '/locations', name: 'locations', component: () => import('../views/LocationsView.vue'), meta: { auth: true } },
+  { path: '/map', name: 'map', component: () => import('../views/MapView.vue'), meta: { auth: true } },
+  { path: '/inventory', name: 'inventory', component: () => import('../views/InventoryView.vue'), meta: { auth: true } },
+  { path: '/npcs', name: 'npcs', component: () => import('../views/NpcsView.vue'), meta: { auth: true } },
+  { path: '/organizations', name: 'organizations', component: () => import('../views/OrganizationsView.vue'), meta: { auth: true } },
+  { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { auth: true, role: 'admin' } },
+  { path: '/dm', name: 'dm', component: () => import('../views/DmView.vue'), meta: { auth: true, role: 'dm' } },
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes,
+})
+
+router.beforeEach((to, _from, next) => {
+  const authStore = useAuthStore()
+
+  if (to.meta.auth && !authStore.isAuthenticated) {
+    return next({ name: 'login' })
+  }
+  if (to.meta.guest && authStore.isAuthenticated) {
+    return next({ name: 'home' })
+  }
+  if (to.meta.role === 'admin' && !authStore.isAdmin) {
+    return next({ name: 'home' })
+  }
+  if (to.meta.role === 'dm' && !authStore.isDm) {
+    return next({ name: 'home' })
+  }
+  next()
+})
+
+export default router

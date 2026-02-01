@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    function isDm() {
+      return isAuthenticated() && (getUserRole() == 'dm' || getUserRole() == 'admin');
+    }
+
+    // Users
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if request.auth.uid == userId || isAdmin();
+    }
+
+    // Characters
+    match /characters/{charId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDm());
+    }
+
+    // Locations
+    match /locations/{locId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isDm();
+    }
+
+    // Hex tags
+    match /hexTags/{tagId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.addedBy == request.auth.uid || isDm());
+    }
+
+    // Party inventory
+    match /inventory/{itemId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // NPCs
+    match /npcs/{npcId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isDm();
+    }
+
+    // Organizations
+    match /organizations/{orgId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isDm();
+    }
+
+    // Comments
+    match /comments/{commentId} {
+      allow read: if isAuthenticated() && (!resource.data.isPrivate || isDm() || resource.data.authorId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || isDm());
+    }
+
+    // Votes
+    match /votes/{voteId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // Likes
+    match /likes/{likeId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isAuthenticated();
+    }
+  }
+}

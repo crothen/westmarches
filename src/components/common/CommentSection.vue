@@ -1,0 +1,60 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useAuthStore } from '../../stores/auth'
+
+defineProps<{
+  targetType: string
+  targetId: string
+  comments: Array<{
+    id: string
+    authorName: string
+    content: string
+    isPrivate: boolean
+    createdAt: Date
+  }>
+}>()
+
+const emit = defineEmits<{
+  'add-comment': [content: string, isPrivate: boolean]
+}>()
+
+const auth = useAuthStore()
+const newComment = ref('')
+const isPrivate = ref(false)
+
+function submitComment() {
+  if (!newComment.value.trim()) return
+  emit('add-comment', newComment.value.trim(), isPrivate.value)
+  newComment.value = ''
+  isPrivate.value = false
+}
+</script>
+
+<template>
+  <div class="mt-6">
+    <h3 class="text-lg font-semibold text-stone-200 mb-3">💬 Comments</h3>
+
+    <div v-if="comments.length === 0" class="text-stone-500 text-sm">No comments yet.</div>
+
+    <div v-for="comment in comments" :key="comment.id" class="bg-stone-800 border border-stone-700 rounded p-3 mb-2">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-amber-500 text-sm font-medium">{{ comment.authorName }}</span>
+        <span v-if="comment.isPrivate" class="text-xs bg-red-900/50 text-red-400 px-1.5 py-0.5 rounded">Private</span>
+      </div>
+      <p class="text-stone-300 text-sm">{{ comment.content }}</p>
+    </div>
+
+    <div v-if="auth.isAuthenticated" class="mt-4">
+      <textarea v-model="newComment" rows="2" placeholder="Add a comment..." class="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-stone-100 focus:border-amber-500 focus:outline-none text-sm" />
+      <div class="flex items-center justify-between mt-2">
+        <label class="flex items-center gap-2 text-sm text-stone-400">
+          <input v-model="isPrivate" type="checkbox" class="accent-amber-500" />
+          Private (DM only)
+        </label>
+        <button @click="submitComment" class="bg-amber-600 hover:bg-amber-500 text-stone-900 text-sm font-medium px-4 py-1.5 rounded transition-colors">
+          Post
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
