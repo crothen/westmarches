@@ -9,6 +9,7 @@ const routes = [
   { path: '/characters/:id', name: 'character-detail', component: () => import('../views/CharacterDetailView.vue'), meta: { auth: true } },
   { path: '/locations', name: 'locations', component: () => import('../views/LocationsView.vue'), meta: { auth: true } },
   { path: '/locations/:id', name: 'location-detail', component: () => import('../views/LocationDetailView.vue'), meta: { auth: true } },
+  { path: '/features', name: 'features', component: () => import('../views/FeaturesView.vue'), meta: { auth: true } },
   { path: '/map', name: 'map', component: () => import('../views/MapView.vue'), meta: { auth: true } },
   { path: '/inventory', name: 'inventory', component: () => import('../views/InventoryView.vue'), meta: { auth: true } },
   { path: '/npcs', name: 'npcs', component: () => import('../views/NpcsView.vue'), meta: { auth: true } },

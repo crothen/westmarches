@@ -5,20 +5,74 @@ defineProps<{ open: boolean }>()
 defineEmits<{ close: [] }>()
 const auth = useAuthStore()
 
-const navItems = [
-  { to: '/', label: 'Home', icon: '🏠', show: 'all' },
-  { to: '/characters', label: 'Characters', icon: '🧙', show: 'all' },
-  { to: '/locations', label: 'Locations', icon: '📍', show: 'all' },
-  { to: '/map', label: 'Map', icon: '🗺️', show: 'all' },
-  { to: '/inventory', label: 'Inventory', icon: '🎒', show: 'all' },
-  { to: '/npcs', label: 'NPCs', icon: '👤', show: 'all' },
-  { to: '/organizations', label: 'Organizations', icon: '🏛️', show: 'all' },
-  { to: '/sessions', label: 'Session Log', icon: '📖', show: 'all' },
-  { to: '/missions', label: 'Missions', icon: '⚔️', show: 'all' },
-  { to: '/schedule', label: 'Schedule', icon: '📅', show: 'all' },
-  { to: '/dm', label: 'DM Panel', icon: '📋', show: 'dm' },
-  { to: '/admin', label: 'Admin', icon: '⚙️', show: 'admin' },
+interface NavItem {
+  to: string
+  label: string
+  icon: string
+  show: 'all' | 'dm' | 'admin'
+}
+
+interface NavSection {
+  title: string
+  items: NavItem[]
+}
+
+const sections: NavSection[] = [
+  {
+    title: '',
+    items: [
+      { to: '/', label: 'Home', icon: '🏠', show: 'all' },
+    ]
+  },
+  {
+    title: 'World',
+    items: [
+      { to: '/map', label: 'Map', icon: '🗺️', show: 'all' },
+      { to: '/locations', label: 'Locations', icon: '📍', show: 'all' },
+      { to: '/features', label: 'Points of Interest', icon: '📌', show: 'all' },
+    ]
+  },
+  {
+    title: 'People',
+    items: [
+      { to: '/characters', label: 'Characters', icon: '🧙', show: 'all' },
+      { to: '/npcs', label: 'NPCs', icon: '👤', show: 'all' },
+    ]
+  },
+  {
+    title: 'Factions & Missions',
+    items: [
+      { to: '/organizations', label: 'Organizations', icon: '🏛️', show: 'all' },
+      { to: '/missions', label: 'Missions', icon: '⚔️', show: 'all' },
+    ]
+  },
+  {
+    title: 'Journal',
+    items: [
+      { to: '/sessions', label: 'Session Log', icon: '📖', show: 'all' },
+      { to: '/schedule', label: 'Schedule', icon: '📅', show: 'all' },
+      { to: '/inventory', label: 'Inventory', icon: '🎒', show: 'all' },
+    ]
+  },
+  {
+    title: 'Management',
+    items: [
+      { to: '/dm', label: 'DM Panel', icon: '📋', show: 'dm' },
+      { to: '/admin', label: 'Admin', icon: '⚙️', show: 'admin' },
+    ]
+  },
 ]
+
+function isVisible(item: NavItem): boolean {
+  if (item.show === 'all') return true
+  if (item.show === 'dm') return auth.isDm || auth.isAdmin
+  if (item.show === 'admin') return auth.isAdmin
+  return false
+}
+
+function hasVisibleItems(section: NavSection): boolean {
+  return section.items.some(isVisible)
+}
 </script>
 
 <template>
@@ -32,18 +86,26 @@ const navItems = [
       open ? 'translate-x-0' : '-translate-x-full'
     ]"
   >
-    <nav class="p-3 space-y-0.5 mt-1">
-      <template v-for="item in navItems" :key="item.to">
-        <RouterLink
-          v-if="item.show === 'all' || (item.show === 'dm' && (auth.isDm || auth.isAdmin)) || (item.show === 'admin' && auth.isAdmin)"
-          :to="item.to"
-          class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-all duration-150"
-          active-class="!text-[#ef233c] bg-[#ef233c]/[0.06] hover:!bg-[#ef233c]/[0.1]"
-          @click="$emit('close')"
-        >
-          <span class="text-sm w-5 text-center">{{ item.icon }}</span>
-          <span class="font-medium">{{ item.label }}</span>
-        </RouterLink>
+    <nav class="p-3 mt-1">
+      <template v-for="(section, si) in sections" :key="si">
+        <div v-if="hasVisibleItems(section)">
+          <!-- Section title -->
+          <div v-if="section.title" class="px-3 pt-4 pb-1.5 first:pt-0">
+            <span class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-zinc-600" style="font-family: Manrope, sans-serif">{{ section.title }}</span>
+          </div>
+
+          <!-- Items -->
+          <RouterLink
+            v-for="item in section.items.filter(isVisible)" :key="item.to"
+            :to="item.to"
+            class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-all duration-150"
+            active-class="!text-[#ef233c] bg-[#ef233c]/[0.06] hover:!bg-[#ef233c]/[0.1]"
+            @click="$emit('close')"
+          >
+            <span class="text-sm w-5 text-center">{{ item.icon }}</span>
+            <span class="font-medium">{{ item.label }}</span>
+          </RouterLink>
+        </div>
       </template>
     </nav>
   </aside>
