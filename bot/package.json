@@ -1,0 +1,16 @@
+{
+  "name": "westmarches-bot",
+  "version": "1.0.0",
+  "description": "Discord bot bridging D&D group feedback to GitHub Issues",
+  "type": "module",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "register": "node register-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "octokit": "^4.1.2",
+    "dotenv": "^16.5.0"
+  }
+}
