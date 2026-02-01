@@ -110,6 +110,14 @@ service cloud.firestore {
       allow update: if isAuthenticated();
     }
 
+    // Hex Notes
+    match /hexNotes/{noteId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDm());
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDm());
+    }
+
     // Map data
     match /maps/{mapId} {
       allow read: if isAuthenticated();

@@ -204,3 +204,23 @@ export interface MissionVote {
   missionId: string
   votedAt: Date
 }
+
+export interface HexNote {
+  id: string
+  hexKey: string  // "x_y" format
+  userId: string
+  authorName: string
+  content: string
+  isPrivate: boolean  // private = only author and DM
+  replies: HexNoteReply[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface HexNoteReply {
+  id: string
+  userId: string
+  authorName: string
+  content: string
+  createdAt: Date
+}
