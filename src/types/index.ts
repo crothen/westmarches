@@ -35,13 +35,14 @@ export interface NpcNote {
 
 export interface Character {
   id: string
-  userId: string
+  userId?: string  // assigned user (set by admin/DM)
   name: string
   race: string
   class: string
   level: number
   description: string
   imageUrl?: string
+  galleryUrls?: string[]  // additional images, first = hero portrait
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -184,6 +185,11 @@ export interface SessionNote {
 
 export type MissionStatus = 'available' | 'in_progress' | 'completed' | 'failed'
 
+export interface MissionVoteEntry {
+  userId: string
+  userName: string
+}
+
 export interface Mission {
   id: string
   unitId: string  // organization/unit this belongs to
@@ -200,6 +206,7 @@ export interface Mission {
     currency: 'silver' | 'gold'
     note?: string  // for "most likely more than 50 gold each" etc
   }
+  votes?: MissionVoteEntry[]
   status: MissionStatus
   createdAt: Date
   updatedAt: Date
@@ -264,6 +271,9 @@ export interface CampaignLocation {
   mapImageUrl?: string  // city/town map image
   imageUrl?: string  // AI generated or uploaded image
   discoveredBy?: string
+  hidden?: boolean  // if true, only DM/Admin can see it
+  parentLocationId?: string  // nested location — e.g. dungeon inside a city
+  mapPosition?: { x: number; y: number }  // position on parent's map (percentage-based)
   tags: string[]
   createdAt: Date
   updatedAt: Date
@@ -281,6 +291,27 @@ export interface LocationFeature {
   // Position on the location's map image (percentage-based for responsiveness)
   mapPosition?: { x: number; y: number }
   discoveredBy?: string
+  hidden?: boolean  // if true, only DM/Admin can see it
+  tags: string[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+// --- Markers (Feature 2) ---
+
+export type MarkerType = 'clue' | 'battle' | 'danger' | 'puzzle' | 'mystery' | 'waypoint' | 'quest' | 'locked' | 'unlocked'
+
+export interface HexMarker {
+  id: string
+  type: MarkerType
+  name: string
+  description: string
+  hexKey?: string  // overworld position
+  locationId?: string  // parent location (for city/dungeon maps)
+  mapPosition?: { x: number; y: number }  // position on location map
+  hidden?: boolean
+  isPrivate?: boolean  // private = only creator and admins can see
+  createdBy?: string
   tags: string[]
   createdAt: Date
   updatedAt: Date

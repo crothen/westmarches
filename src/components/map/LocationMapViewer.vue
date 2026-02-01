@@ -7,6 +7,8 @@ const props = defineProps<{
   features: LocationFeature[]
   placingFeature: string | null
   isInteractive?: boolean
+  highlightedFeatureId?: string | null
+  maxHeight?: number
 }>()
 
 const emit = defineEmits<{
@@ -15,15 +17,11 @@ const emit = defineEmits<{
   'map-click': [x: number, y: number]
 }>()
 
-const typeIcons: Record<string, string> = {
-  inn: '🍺', shop: '🛒', temple: '⛪', shrine: '🕯️', blacksmith: '⚒️', tavern: '🍻', guild: '🏛️',
-  market: '🛍️', gate: '🚪', tower: '🗼', ruins: '🏚️', cave: '🕳️', bridge: '🌉',
-  well: '💧', monument: '🗿', graveyard: '⚰️', dock: '⚓', warehouse: '📦',
-  barracks: '⚔️', library: '📚', other: '📌'
-}
+import { getIconPath } from '../../lib/icons'
 
 const container = ref<HTMLElement | null>(null)
 const imgEl = ref<HTMLImageElement | null>(null)
+const imgAspect = ref(0)
 
 // Camera state
 const zoom = ref(1)
@@ -32,12 +30,19 @@ const panY = ref(0)
 const isDragging = ref(false)
 const dragStart = ref({ x: 0, y: 0, panX: 0, panY: 0 })
 
+// Touch state
+const touchStartPos = ref({ x: 0, y: 0 })
+const touchHasMoved = ref(false)
+const lastTouchDist = ref(0)
+const lastTouchCenter = ref({ x: 0, y: 0 })
+const isTouching = ref(false)
+
 // Tooltip
 const hoveredFeature = ref<LocationFeature | null>(null)
 const tooltipPos = ref({ x: 0, y: 0 })
 
 const MIN_ZOOM = 0.5
-const MAX_ZOOM = 5
+const MAX_ZOOM = 20
 
 const placedFeatures = computed(() => props.features.filter(f => f.mapPosition))
 
@@ -58,19 +63,23 @@ function onWheel(e: WheelEvent) {
   zoom.value = newZoom
 }
 
+const mouseHasDragged = ref(false)
+
 function onMouseDown(e: MouseEvent) {
   if (e.button !== 0) return
-  // If placing a feature, handle the click instead
-  if (props.placingFeature) return
   isDragging.value = true
+  mouseHasDragged.value = false
   dragStart.value = { x: e.clientX, y: e.clientY, panX: panX.value, panY: panY.value }
   e.preventDefault()
 }
 
 function onMouseMove(e: MouseEvent) {
   if (!isDragging.value) return
-  panX.value = dragStart.value.panX + (e.clientX - dragStart.value.x)
-  panY.value = dragStart.value.panY + (e.clientY - dragStart.value.y)
+  const dx = e.clientX - dragStart.value.x
+  const dy = e.clientY - dragStart.value.y
+  if (Math.hypot(dx, dy) > 5) mouseHasDragged.value = true
+  panX.value = dragStart.value.panX + dx
+  panY.value = dragStart.value.panY + dy
 }
 
 function onMouseUp() {
@@ -78,17 +87,16 @@ function onMouseUp() {
 }
 
 function onMapClick(e: MouseEvent) {
-  if (!props.placingFeature) {
-    // Check if we should emit a general map click for adding new POI
+  if (mouseHasDragged.value) return
+
+  if (props.placingFeature) {
     const pos = getMapPosition(e)
-    if (pos) emit('map-click', pos.x, pos.y)
+    if (pos) emit('place', props.placingFeature, pos.x, pos.y)
     return
   }
 
   const pos = getMapPosition(e)
-  if (pos) {
-    emit('place', props.placingFeature, pos.x, pos.y)
-  }
+  if (pos) emit('map-click', pos.x, pos.y)
 }
 
 function getMapPosition(e: MouseEvent): { x: number; y: number } | null {
@@ -128,6 +136,149 @@ function onFeatureClick(e: MouseEvent, feat: LocationFeature) {
   emit('click-feature', feat)
 }
 
+// --- Touch handlers ---
+function getTouchDist(touches: TouchList): number {
+  if (touches.length < 2) return 0
+  const t0 = touches[0]!, t1 = touches[1]!
+  return Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY)
+}
+
+function getTouchCenter(touches: TouchList): { x: number; y: number } {
+  const t0 = touches[0]!
+  if (touches.length < 2) return { x: t0.clientX, y: t0.clientY }
+  const t1 = touches[1]!
+  return { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 }
+}
+
+function onTouchStart(e: TouchEvent) {
+  e.preventDefault()
+  isTouching.value = true
+  touchHasMoved.value = false
+  const t0 = e.touches[0]!
+  if (e.touches.length === 1) {
+    touchStartPos.value = { x: t0.clientX, y: t0.clientY }
+    dragStart.value = { x: t0.clientX, y: t0.clientY, panX: panX.value, panY: panY.value }
+  } else if (e.touches.length === 2) {
+    touchHasMoved.value = true // multi-touch = no tap
+    lastTouchDist.value = getTouchDist(e.touches)
+    lastTouchCenter.value = getTouchCenter(e.touches)
+  }
+}
+
+function onTouchMove(e: TouchEvent) {
+  e.preventDefault()
+  if (!isTouching.value) return
+
+  if (e.touches.length === 1) {
+    const t0 = e.touches[0]!
+    const dx = t0.clientX - touchStartPos.value.x
+    const dy = t0.clientY - touchStartPos.value.y
+    if (Math.hypot(dx, dy) > 5) touchHasMoved.value = true
+    panX.value = dragStart.value.panX + (t0.clientX - dragStart.value.x)
+    panY.value = dragStart.value.panY + (t0.clientY - dragStart.value.y)
+  } else if (e.touches.length === 2) {
+    const dist = getTouchDist(e.touches)
+    const center = getTouchCenter(e.touches)
+    const rect = container.value!.getBoundingClientRect()
+
+    if (lastTouchDist.value > 0) {
+      const prevZoom = zoom.value
+      const scale = dist / lastTouchDist.value
+      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom.value * scale))
+      const zoomScale = newZoom / prevZoom
+      const cx = center.x - rect.left
+      const cy = center.y - rect.top
+      panX.value = cx - zoomScale * (cx - panX.value)
+      panY.value = cy - zoomScale * (cy - panY.value)
+      zoom.value = newZoom
+    }
+
+    // Pan with two fingers
+    panX.value += center.x - lastTouchCenter.value.x
+    panY.value += center.y - lastTouchCenter.value.y
+
+    lastTouchDist.value = dist
+    lastTouchCenter.value = center
+  }
+}
+
+function onTouchEnd(e: TouchEvent) {
+  if (e.touches.length === 0) {
+    // Single tap = click
+    if (!touchHasMoved.value && e.changedTouches.length > 0) {
+      const t = e.changedTouches[0]!
+      // Check if tap hit a feature marker first
+      const tappedFeat = getFeatureAtTouch(t)
+      if (tappedFeat) {
+        emit('click-feature', tappedFeat)
+      } else {
+        const pos = getTouchMapPosition(t)
+        if (pos) {
+          if (props.placingFeature) {
+            emit('place', props.placingFeature, pos.x, pos.y)
+          } else {
+            emit('map-click', pos.x, pos.y)
+          }
+        }
+      }
+    }
+    isTouching.value = false
+    lastTouchDist.value = 0
+  } else if (e.touches.length === 1) {
+    const t0 = e.touches[0]!
+    dragStart.value = { x: t0.clientX, y: t0.clientY, panX: panX.value, panY: panY.value }
+    lastTouchDist.value = 0
+  }
+}
+
+function getFeatureAtTouch(touch: Touch): LocationFeature | null {
+  if (!container.value || !imgEl.value) return null
+  const rect = container.value.getBoundingClientRect()
+  const clickX = touch.clientX - rect.left
+  const clickY = touch.clientY - rect.top
+  const imgX = (clickX - panX.value) / zoom.value
+  const imgY = (clickY - panY.value) / zoom.value
+  const imgWidth = container.value.clientWidth
+  const imgHeight = imgEl.value.naturalHeight * (container.value.clientWidth / imgEl.value.naturalWidth)
+  const pctX = (imgX / imgWidth) * 100
+  const pctY = (imgY / imgHeight) * 100
+
+  // Hit test: find closest feature within a tap radius
+  const tapRadius = 3 / zoom.value // ~3% of image at current zoom
+  let closest: LocationFeature | null = null
+  let closestDist = Infinity
+  for (const feat of placedFeatures.value) {
+    const dx = pctX - feat.mapPosition!.x
+    const dy = pctY - feat.mapPosition!.y
+    const dist = Math.hypot(dx, dy)
+    if (dist < tapRadius && dist < closestDist) {
+      closest = feat
+      closestDist = dist
+    }
+  }
+  return closest
+}
+
+function getTouchMapPosition(touch: Touch): { x: number; y: number } | null {
+  if (!imgEl.value || !container.value) return null
+  const rect = container.value.getBoundingClientRect()
+  const clickX = touch.clientX - rect.left
+  const clickY = touch.clientY - rect.top
+  const imgX = (clickX - panX.value) / zoom.value
+  const imgY = (clickY - panY.value) / zoom.value
+  const imgWidth = imgEl.value.naturalWidth * (container.value.clientWidth / imgEl.value.naturalWidth)
+  const imgHeight = imgEl.value.naturalHeight * (container.value.clientWidth / imgEl.value.naturalWidth)
+  const x = (imgX / imgWidth) * 100
+  const y = (imgY / imgHeight) * 100
+  if (x < 0 || x > 100 || y < 0 || y > 100) return null
+  return { x, y }
+}
+
+function onImageLoad() {
+  if (!imgEl.value) return
+  imgAspect.value = imgEl.value.naturalHeight / imgEl.value.naturalWidth
+}
+
 function resetView() {
   zoom.value = 1
   panX.value = 0
@@ -162,11 +313,15 @@ onUnmounted(() => {
     <!-- Map container -->
     <div
       ref="container"
-      :class="['relative overflow-hidden rounded-xl border border-white/10 bg-zinc-950 select-none', placingFeature ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-grab']"
-      style="height: 500px"
+      :class="['relative overflow-hidden rounded-xl border border-white/10 bg-zinc-950 select-none touch-none', placingFeature ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-grab']"
+      :style="imgAspect ? { aspectRatio: `1 / ${imgAspect}`, maxHeight: '80vh', maxWidth: 'calc(100% - 2rem)' } : { height: '300px' }"
       @wheel="onWheel"
       @mousedown="onMouseDown"
       @click="onMapClick"
+      @touchstart="onTouchStart"
+      @touchmove="onTouchMove"
+      @touchend="onTouchEnd"
+      @touchcancel="onTouchEnd"
     >
       <!-- Transformed layer -->
       <div
@@ -182,24 +337,27 @@ onUnmounted(() => {
           :src="mapUrl"
           class="w-full pointer-events-none"
           draggable="false"
+          @load="onImageLoad"
         />
 
         <!-- Feature markers (positioned on the image) -->
         <div
           v-for="feat in placedFeatures" :key="feat.id"
-          class="absolute flex items-center justify-center transition-transform hover:scale-110"
+          :class="['absolute flex items-center justify-center hover:scale-110']"
           :style="{
             left: feat.mapPosition!.x + '%',
             top: feat.mapPosition!.y + '%',
-            transform: `translate(-50%, -50%) scale(${1 / zoom})`,
-            fontSize: `${Math.max(14, 20 / zoom)}px`,
-            zIndex: hoveredFeature?.id === feat.id ? 30 : 10
+            width: `${(highlightedFeatureId === feat.id ? 32 : 24) / zoom}px`,
+            height: `${(highlightedFeatureId === feat.id ? 32 : 24) / zoom}px`,
+            transform: 'translate(-50%, -50%)',
+            zIndex: hoveredFeature?.id === feat.id || highlightedFeatureId === feat.id ? 30 : 10,
+            transition: 'filter 0.2s, width 0.2s, height 0.2s'
           }"
           @mouseenter="onFeatureHover($event, feat)"
           @mouseleave="onFeatureLeave"
           @click="onFeatureClick($event, feat)"
         >
-          <span class="drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] cursor-pointer">{{ typeIcons[feat.type] || '📌' }}</span>
+          <img :src="getIconPath(feat.type)" :class="['cursor-pointer transition-all duration-200 w-full h-full object-contain', highlightedFeatureId === feat.id ? 'drop-shadow-[0_0_8px_rgba(239,35,60,0.8)]' : 'drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]']" />
         </div>
       </div>
     </div>
@@ -224,7 +382,7 @@ onUnmounted(() => {
           :style="{ left: (tooltipPos.x + 12) + 'px', top: (tooltipPos.y - 10) + 'px' }"
         >
           <div class="flex items-center gap-1.5 mb-0.5">
-            <span class="text-sm">{{ typeIcons[hoveredFeature.type] || '📌' }}</span>
+            <img :src="getIconPath(hoveredFeature.type)" class="w-4 h-4 object-contain" />
             <span class="text-xs font-semibold text-white" style="font-family: Manrope, sans-serif">{{ hoveredFeature.name }}</span>
           </div>
           <span class="text-[0.6rem] text-zinc-500">{{ hoveredFeature.type }}</span>

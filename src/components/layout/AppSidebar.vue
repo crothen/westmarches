@@ -52,6 +52,7 @@ const sections: NavSection[] = [
       { to: '/sessions', label: 'Session Log', icon: '📖', show: 'all' },
       { to: '/schedule', label: 'Schedule', icon: '📅', show: 'all' },
       { to: '/inventory', label: 'Inventory', icon: '🎒', show: 'all' },
+      { to: '/my-notes', label: 'My Notes', icon: '📝', show: 'all' },
     ]
   },
   {

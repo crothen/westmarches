@@ -71,9 +71,9 @@ service cloud.firestore {
       allow delete: if isDmOrAdmin();
     }
 
-    // NPC Notes
+    // NPC Notes (privacy filtered client-side)
     match /npcNotes/{noteId} {
-      allow read: if isAuthenticated() && (!resource.data.isPrivate || isDmOrAdmin() || resource.data.userId == request.auth.uid);
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       // Author can edit content; DMs/admins can soft-delete (set deleted=true)
       allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
@@ -112,9 +112,9 @@ service cloud.firestore {
       allow create, update, delete: if isDmOrAdmin();
     }
 
-    // Session Notes
+    // Session Notes (privacy filtered client-side)
     match /sessionNotes/{noteId} {
-      allow read: if isAuthenticated() && (!resource.data.isPrivate || isDmOrAdmin() || resource.data.userId == request.auth.uid);
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
     }
@@ -122,7 +122,9 @@ service cloud.firestore {
     // Missions
     match /missions/{missionId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isDmOrAdmin();
+      allow create, delete: if isDmOrAdmin();
+      // Players can update votes; DMs/admins can update anything
+      allow update: if isAuthenticated();
     }
 
     // Scheduled Sessions
@@ -138,6 +140,13 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
       allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
+    }
+
+    // Hex Markers (clue, battle, danger, etc.)
+    match /markers/{markerId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isDmOrAdmin());
     }
 
     // Map data

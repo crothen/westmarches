@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, doc, Timestamp, getDocs } from 'firebase/firestore'
+import { collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, doc, Timestamp, getDocs } from 'firebase/firestore'
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '../../firebase/config'
 import { useAuthStore } from '../../stores/auth'
 import DetailMapViewer from './DetailMapViewer.vue'
-import type { HexNote } from '../../types'
+import MentionTextarea from '../common/MentionTextarea.vue'
+import NotesSection from '../common/NotesSection.vue'
+import { getIconPath, markerTypeIcons } from '../../lib/icons'
+import type { HexMarker, MarkerType } from '../../types'
 
 const props = defineProps<{
   hex: { x: number; y: number } | null
@@ -20,20 +23,30 @@ const emit = defineEmits<{
   'toggle-tag': [hexKey: string, tagId: number]
   'set-main-tag': [hexKey: string, tagId: number | null, isPrivate: boolean]
   'update-detail-map': [hexKey: string, url: string | null]
+  'markers-changed': []
 }>()
 
 const auth = useAuthStore()
-const notes = ref<HexNote[]>([])
-const newNoteContent = ref('')
-const newNotePrivate = ref(false)
-const replyingTo = ref<string | null>(null)
-const replyContent = ref('')
-let unsubNotes: (() => void) | null = null
 const uploadProgress = ref(0)
 const isUploading = ref(false)
 const showDetailMapViewer = ref(false)
 const hexLocations = ref<any[]>([])
 const hexFeatures = ref<any[]>([])
+const allLocations = ref<any[]>([])
+const allFeatures = ref<any[]>([])
+const showAddPoi = ref(false)
+const poiSearch = ref('')
+const poiLocationFilter = ref<string | ''>('')
+const showCreateMarker = ref(false)
+const newMarkerKind = ref<'location' | 'feature' | 'marker'>('location')
+const newMarkerForm = ref({ name: '', type: 'other', description: '' })
+const hexMarkersList = ref<HexMarker[]>([])
+const showCreateHexMarker = ref(false)
+const newHexMarkerForm = ref({ name: '', type: 'clue' as MarkerType, description: '', isPrivate: false })
+
+const locationTypes = ['city', 'town', 'village', 'castle', 'fortress', 'monastery', 'camp', 'ruins', 'other']
+const featureTypes = ['inn', 'shop', 'temple', 'shrine', 'blacksmith', 'tavern', 'guild', 'market', 'gate', 'tower', 'ruins', 'cave', 'bridge', 'well', 'monument', 'graveyard', 'dock', 'warehouse', 'barracks', 'library', 'other']
+const markerTypes: MarkerType[] = ['clue', 'battle', 'danger', 'puzzle', 'mystery', 'waypoint', 'quest', 'locked', 'unlocked']
 
 const hexKey = computed(() => props.hex ? `${props.hex.x}_${props.hex.y}` : null)
 
@@ -82,36 +95,10 @@ const currentSideTags = computed(() => {
   })
 })
 
-const visibleNotes = computed(() => {
-  return notes.value.filter(note => {
-    if (!note.isPrivate) return true
-    if (auth.isDm) return true
-    if (note.userId === auth.firebaseUser?.uid) return true
-    return false
-  })
-})
-
-watch(hexKey, (newKey) => {
-  unsubNotes?.()
-  notes.value = []
-  
-  if (!newKey) return
-  
-  const notesQuery = query(
-    collection(db, 'hexNotes'),
-    where('hexKey', '==', newKey),
-    orderBy('createdAt', 'desc')
-  )
-  unsubNotes = onSnapshot(notesQuery, (snap) => {
-    notes.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as HexNote))
-  }, (err) => {
-    console.warn('Hex notes query error:', err.message)
-  })
-}, { immediate: true })
-
 watch(hexKey, async (newKey) => {
   hexLocations.value = []
   hexFeatures.value = []
+  hexMarkersList.value = []
   if (!newKey) return
   
   try {
@@ -124,10 +111,106 @@ watch(hexKey, async (newKey) => {
   } catch (e) {
     console.warn('Failed to load hex locations:', e)
   }
+
+  // Load markers separately — non-critical
+  try {
+    const markerSnap = await getDocs(query(collection(db, 'markers'), where('hexKey', '==', newKey)))
+    hexMarkersList.value = markerSnap.docs.map(d => ({ id: d.id, ...d.data() } as HexMarker))
+  } catch (e) {
+    console.warn('Failed to load hex markers:', e)
+  }
 }, { immediate: true })
 
+// Filtered visible locations/features (hide hidden items from players)
+const visibleHexLocations = computed(() => {
+  if (auth.isDm || auth.isAdmin) return hexLocations.value
+  return hexLocations.value.filter((l: any) => !l.hidden)
+})
+
+const visibleHexFeatures = computed(() => {
+  if (auth.isDm || auth.isAdmin) return hexFeatures.value
+  return hexFeatures.value.filter((f: any) => !f.hidden)
+})
+
+const visibleHexMarkers = computed(() => {
+  return hexMarkersList.value.filter(m => {
+    // Admins see everything
+    if (auth.isAdmin) return true
+    // Hidden markers only visible to DM/admin
+    if (m.hidden && !auth.isDm) return false
+    // Private markers only visible to creator and admins (NOT DMs)
+    if (m.isPrivate) {
+      return m.createdBy === auth.firebaseUser?.uid
+    }
+    return true
+  })
+})
+
+async function createHexMarker() {
+  if (!newHexMarkerForm.value.name.trim() || !hexKey.value) return
+  try {
+    const data = {
+      name: newHexMarkerForm.value.name.trim(),
+      type: newHexMarkerForm.value.type,
+      description: newHexMarkerForm.value.description.trim(),
+      hexKey: hexKey.value,
+      isPrivate: newHexMarkerForm.value.isPrivate,
+      tags: [],
+      createdBy: auth.firebaseUser?.uid || null,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    }
+    const docRef = await addDoc(collection(db, 'markers'), data)
+    hexMarkersList.value.push({ id: docRef.id, ...data } as unknown as HexMarker)
+    newHexMarkerForm.value = { name: '', type: 'clue', description: '', isPrivate: false }
+    showCreateHexMarker.value = false
+    emit('markers-changed')
+  } catch (e) {
+    console.error('Failed to create marker:', e)
+    alert('Failed to create marker.')
+  }
+}
+
+async function deleteHexMarker(marker: HexMarker) {
+  if (!confirm(`Delete marker "${marker.name}"?`)) return
+  try {
+    await deleteDoc(doc(db, 'markers', marker.id))
+    hexMarkersList.value = hexMarkersList.value.filter(m => m.id !== marker.id)
+    emit('markers-changed')
+  } catch (e) {
+    console.error('Failed to delete marker:', e)
+  }
+}
+
+async function toggleMarkerHidden(marker: HexMarker) {
+  const newHidden = !marker.hidden
+  try {
+    await updateDoc(doc(db, 'markers', marker.id), { hidden: newHidden, updatedAt: Timestamp.now() })
+    const idx = hexMarkersList.value.findIndex(m => m.id === marker.id)
+    if (idx >= 0) hexMarkersList.value[idx] = { ...hexMarkersList.value[idx]!, hidden: newHidden } as HexMarker
+  } catch (e) {
+    console.error('Failed to toggle marker hidden:', e)
+  }
+}
+
+async function togglePoiHidden(poi: any, kind: 'location' | 'feature') {
+  const collName = kind === 'location' ? 'locations' : 'features'
+  const newHidden = !poi.hidden
+  try {
+    await updateDoc(doc(db, collName, poi.id), { hidden: newHidden, updatedAt: Timestamp.now() })
+    const list = kind === 'location' ? hexLocations : hexFeatures
+    const idx = list.value.findIndex((item: any) => item.id === poi.id)
+    if (idx >= 0) {
+      list.value[idx] = { ...list.value[idx], hidden: newHidden }
+    }
+  } catch (e) {
+    console.error('Failed to toggle hidden:', e)
+    alert('Failed to update.')
+  }
+}
+
 onUnmounted(() => {
-  unsubNotes?.()
+  // cleanup handled by NotesSection
 })
 
 function onTerrainChange(e: Event) {
@@ -151,109 +234,6 @@ function onToggleSideTag(tagId: number) {
   if (hexKey.value) {
     emit('toggle-tag', hexKey.value, tagId)
   }
-}
-
-async function addNote() {
-  if (!newNoteContent.value.trim() || !auth.firebaseUser || !hexKey.value) return
-  await addDoc(collection(db, 'hexNotes'), {
-    hexKey: hexKey.value,
-    userId: auth.firebaseUser.uid,
-    authorName: auth.appUser?.displayName || 'Unknown',
-    content: newNoteContent.value.trim(),
-    isPrivate: newNotePrivate.value,
-    replies: [],
-    createdAt: Timestamp.now(),
-    updatedAt: Timestamp.now()
-  })
-  newNoteContent.value = ''
-  newNotePrivate.value = false
-}
-
-async function addReply(noteId: string) {
-  if (!replyContent.value.trim() || !auth.firebaseUser) return
-  const note = notes.value.find(n => n.id === noteId)
-  if (!note) return
-  
-  const newReply = {
-    id: crypto.randomUUID(),
-    userId: auth.firebaseUser.uid,
-    authorName: auth.appUser?.displayName || 'Unknown',
-    content: replyContent.value.trim(),
-    createdAt: Timestamp.now()
-  }
-  
-  const currentReplies = note.replies || []
-  await updateDoc(doc(db, 'hexNotes', noteId), {
-    replies: [...currentReplies, newReply],
-    updatedAt: Timestamp.now()
-  })
-  replyContent.value = ''
-  replyingTo.value = null
-}
-
-// Edit note
-const editingHexNoteId = ref<string | null>(null)
-const editingHexNoteContent = ref('')
-
-function startEditHexNote(note: HexNote) {
-  editingHexNoteId.value = note.id
-  editingHexNoteContent.value = note.content
-}
-
-function cancelEditHexNote() {
-  editingHexNoteId.value = null
-  editingHexNoteContent.value = ''
-}
-
-async function saveEditHexNote(noteId: string) {
-  if (!editingHexNoteContent.value.trim()) return
-  await updateDoc(doc(db, 'hexNotes', noteId), {
-    content: editingHexNoteContent.value.trim(),
-    updatedAt: Timestamp.now()
-  })
-  editingHexNoteId.value = null
-  editingHexNoteContent.value = ''
-}
-
-async function deleteNote(noteId: string) {
-  if (!confirm('Delete this note?')) return
-  // Soft delete
-  await updateDoc(doc(db, 'hexNotes', noteId), {
-    content: '',
-    deleted: true,
-    deletedBy: auth.firebaseUser?.uid,
-    updatedAt: Timestamp.now()
-  })
-}
-
-async function deleteReply(noteId: string, replyId: string) {
-  const note = notes.value.find(n => n.id === noteId)
-  if (!note) return
-  const updatedReplies = (note.replies || []).map(r =>
-    r.id === replyId ? { ...r, content: '', deleted: true } : r
-  )
-  await updateDoc(doc(db, 'hexNotes', noteId), {
-    replies: updatedReplies,
-    updatedAt: Timestamp.now()
-  })
-}
-
-function canEditNote(note: HexNote): boolean {
-  return note.userId === auth.firebaseUser?.uid && !(note as any).deleted
-}
-
-function canDelete(note: HexNote): boolean {
-  return (note.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin) && !(note as any).deleted
-}
-
-function canDeleteReply(reply: any): boolean {
-  return (reply.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin) && !reply.deleted
-}
-
-function formatDate(date: any): string {
-  if (!date) return ''
-  const d = date.toDate ? date.toDate() : new Date(date)
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
 const detailMapUrl = computed(() => currentHexData.value?.detailMapUrl || null)
@@ -284,6 +264,129 @@ async function uploadDetailMap(event: Event) {
       uploadProgress.value = 0
     }
   )
+}
+
+async function loadAllPois() {
+  if (allLocations.value.length || allFeatures.value.length) return
+  try {
+    const [locSnap, featSnap] = await Promise.all([
+      getDocs(query(collection(db, 'locations'), orderBy('name', 'asc'))),
+      getDocs(query(collection(db, 'features'), orderBy('name', 'asc')))
+    ])
+    allLocations.value = locSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    allFeatures.value = featSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+  } catch (e) {
+    console.warn('Failed to load all POIs:', e)
+  }
+}
+
+function openAddPoi() {
+  showAddPoi.value = true
+  poiSearch.value = ''
+  poiLocationFilter.value = ''
+  loadAllPois()
+}
+
+function poiLocationOptions() {
+  // Unique locations that have features (for the filter dropdown)
+  const locMap = new Map<string, string>()
+  for (const f of allFeatures.value) {
+    if (f.locationId) {
+      const loc = allLocations.value.find((l: any) => l.id === f.locationId)
+      if (loc) locMap.set(loc.id, loc.name)
+    }
+  }
+  return Array.from(locMap.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function filteredPois() {
+  const q = poiSearch.value.toLowerCase()
+  const locFilter = poiLocationFilter.value
+  const currentLocIds = new Set(hexLocations.value.map((l: any) => l.id))
+  const currentFeatIds = new Set(hexFeatures.value.map((f: any) => f.id))
+  
+  let locs = allLocations.value
+    .filter(l => !currentLocIds.has(l.id))
+    .filter(l => !q || l.name?.toLowerCase().includes(q))
+  
+  let feats = allFeatures.value
+    .filter(f => !currentFeatIds.has(f.id))
+    .filter(f => !q || f.name?.toLowerCase().includes(q))
+  
+  // Apply location filter
+  if (locFilter) {
+    locs = locs.filter(l => l.id === locFilter)
+    feats = feats.filter(f => f.locationId === locFilter)
+  }
+  
+  return [
+    ...locs.map(l => ({ ...l, _kind: 'location' as const, _currentHex: l.hexKey || null })),
+    ...feats.map(f => ({ ...f, _kind: 'feature' as const, _currentHex: f.hexKey || null }))
+  ]
+}
+
+async function assignPoiToHex(poi: any) {
+  if (!hexKey.value) return
+  const collName = poi._kind === 'location' ? 'locations' : 'features'
+  try {
+    await updateDoc(doc(db, collName, poi.id), { hexKey: hexKey.value })
+    // Update local state
+    if (poi._kind === 'location') {
+      hexLocations.value.push({ ...poi })
+    } else {
+      hexFeatures.value.push({ ...poi })
+    }
+    emit('markers-changed')
+  } catch (e) {
+    console.error('Failed to assign POI:', e)
+    alert('Failed to assign POI.')
+  }
+}
+
+async function unassignPoi(poi: any, kind: 'location' | 'feature') {
+  const collName = kind === 'location' ? 'locations' : 'features'
+  try {
+    await updateDoc(doc(db, collName, poi.id), { hexKey: null })
+    if (kind === 'location') {
+      hexLocations.value = hexLocations.value.filter((l: any) => l.id !== poi.id)
+    } else {
+      hexFeatures.value = hexFeatures.value.filter((f: any) => f.id !== poi.id)
+    }
+    emit('markers-changed')
+  } catch (e) {
+    console.error('Failed to unassign POI:', e)
+  }
+}
+
+// Legacy createLocation/createFeature replaced by unified createMarker
+
+async function createMarker() {
+  if (!newMarkerForm.value.name.trim() || !hexKey.value) return
+  try {
+    const data = {
+      name: newMarkerForm.value.name.trim(),
+      type: newMarkerForm.value.type,
+      description: newMarkerForm.value.description.trim(),
+      hexKey: hexKey.value,
+      tags: [],
+      discoveredBy: auth.firebaseUser?.uid || null,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    }
+    const collName = newMarkerKind.value === 'location' ? 'locations' : 'features'
+    const docRef = await addDoc(collection(db, collName), data)
+    if (newMarkerKind.value === 'location') {
+      hexLocations.value.push({ id: docRef.id, ...data })
+    } else {
+      hexFeatures.value.push({ id: docRef.id, ...data })
+    }
+    newMarkerForm.value = { name: '', type: 'other', description: '' }
+    showCreateMarker.value = false
+    emit('markers-changed')
+  } catch (e) {
+    console.error('Failed to create marker:', e)
+    alert('Failed to create marker.')
+  }
 }
 
 async function removeDetailMap() {
@@ -325,26 +428,122 @@ async function removeDetailMap() {
       </div>
 
       <!-- Locations in this hex -->
-      <div v-if="hexLocations.length > 0 || hexFeatures.length > 0">
-        <h4 class="label mb-2">Locations</h4>
+      <div v-if="visibleHexLocations.length > 0 || visibleHexFeatures.length > 0 || visibleHexMarkers.length > 0 || auth.isAuthenticated">
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="label">Markers</h4>
+          <div v-if="auth.isAuthenticated" class="flex gap-2">
+            <button @click="openAddPoi(); showCreateMarker = false; showCreateHexMarker = false" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Existing</button>
+            <button @click="showCreateMarker = !showCreateMarker; showAddPoi = false; showCreateHexMarker = false" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ POI</button>
+            <button @click="showCreateHexMarker = !showCreateHexMarker; showAddPoi = false; showCreateMarker = false" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Tag</button>
+          </div>
+        </div>
         <div class="space-y-1.5">
-          <RouterLink
-            v-for="loc in hexLocations" :key="loc.id"
-            :to="`/locations/${loc.id}`"
-            class="block card-flat p-2.5 hover:border-white/20 transition-colors"
-          >
-            <div class="flex items-center gap-2">
-              <span class="text-sm">🏰</span>
-              <span class="text-sm text-zinc-200 font-medium">{{ loc.name }}</span>
-              <span class="text-[0.6rem] text-zinc-600">{{ loc.type }}</span>
+          <div v-for="loc in visibleHexLocations" :key="loc.id" :class="['card-flat p-2.5 hover:border-white/20 transition-colors flex items-center justify-between', loc.hidden ? 'opacity-50 !border-dashed' : '']">
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <img :src="getIconPath(loc.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
+              <span class="text-sm text-zinc-200 font-medium truncate">{{ loc.name }}</span>
+              <span v-if="loc.hidden && (auth.isDm || auth.isAdmin)" class="text-[0.55rem] text-amber-400/70 shrink-0">🚫</span>
+              <span class="text-[0.6rem] text-zinc-600 shrink-0">{{ loc.type }}</span>
             </div>
-          </RouterLink>
-          <div v-for="feat in hexFeatures" :key="feat.id" class="card-flat p-2.5">
-            <div class="flex items-center gap-2">
-              <span class="text-sm">📌</span>
-              <span class="text-sm text-zinc-300">{{ feat.name }}</span>
-              <span class="text-[0.6rem] text-zinc-600">{{ feat.type }}</span>
+            <div class="flex items-center gap-1 ml-2 shrink-0">
+              <RouterLink :to="`/locations/${loc.id}`" class="text-zinc-600 hover:text-[#ef233c] text-sm transition-colors" title="View detail">🔍</RouterLink>
+              <button v-if="auth.isDm || auth.isAdmin" @click="togglePoiHidden(loc, 'location')" :class="['text-sm transition-colors', loc.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-700 hover:text-amber-400']" :title="loc.hidden ? 'Show to players' : 'Hide from players'">{{ loc.hidden ? '🚫' : '👁️' }}</button>
+              <button v-if="auth.isDm || auth.isAdmin" @click="unassignPoi(loc, 'location')" class="text-zinc-700 hover:text-red-400 text-sm transition-colors" title="Remove from hex">✕</button>
             </div>
+          </div>
+          <div v-for="feat in visibleHexFeatures" :key="feat.id" :class="['card-flat p-2.5 flex items-center justify-between', feat.hidden ? 'opacity-50 !border-dashed' : '']">
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <img :src="getIconPath(feat.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
+              <span class="text-sm text-zinc-300 truncate">{{ feat.name }}</span>
+              <span v-if="feat.hidden && (auth.isDm || auth.isAdmin)" class="text-[0.55rem] text-amber-400/70 shrink-0">🚫</span>
+              <span class="text-[0.6rem] text-zinc-600 shrink-0">{{ feat.type }}</span>
+            </div>
+            <div class="flex items-center gap-1 ml-2 shrink-0">
+              <RouterLink v-if="feat.locationId" :to="`/locations/${feat.locationId}`" class="text-zinc-600 hover:text-[#ef233c] text-sm transition-colors" title="View parent location">🔍</RouterLink>
+              <button v-if="auth.isDm || auth.isAdmin" @click="togglePoiHidden(feat, 'feature')" :class="['text-sm transition-colors', feat.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-700 hover:text-amber-400']" :title="feat.hidden ? 'Show to players' : 'Hide from players'">{{ feat.hidden ? '🚫' : '👁️' }}</button>
+              <button v-if="auth.isDm || auth.isAdmin" @click="unassignPoi(feat, 'feature')" class="text-zinc-700 hover:text-red-400 text-sm transition-colors" title="Remove from hex">✕</button>
+            </div>
+          </div>
+          <!-- Hex Markers (clue, battle, etc.) -->
+          <div v-for="marker in visibleHexMarkers" :key="marker.id" :class="['card-flat p-2.5 flex items-center justify-between', marker.hidden ? 'opacity-50 !border-dashed' : '', marker.isPrivate ? 'border-dashed !border-purple-500/30' : '']">
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <img :src="markerTypeIcons[marker.type] || getIconPath('other')" class="w-5 h-5 object-contain shrink-0" />
+              <span class="text-sm text-zinc-300 truncate">{{ marker.name }}</span>
+              <span v-if="marker.isPrivate" class="text-[0.55rem] bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded-full shrink-0">🔒 Private</span>
+              <span v-if="marker.hidden && (auth.isDm || auth.isAdmin)" class="text-[0.55rem] text-amber-400/70 shrink-0">🚫</span>
+              <span class="text-[0.6rem] text-zinc-600 shrink-0">{{ marker.type }}</span>
+            </div>
+            <div class="flex items-center gap-1 ml-2 shrink-0">
+              <button v-if="auth.isDm || auth.isAdmin" @click="toggleMarkerHidden(marker)" :class="['text-sm transition-colors', marker.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-700 hover:text-amber-400']" :title="marker.hidden ? 'Show to players' : 'Hide from players'">{{ marker.hidden ? '🚫' : '👁️' }}</button>
+              <button v-if="auth.isDm || auth.isAdmin || marker.createdBy === auth.firebaseUser?.uid" @click="deleteHexMarker(marker)" class="text-zinc-700 hover:text-red-400 text-sm transition-colors" title="Delete marker">🗑️</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Create POI form (location/feature) -->
+        <div v-if="showCreateMarker" class="mt-3 card-flat !rounded-lg p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-zinc-400 font-medium">📌 New POI</span>
+            <button @click="showCreateMarker = false" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">✕</button>
+          </div>
+          <div class="flex gap-1">
+            <button @click="newMarkerKind = 'location'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', newMarkerKind === 'location' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">Location</button>
+            <button @click="newMarkerKind = 'feature'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', newMarkerKind === 'feature' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">Feature</button>
+          </div>
+          <input v-model="newMarkerForm.name" class="input w-full text-sm" placeholder="Name" @keyup.enter="createMarker" />
+          <select v-model="newMarkerForm.type" class="input w-full text-sm">
+            <template v-if="newMarkerKind === 'location'">
+              <option v-for="t in locationTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
+            </template>
+            <template v-else>
+              <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
+            </template>
+          </select>
+          <MentionTextarea v-model="newMarkerForm.description" input-class="text-sm" :rows="2" placeholder="Description (optional)" />
+          <button @click="createMarker" :disabled="!newMarkerForm.name.trim()" class="btn !text-xs !py-1.5 w-full">Create {{ newMarkerKind === 'location' ? 'Location' : 'Feature' }}</button>
+        </div>
+
+        <!-- Create Hex Marker form (clue, battle, etc.) -->
+        <div v-if="showCreateHexMarker" class="mt-3 card-flat !rounded-lg p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-zinc-400 font-medium">🏷️ New Hex Tag</span>
+            <button @click="showCreateHexMarker = false" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">✕</button>
+          </div>
+          <input v-model="newHexMarkerForm.name" class="input w-full text-sm" placeholder="Name" @keyup.enter="createHexMarker" />
+          <select v-model="newHexMarkerForm.type" class="input w-full text-sm">
+            <option v-for="t in markerTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
+          </select>
+          <MentionTextarea v-model="newHexMarkerForm.description" input-class="text-sm" :rows="2" placeholder="Description (optional)" />
+          <label class="flex items-center gap-1.5 text-xs text-zinc-500">
+            <input v-model="newHexMarkerForm.isPrivate" type="checkbox" class="accent-purple-500" />
+            🔒 Private (only you & admins)
+          </label>
+          <button @click="createHexMarker" :disabled="!newHexMarkerForm.name.trim()" class="btn !text-xs !py-1.5 w-full">Create Tag</button>
+        </div>
+
+        <!-- Add POI picker -->
+        <div v-if="showAddPoi" class="mt-3 card-flat !rounded-lg p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-zinc-400 font-medium">Add existing marker</span>
+            <button @click="showAddPoi = false" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">✕</button>
+          </div>
+          <input v-model="poiSearch" type="text" placeholder="Search locations & features..." class="input w-full text-sm" />
+          <select v-model="poiLocationFilter" class="input w-full text-sm">
+            <option value="">All locations</option>
+            <option v-for="loc in poiLocationOptions()" :key="loc.id" :value="loc.id">{{ loc.name }}</option>
+          </select>
+          <div class="max-h-48 overflow-y-auto space-y-1">
+            <div v-if="filteredPois().length === 0" class="text-zinc-600 text-xs py-2 text-center">No matches</div>
+            <button
+              v-for="poi in filteredPois().slice(0, 20)" :key="poi.id"
+              @click="assignPoiToHex(poi)"
+              class="w-full text-left p-2 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-2"
+            >
+              <img :src="getIconPath(poi.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
+              <span class="text-sm text-zinc-300 truncate flex-1">{{ poi.name }}</span>
+              <span class="text-[0.6rem] text-zinc-600 shrink-0">{{ poi.type }}</span>
+              <span v-if="poi._currentHex" class="text-[0.55rem] text-amber-500/60 shrink-0">@ {{ poi._currentHex }}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -389,7 +588,7 @@ async function removeDetailMap() {
         <div class="mt-3">
           <label class="block text-xs text-zinc-500 mb-1">Detail Map</label>
           <div v-if="detailMapUrl" class="mb-2">
-            <img :src="detailMapUrl" class="w-full rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors" @click="showDetailMapViewer = true" />
+            <img :src="detailMapUrl" class="w-full max-h-48 object-contain rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors" @click="showDetailMapViewer = true" />
             <button @click="removeDetailMap" class="text-xs text-zinc-600 hover:text-red-400 mt-1 transition-colors">Remove map</button>
           </div>
           <div v-if="isUploading" class="mb-2">
@@ -405,90 +604,20 @@ async function removeDetailMap() {
       <!-- Detail Map Preview (visible to non-DMs) -->
       <div v-if="detailMapUrl && !auth.isDm">
         <h4 class="label mb-2">Detail Map</h4>
-        <img :src="detailMapUrl" class="w-full rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors" @click="showDetailMapViewer = true" />
+        <img :src="detailMapUrl" class="w-full max-h-48 object-contain rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors" @click="showDetailMapViewer = true" />
       </div>
 
       <!-- Notes Section -->
-      <div>
-        <h4 class="label mb-3">Notes</h4>
-        
-        <div v-if="visibleNotes.length === 0" class="text-zinc-700 text-sm">No notes on this hex yet.</div>
-
-        <div v-for="note in visibleNotes" :key="note.id" class="card-flat !rounded-lg p-3 mb-2">
-          <!-- Deleted placeholder -->
-          <div v-if="(note as any).deleted" class="text-zinc-600 text-xs italic">
-            🗑️ This note was deleted
-          </div>
-          <template v-else>
-            <!-- Note header -->
-            <div class="flex items-center justify-between mb-1.5">
-              <div class="flex items-center gap-1.5">
-                <span class="text-[#ef233c] text-xs font-medium">{{ note.authorName }}</span>
-                <span v-if="note.isPrivate" class="text-[0.6rem] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded-full">🔒</span>
-                <span class="text-zinc-600 text-[0.65rem]">{{ formatDate(note.createdAt) }}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <button v-if="canEditNote(note)" @click="startEditHexNote(note)" class="text-zinc-500 hover:text-[#ef233c] text-xs transition-colors">Edit</button>
-                <button v-if="canDelete(note)" @click="deleteNote(note.id)" class="text-zinc-500 hover:text-red-400 text-xs transition-colors">Delete</button>
-              </div>
-            </div>
-
-            <!-- Edit mode -->
-            <div v-if="editingHexNoteId === note.id" class="space-y-2">
-              <textarea v-model="editingHexNoteContent" class="input w-full text-sm" rows="2" />
-              <div class="flex gap-2 justify-end">
-                <button @click="cancelEditHexNote" class="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
-                <button @click="saveEditHexNote(note.id)" class="btn !text-xs !py-1 !px-3">Save</button>
-              </div>
-            </div>
-            <!-- Note content -->
-            <p v-else class="text-zinc-300 text-sm whitespace-pre-wrap">{{ note.content }}</p>
-
-            <!-- Replies -->
-            <div v-if="note.replies?.length" class="mt-2 pl-3 border-l border-white/[0.06] space-y-2">
-              <div v-for="reply in note.replies" :key="reply.id" class="text-sm">
-                <div v-if="reply.deleted" class="text-zinc-600 text-xs italic">🗑️ This reply was deleted</div>
-                <template v-else>
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-1.5">
-                      <span class="text-[#ef233c]/80 text-xs font-medium">{{ reply.authorName }}</span>
-                      <span class="text-zinc-600 text-[0.65rem]">{{ formatDate(reply.createdAt) }}</span>
-                    </div>
-                    <button v-if="canDeleteReply(reply)" @click="deleteReply(note.id, reply.id)" class="text-zinc-500 hover:text-red-400 text-xs transition-colors">Delete</button>
-                  </div>
-                  <p class="text-zinc-400 text-sm">{{ reply.content }}</p>
-                </template>
-              </div>
-            </div>
-          </template>
-
-          <!-- Reply button / form -->
-          <div class="mt-2">
-            <button v-if="replyingTo !== note.id" @click="replyingTo = note.id" class="text-zinc-600 hover:text-[#ef233c] text-xs transition-colors">
-              Reply
-            </button>
-            <div v-else class="mt-1.5">
-              <textarea v-model="replyContent" rows="2" placeholder="Write a reply..." class="input w-full text-sm !p-2" />
-              <div class="flex gap-2 mt-1.5 justify-end">
-                <button @click="replyingTo = null; replyContent = ''" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">Cancel</button>
-                <button @click="addReply(note.id)" :disabled="!replyContent.trim()" class="btn !text-xs !py-1 !px-3">Reply</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Add Note Form -->
-        <div v-if="auth.isAuthenticated" class="mt-3">
-          <textarea v-model="newNoteContent" rows="2" placeholder="Add a note to this hex..." class="input w-full text-sm !p-2" />
-          <div class="flex items-center justify-between mt-2">
-            <label class="flex items-center gap-1.5 text-xs text-zinc-600">
-              <input v-model="newNotePrivate" type="checkbox" class="accent-[#ef233c]" />
-              🔒 Private
-            </label>
-            <button @click="addNote" :disabled="!newNoteContent.trim()" class="btn !text-xs !py-1 !px-3">Add Note</button>
-          </div>
-        </div>
-      </div>
+      <NotesSection
+        v-if="hexKey"
+        collection-name="hexNotes"
+        parent-id-field="hexKey"
+        :parent-id-value="hexKey"
+        order-direction="desc"
+        title="Notes"
+        variant="compact"
+        @notes-changed="emit('markers-changed')"
+      />
     </div>
 
     <!-- Detail Map Viewer Modal -->

@@ -1,18 +1,52 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, Timestamp } from 'firebase/firestore'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
-import { useImageGen } from '../composables/useImageGen'
 import LocationMapViewer from '../components/map/LocationMapViewer.vue'
-import type { CampaignLocation, LocationFeature } from '../types'
+import HexMiniMap from '../components/map/HexMiniMap.vue'
+import MentionTextarea from '../components/common/MentionTextarea.vue'
+import MentionText from '../components/common/MentionText.vue'
+import { getIconPath, markerTypeIcons } from '../lib/icons'
+import type { CampaignLocation, LocationFeature, HexMarker } from '../types'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
-const { generating, error: genError, generateImage } = useImageGen()
 
+// Mini map hover/tap state
+const miniMapHex = ref<string | null>(null)
+const miniMapPos = ref({ x: 0, y: 0 })
+
+function showMiniMap(hexKey: string, event: MouseEvent | TouchEvent) {
+  const el = event.target as HTMLElement
+  const rect = el.getBoundingClientRect()
+  miniMapPos.value = { x: rect.left, y: rect.bottom + 4 }
+  miniMapHex.value = hexKey
+}
+
+function hideMiniMap() {
+  miniMapHex.value = null
+}
+
+function toggleMiniMap(hexKey: string, event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  if (miniMapHex.value === hexKey) {
+    miniMapHex.value = null
+  } else {
+    showMiniMap(hexKey, event)
+  }
+}
+
+function onGlobalClick() {
+  if (miniMapHex.value) miniMapHex.value = null
+}
+
+onMounted(() => document.addEventListener('click', onGlobalClick))
+onUnmounted(() => document.removeEventListener('click', onGlobalClick))
 const location = ref<CampaignLocation | null>(null)
 const features = ref<LocationFeature[]>([])
 const loading = ref(true)
@@ -20,6 +54,7 @@ const showAddFeature = ref(false)
 const uploadingMap = ref(false)
 const uploadProgress = ref(0)
 const placingFeature = ref<string | null>(null)
+const highlightedFeature = ref<string | null>(null)
 
 // Quick-add from map click
 const showQuickAdd = ref(false)
@@ -30,26 +65,32 @@ const newFeat = ref({ name: '', type: 'other' as any, description: '' })
 
 const featureTypes = ['inn', 'shop', 'temple', 'shrine', 'blacksmith', 'tavern', 'guild', 'market', 'gate', 'tower', 'ruins', 'cave', 'bridge', 'well', 'monument', 'graveyard', 'dock', 'warehouse', 'barracks', 'library', 'other']
 
-const typeIcons: Record<string, string> = {
-  inn: '🍺', shop: '🛒', temple: '⛪', shrine: '🕯️', blacksmith: '⚒️', tavern: '🍻', guild: '🏛️',
-  market: '🛍️', gate: '🚪', tower: '🗼', ruins: '🏚️', cave: '🕳️', bridge: '🌉',
-  well: '💧', monument: '🗿', graveyard: '⚰️', dock: '⚓', warehouse: '📦',
-  barracks: '⚔️', library: '📚', other: '📌'
-}
-
-const locTypeIcons: Record<string, string> = {
-  city: '🏙️', town: '🏘️', village: '🏡', castle: '🏰', fortress: '⛩️',
-  monastery: '⛪', camp: '⛺', ruins: '🏚️', other: '📍'
-}
+// Sub-locations (Feature 3 - nested/recursive locations)
+const subLocations = ref<CampaignLocation[]>([])
+const locationMarkers = ref<HexMarker[]>([])
 
 onMounted(async () => {
   try {
-    const locSnap = await getDoc(doc(db, 'locations', route.params.id as string))
+    const locationId = route.params.id as string
+    // Load location, features, sub-locations first (essential data)
+    const [locSnap, featSnap, subLocSnap] = await Promise.all([
+      getDoc(doc(db, 'locations', locationId)),
+      getDocs(query(collection(db, 'features'), where('locationId', '==', locationId))),
+      getDocs(query(collection(db, 'locations'), where('parentLocationId', '==', locationId)))
+    ])
     if (locSnap.exists()) {
       location.value = { id: locSnap.id, ...locSnap.data() } as CampaignLocation
     }
-    const featSnap = await getDocs(query(collection(db, 'features'), where('locationId', '==', route.params.id)))
     features.value = featSnap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
+    subLocations.value = subLocSnap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
+
+    // Load markers separately — non-critical, don't block page if it fails
+    try {
+      const markerSnap = await getDocs(query(collection(db, 'markers'), where('locationId', '==', locationId)))
+      locationMarkers.value = markerSnap.docs.map(d => ({ id: d.id, ...d.data() } as HexMarker))
+    } catch (e) {
+      console.warn('Failed to load location markers:', e)
+    }
   } catch (e) {
     console.error('Failed to load:', e)
   } finally {
@@ -155,15 +196,117 @@ async function addFeature() {
   showAddFeature.value = false
 }
 
-async function generateLocationImage() {
-  if (!location.value) return
-  const prompt = `Create a fantasy illustration of a ${location.value.type} called "${location.value.name}" in a D&D medieval fantasy setting. ${location.value.description}. Style: detailed fantasy landscape art, dramatic lighting, painterly style.`
-  const url = await generateImage(prompt, `location-images/${location.value.id}`)
-  if (url) {
-    await updateDoc(doc(db, 'locations', location.value.id), { imageUrl: url })
-    location.value.imageUrl = url
+// --- Feature edit/delete ---
+const editingFeature = ref<LocationFeature | null>(null)
+const editFeatForm = ref({ name: '', type: 'other' as any, description: '' })
+
+function startEditFeature(feat: LocationFeature) {
+  editingFeature.value = feat
+  editFeatForm.value = { name: feat.name, type: feat.type, description: feat.description || '' }
+}
+
+async function saveEditFeature() {
+  if (!editingFeature.value || !editFeatForm.value.name.trim()) return
+  const id = editingFeature.value.id
+  const updates = {
+    name: editFeatForm.value.name.trim(),
+    type: editFeatForm.value.type,
+    description: editFeatForm.value.description.trim(),
+    updatedAt: Timestamp.now()
+  }
+  try {
+    await updateDoc(doc(db, 'features', id), updates)
+    const idx = features.value.findIndex(f => f.id === id)
+    if (idx >= 0) {
+      features.value[idx] = { ...features.value[idx], name: updates.name, type: updates.type, description: updates.description } as LocationFeature
+    }
+    editingFeature.value = null
+  } catch (e) {
+    console.error('Failed to update feature:', e)
+    alert('Failed to save.')
   }
 }
+
+async function deleteFeature(feat: LocationFeature) {
+  if (!confirm(`Delete "${feat.name}"?`)) return
+  try {
+    await deleteDoc(doc(db, 'features', feat.id))
+    features.value = features.value.filter(f => f.id !== feat.id)
+  } catch (e) {
+    console.error('Failed to delete feature:', e)
+    alert('Failed to delete.')
+  }
+}
+
+async function removeFeatureFromMap(feat: LocationFeature) {
+  try {
+    await updateDoc(doc(db, 'features', feat.id), { mapPosition: null })
+    const idx = features.value.findIndex(f => f.id === feat.id)
+    if (idx >= 0) {
+      features.value[idx] = { ...features.value[idx], mapPosition: undefined } as LocationFeature
+    }
+  } catch (e) {
+    console.error('Failed to remove from map:', e)
+  }
+}
+
+async function deleteLocation() {
+  if (!location.value) return
+  if (!confirm(`Delete "${location.value.name}" and all its features?`)) return
+  try {
+    // Delete all features belonging to this location
+    for (const feat of features.value) {
+      await deleteDoc(doc(db, 'features', feat.id))
+    }
+    // Delete the location itself
+    await deleteDoc(doc(db, 'locations', location.value.id))
+    router.push('/locations')
+  } catch (e) {
+    console.error('Failed to delete location:', e)
+    alert('Failed to delete location.')
+  }
+}
+
+// --- Hidden/Discovered mechanic ---
+const visibleFeatures = computed(() => {
+  if (auth.isDm || auth.isAdmin) return features.value
+  return features.value.filter(f => !f.hidden)
+})
+
+// Redirect players away from hidden locations
+watch(location, (loc) => {
+  if (loc && loc.hidden && !(auth.isDm || auth.isAdmin)) {
+    router.replace('/locations')
+  }
+}, { immediate: true })
+
+async function toggleLocationHidden() {
+  if (!location.value) return
+  const newHidden = !location.value.hidden
+  try {
+    await updateDoc(doc(db, 'locations', location.value.id), { hidden: newHidden, updatedAt: Timestamp.now() })
+    location.value = { ...location.value, hidden: newHidden } as CampaignLocation
+  } catch (e) {
+    console.error('Failed to toggle hidden:', e)
+    alert('Failed to update.')
+  }
+}
+
+async function toggleFeatureHidden(feat: LocationFeature) {
+  const newHidden = !feat.hidden
+  try {
+    await updateDoc(doc(db, 'features', feat.id), { hidden: newHidden, updatedAt: Timestamp.now() })
+    const idx = features.value.findIndex(f => f.id === feat.id)
+    if (idx >= 0) {
+      features.value[idx] = { ...features.value[idx], hidden: newHidden } as LocationFeature
+    }
+  } catch (e) {
+    console.error('Failed to toggle feature hidden:', e)
+    alert('Failed to update.')
+  }
+}
+
+
 </script>
 
 <template>
@@ -176,21 +319,24 @@ async function generateLocationImage() {
     <div v-else>
       <!-- Header -->
       <div class="flex items-center gap-3 mb-2">
-        <span class="text-2xl">{{ locTypeIcons[location.type] || '📍' }}</span>
+        <img :src="getIconPath(location.type)" class="w-8 h-8 object-contain" :alt="location.type" />
         <h1 class="text-3xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">{{ location.name }}</h1>
         <span class="badge bg-white/5 text-zinc-500">{{ location.type }}</span>
+        <span v-if="location.hidden && (auth.isDm || auth.isAdmin)" class="badge bg-amber-500/15 text-amber-400 text-xs">👁️‍🗨️ Hidden</span>
+        <span class="flex-1"></span>
+        <button v-if="auth.isDm || auth.isAdmin" @click="toggleLocationHidden" :class="['text-sm transition-colors mr-2', location.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-amber-400']" :title="location.hidden ? 'Show to players' : 'Hide from players'">{{ location.hidden ? '👁️‍🗨️ Reveal' : '👁️ Hide' }}</button>
+        <button v-if="auth.isDm || auth.isAdmin" @click="deleteLocation" class="text-zinc-600 hover:text-red-400 transition-colors text-sm" title="Delete location">🗑️ Delete</button>
       </div>
-      <p v-if="location.hexKey" class="text-zinc-600 text-sm mb-4">📍 Hex {{ location.hexKey }}</p>
-      <p class="text-zinc-400 mb-6">{{ location.description }}</p>
+      <p v-if="location.hexKey" class="text-zinc-600 text-sm mb-2 inline-block cursor-default" @mouseenter="showMiniMap(location.hexKey!, $event)" @mouseleave="hideMiniMap" @click.stop="toggleMiniMap(location.hexKey!, $event)">📍 Hex {{ location.hexKey }}</p>
+      <p v-if="location.parentLocationId" class="text-zinc-600 text-sm mb-2">
+        <RouterLink :to="`/locations/${location.parentLocationId}`" class="text-[#ef233c] hover:text-red-400 transition-colors">↑ Parent location</RouterLink>
+      </p>
+      <p class="text-zinc-400 mb-6"><MentionText :text="location.description" /></p>
 
       <!-- Location Image -->
       <div v-if="location.imageUrl" class="mb-6">
         <img :src="location.imageUrl" class="w-full max-h-64 object-cover rounded-xl border border-white/10" />
       </div>
-      <button v-if="!location.imageUrl && auth.isAuthenticated" @click="generateLocationImage" :disabled="generating" class="btn !text-xs !py-1.5 mb-6">
-        {{ generating ? '🎨 Generating...' : '🎨 Generate Image' }}
-      </button>
-      <div v-if="genError" class="text-red-400 text-xs mb-4">{{ genError }}</div>
 
       <!-- Interactive Map Section -->
       <div class="mb-8">
@@ -207,12 +353,14 @@ async function generateLocationImage() {
             :mapUrl="location.mapImageUrl"
             :features="features"
             :placingFeature="placingFeature"
+            :highlightedFeatureId="highlightedFeature"
+            :maxHeight="400"
             :isInteractive="true"
             @place="onPlaceFeature"
             @click-feature="onClickFeature"
             @map-click="onMapClick"
           />
-          <p class="text-zinc-600 text-[0.6rem] mt-1.5">Scroll to zoom · Drag to pan · Click map to add a POI</p>
+          <p class="text-zinc-600 text-[0.6rem] mt-1.5">Scroll/pinch to zoom · Drag to pan · Click/tap to add a marker</p>
         </div>
 
         <div v-else class="card-flat p-6 text-center">
@@ -240,14 +388,14 @@ async function generateLocationImage() {
             <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showQuickAdd = false" />
             <div class="relative w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-5 space-y-3 z-10">
               <div class="flex items-center justify-between">
-                <h3 class="text-sm font-semibold text-white" style="font-family: Manrope, sans-serif">📌 Add Point of Interest</h3>
+                <h3 class="text-sm font-semibold text-white" style="font-family: Manrope, sans-serif">📌 Add Marker</h3>
                 <button @click="showQuickAdd = false" class="text-zinc-500 hover:text-white transition-colors">✕</button>
               </div>
               <input v-model="quickAddForm.name" placeholder="Name" class="input w-full" @keyup.enter="quickAddFeature" />
               <select v-model="quickAddForm.type" class="input w-full">
-                <option v-for="t in featureTypes" :key="t" :value="t">{{ typeIcons[t] || '' }} {{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
+                <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
               </select>
-              <textarea v-model="quickAddForm.description" placeholder="Description (optional)" class="input w-full" rows="2" />
+              <MentionTextarea v-model="quickAddForm.description" placeholder="Description (optional)" :rows="2" />
               <div class="flex justify-end gap-2">
                 <button @click="showQuickAdd = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
                 <button @click="quickAddFeature" :disabled="!quickAddForm.name.trim()" class="btn text-sm">Add & Place</button>
@@ -257,10 +405,42 @@ async function generateLocationImage() {
         </transition>
       </Teleport>
 
+      <!-- Sub-Locations Section (Feature 3: nested/recursive) -->
+      <div v-if="subLocations.length > 0" class="mb-8">
+        <h2 class="label mb-3">Sub-Locations ({{ subLocations.length }})</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          <RouterLink
+            v-for="sub in subLocations" :key="sub.id"
+            :to="`/locations/${sub.id}`"
+            class="card-flat p-3 hover:border-white/15 transition-all duration-200 flex items-center gap-2"
+          >
+            <img :src="getIconPath(sub.type)" class="w-6 h-6 object-contain shrink-0" :alt="sub.type" />
+            <div class="min-w-0">
+              <span class="text-xs font-semibold text-zinc-200 truncate block" style="font-family: Manrope, sans-serif">{{ sub.name }}</span>
+              <span class="text-[0.6rem] text-zinc-600">{{ sub.type }}</span>
+            </div>
+          </RouterLink>
+        </div>
+      </div>
+
+      <!-- Location Markers Section -->
+      <div v-if="locationMarkers.length > 0" class="mb-8">
+        <h2 class="label mb-3">Markers ({{ locationMarkers.length }})</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          <div v-for="marker in locationMarkers" :key="marker.id" class="card-flat p-3 flex items-center gap-2">
+            <img :src="markerTypeIcons[marker.type] || getIconPath('other')" class="w-5 h-5 object-contain shrink-0" />
+            <div class="min-w-0">
+              <span class="text-xs font-semibold text-zinc-200 truncate block" style="font-family: Manrope, sans-serif">{{ marker.name }}</span>
+              <span class="text-[0.6rem] text-zinc-600">{{ marker.type }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Features Section -->
       <div>
         <div class="flex items-center justify-between mb-3">
-          <h2 class="label">Features & Points of Interest ({{ features.length }})</h2>
+          <h2 class="label">Features & Points of Interest ({{ visibleFeatures.length }})</h2>
           <button v-if="auth.isAuthenticated" @click="showAddFeature = !showAddFeature" class="btn !text-xs !py-1">
             {{ showAddFeature ? 'Cancel' : '+ Add Feature' }}
           </button>
@@ -271,38 +451,79 @@ async function generateLocationImage() {
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <input v-model="newFeat.name" placeholder="Feature name" class="input" />
             <select v-model="newFeat.type" class="input">
-              <option v-for="t in featureTypes" :key="t" :value="t">{{ typeIcons[t] || '' }} {{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
+              <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
             </select>
             <button @click="addFeature" :disabled="!newFeat.name.trim()" class="btn !py-2">Add</button>
           </div>
-          <textarea v-model="newFeat.description" placeholder="Description..." class="input w-full mt-2" rows="2" />
+          <MentionTextarea v-model="newFeat.description" placeholder="Description..." input-class="mt-2" :rows="2" />
         </div>
 
-        <div v-if="features.length === 0" class="text-zinc-600 text-sm">No features discovered yet.</div>
+        <div v-if="visibleFeatures.length === 0" class="text-zinc-600 text-sm">No features discovered yet.</div>
 
-        <div class="space-y-2">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
           <div
-            v-for="feat in features" :key="feat.id"
+            v-for="feat in visibleFeatures" :key="feat.id"
             :id="'feat-' + feat.id"
-            class="card-flat p-4 flex items-start justify-between"
+            :class="['card-flat p-3 cursor-pointer transition-all duration-200 relative overflow-hidden', highlightedFeature === feat.id ? 'border-[#ef233c]/40 bg-[#ef233c]/5' : 'hover:border-white/15', feat.hidden ? '!border-amber-500/40 !border-dashed !border-2' : '']"
+            @mouseenter="highlightedFeature = feat.id"
+            @mouseleave="highlightedFeature = null"
           >
-            <div class="flex items-start gap-3">
-              <span class="text-lg mt-0.5">{{ typeIcons[feat.type] || '📌' }}</span>
-              <div>
-                <h4 class="text-sm font-semibold text-zinc-200" style="font-family: Manrope, sans-serif">{{ feat.name }}</h4>
-                <span class="badge bg-white/5 text-zinc-600 mr-1">{{ feat.type }}</span>
-                <span v-if="feat.mapPosition" class="text-[0.6rem] text-green-400/60">📍 placed on map</span>
-                <p v-if="feat.description" class="text-sm text-zinc-500 mt-1">{{ feat.description }}</p>
+            <!-- Edit mode -->
+            <div v-if="editingFeature?.id === feat.id" class="space-y-2" @click.stop>
+              <input v-model="editFeatForm.name" class="input w-full !text-xs" placeholder="Name" />
+              <select v-model="editFeatForm.type" class="input w-full !text-xs">
+                <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
+              </select>
+              <MentionTextarea v-model="editFeatForm.description" input-class="!text-xs" :rows="2" placeholder="Description..." />
+              <div class="flex justify-end gap-1">
+                <button @click="editingFeature = null" class="text-zinc-600 text-[0.6rem] hover:text-zinc-400">Cancel</button>
+                <button @click="saveEditFeature" :disabled="!editFeatForm.name.trim()" class="btn !text-[0.6rem] !py-0.5 !px-2">Save</button>
               </div>
             </div>
-            <button
-              v-if="location.mapImageUrl && !feat.mapPosition"
-              @click="placingFeature = feat.id"
-              class="btn-ghost !text-[0.6rem] !py-1 !px-2 shrink-0"
-            >📍 Place on Map</button>
+
+            <!-- View mode -->
+            <div v-else>
+              <!-- Hidden banner -->
+              <div v-if="feat.hidden" class="absolute top-0 left-0 right-0 bg-amber-500/20 text-amber-400 text-[0.5rem] font-bold uppercase tracking-widest text-center py-0.5 z-10" style="font-family: Manrope, sans-serif">🚫 Hidden</div>
+              <div :class="feat.hidden ? 'mt-3' : ''">
+                <div class="flex items-center gap-1.5 mb-1">
+                  <img :src="getIconPath(feat.type)" class="w-5 h-5 object-contain shrink-0" :alt="feat.type" />
+                  <span class="text-xs font-semibold text-zinc-200 truncate" style="font-family: Manrope, sans-serif">{{ feat.name }}</span>
+                </div>
+                <div class="flex items-center gap-1 mb-1">
+                  <span class="text-[0.6rem] text-zinc-600">{{ feat.type }}</span>
+                  <span v-if="feat.mapPosition" class="text-[0.55rem] text-green-400/50">📍</span>
+                  <span v-if="feat.hexKey || location!.hexKey" class="text-[0.55rem] text-zinc-600 cursor-default" @mouseenter="showMiniMap((feat.hexKey || location!.hexKey)!, $event)" @mouseleave="hideMiniMap" @click.stop="toggleMiniMap((feat.hexKey || location!.hexKey)!, $event)">🗺️ {{ feat.hexKey || location!.hexKey }}</span>
+                </div>
+                <p v-if="feat.description" class="text-zinc-500 text-[0.65rem] line-clamp-2"><MentionText :text="feat.description" /></p>
+                <!-- Action buttons (always visible) -->
+                <div class="flex items-center gap-1 mt-1.5">
+                  <button v-if="location!.mapImageUrl && !feat.mapPosition" @click.stop="placingFeature = feat.id" class="text-zinc-600 hover:text-zinc-300 text-[0.6rem] transition-colors">📍 Place</button>
+                  <button v-if="feat.mapPosition" @click.stop="removeFeatureFromMap(feat)" class="text-zinc-600 hover:text-zinc-400 text-[0.6rem] transition-colors" title="Remove from map">📍✕</button>
+                  <span class="flex-1"></span>
+                  <button v-if="auth.isDm || auth.isAdmin" @click.stop="toggleFeatureHidden(feat)" :class="['text-sm transition-colors', feat.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-amber-400']" :title="feat.hidden ? 'Show to players' : 'Hide from players'">{{ feat.hidden ? '🚫' : '👁️' }}</button>
+                  <button v-if="auth.isAuthenticated" @click.stop="startEditFeature(feat)" class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors">✏️</button>
+                  <button v-if="auth.isDm || auth.isAdmin" @click.stop="deleteFeature(feat)" class="text-zinc-600 hover:text-red-400 text-sm transition-colors">🗑️</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Mini map hover popup -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-100"
+        enter-from-class="opacity-0" enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-75"
+        leave-from-class="opacity-100" leave-to-class="opacity-0"
+      >
+        <div v-if="miniMapHex" class="fixed z-[100] shadow-2xl rounded-lg border border-white/10 bg-zinc-950/95 backdrop-blur-sm p-1 pointer-events-none" :style="{ left: miniMapPos.x + 'px', top: miniMapPos.y + 'px' }">
+          <HexMiniMap :hexKey="miniMapHex" :width="320" />
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>

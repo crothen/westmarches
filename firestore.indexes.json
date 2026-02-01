@@ -15,6 +15,14 @@
         { "fieldPath": "hexKey", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "npcNotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "npcId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

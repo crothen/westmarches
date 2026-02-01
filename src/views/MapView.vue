@@ -1,21 +1,45 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import HexGrid from '../components/map/HexGrid.vue'
 import HexDetailPanel from '../components/map/HexDetailPanel.vue'
 import { useMapData } from '../composables/useMapData'
 
+const route = useRoute()
+const router = useRouter()
 const selectedHex = ref<{ x: number; y: number } | null>(null)
+const hexGridRef = ref<InstanceType<typeof HexGrid> | null>(null)
 const { hexData, terrainConfig, tagsConfig } = useMapData()
 const mapDocRef = doc(db, 'maps', 'world')
 
+// Parse initial hex from URL query (?hex=5_10)
+const initialHex = computed(() => {
+  const param = route.query.hex
+  if (param && typeof param === 'string') {
+    const parts = param.split('_').map(Number)
+    if (parts.length === 2 && !isNaN(parts[0]!) && !isNaN(parts[1]!)) {
+      return { x: parts[0]!, y: parts[1]! }
+    }
+  }
+  return null
+})
+
+// Set selectedHex from URL on first load
+if (initialHex.value) {
+  selectedHex.value = initialHex.value
+}
+
 function onHexClick(hex: { x: number; y: number }) {
   selectedHex.value = hex
+  // Replace URL silently — no history entry per click, no zoom/jump
+  router.replace({ query: { hex: `${hex.x}_${hex.y}` } })
 }
 
 function closePanel() {
   selectedHex.value = null
+  router.replace({ query: {} })
 }
 
 async function updateTerrain(hexKey: string, terrainId: number) {
@@ -49,6 +73,10 @@ async function updateDetailMap(hexKey: string, url: string | null) {
   }
 }
 
+function onMarkersChanged() {
+  hexGridRef.value?.refreshMarkers()
+}
+
 async function toggleTag(hexKey: string, tagId: number) {
   const currentTags = hexData.value[hexKey]?.tags || []
   let newTags: number[]
@@ -70,7 +98,7 @@ async function toggleTag(hexKey: string, tagId: number) {
 </script>
 
 <template>
-  <div class="h-[calc(100vh-5rem)] flex">
+  <div class="h-[calc(100vh-3rem)] flex">
     <!-- Map area -->
     <div class="flex-1 flex flex-col min-w-0">
       <div class="flex items-center justify-between mb-3 px-1">
@@ -79,7 +107,7 @@ async function toggleTag(hexKey: string, tagId: number) {
           <span class="text-[#ef233c] font-mono">{{ selectedHex.x }}, {{ selectedHex.y }}</span>
         </div>
       </div>
-      <HexGrid @hex-click="onHexClick" class="flex-1 rounded-xl overflow-hidden" />
+      <HexGrid ref="hexGridRef" :initial-hex="initialHex" @hex-click="onHexClick" class="flex-1 rounded-xl overflow-hidden" />
     </div>
 
     <!-- Detail panel (slides in from right) -->
@@ -102,6 +130,7 @@ async function toggleTag(hexKey: string, tagId: number) {
         @set-main-tag="setMainTag"
         @toggle-tag="toggleTag"
         @update-detail-map="updateDetailMap"
+        @markers-changed="onMarkersChanged"
       />
     </transition>
   </div>

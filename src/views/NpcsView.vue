@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc } from 'firebase/firestore'
+import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
 import type { Npc, NpcNote, Organization } from '../types'
+import TagInput from '../components/common/TagInput.vue'
 
 const auth = useAuthStore()
 const { error: genError, generateImage } = useImageGen()
@@ -15,23 +16,16 @@ const npcNotes = ref<Record<string, NpcNote[]>>({})
 const loading = ref(true)
 const searchQuery = ref('')
 const filterTag = ref<string | null>(null)
-const expandedNpc = ref<string | null>(null)
 const generatingForNpc = ref<string | null>(null)
 
 // Modal edit state
 const showEditModal = ref(false)
 const editingNpcData = ref<Npc | null>(null)
-const editForm = ref({ name: '', race: '', description: '', locationEncountered: '', tags: '' })
+const editForm = ref({ name: '', race: '', description: '', locationEncountered: '', tags: [] as string[] })
 const savingEdit = ref(false)
 const portraitPrompt = ref('')
 
-// Note state
-const newNoteNpc = ref<string | null>(null)
-const newNoteContent = ref('')
-const newNotePrivate = ref(false)
-const savingNote = ref(false)
-const editingNoteId = ref<string | null>(null)
-const editingNoteContent = ref('')
+// Note state (used in edit modal only now)
 
 
 onMounted(async () => {
@@ -56,7 +50,6 @@ onMounted(async () => {
     if (window.location.hash) {
       const targetId = window.location.hash.slice(1)
       if (npcs.value.some(n => n.id === targetId)) {
-        expandedNpc.value = targetId
         await nextTick()
         document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
@@ -87,10 +80,6 @@ const filteredNpcs = computed(() => {
 
 const isDeceased = (npc: Npc) => (npc.tags || []).includes('deceased')
 
-function toggleExpand(id: string) {
-  expandedNpc.value = expandedNpc.value === id ? null : id
-}
-
 function getUnitAbbrev(npc: Npc): string | null {
   const unitTags = ['ZFC', 'LDU', 'DDU', 'GDU', 'PCU', 'EFDU', 'UEU', 'VIU']
   return (npc.tags || []).find(t => unitTags.includes(t)) || null
@@ -101,11 +90,6 @@ function getRoleBadge(npc: Npc): string | null {
   if ((npc.tags || []).includes('leader')) return 'Leader'
   if ((npc.tags || []).includes('subleader')) return 'Vice-Leader'
   return null
-}
-
-function getOrgsForNpc(npc: Npc): Organization[] {
-  if (!npc.organizationIds?.length) return []
-  return orgs.value.filter(o => npc.organizationIds.includes(o.id))
 }
 
 function noteCount(npcId: string): number {
@@ -124,7 +108,7 @@ function openEditModal(npc: Npc) {
     race: npc.race || '',
     description: npc.description || '',
     locationEncountered: npc.locationEncountered || '',
-    tags: (npc.tags || []).join(', '),
+    tags: [...(npc.tags || [])],
   }
   portraitPrompt.value = getDefaultPortraitPrompt(npc)
   showEditModal.value = true
@@ -145,7 +129,7 @@ async function saveEdit() {
     race: editForm.value.race.trim(),
     description: editForm.value.description.trim(),
     locationEncountered: editForm.value.locationEncountered.trim(),
-    tags: editForm.value.tags.split(',').map(t => t.trim()).filter(Boolean),
+    tags: editForm.value.tags,
     updatedAt: new Date(),
   }
 
@@ -177,88 +161,6 @@ async function generatePortrait() {
   generatingForNpc.value = null
 }
 
-// --- Notes ---
-function startNote(npcId: string) {
-  newNoteNpc.value = npcId
-  newNoteContent.value = ''
-  newNotePrivate.value = false
-}
-
-function startEditNote(note: NpcNote) {
-  editingNoteId.value = note.id
-  editingNoteContent.value = note.content
-}
-
-function cancelEditNote() {
-  editingNoteId.value = null
-  editingNoteContent.value = ''
-}
-
-async function saveEditNote(note: NpcNote) {
-  if (!editingNoteContent.value.trim()) return
-  try {
-    await updateDoc(doc(db, 'npcNotes', note.id), { content: editingNoteContent.value.trim(), updatedAt: new Date() })
-    note.content = editingNoteContent.value.trim()
-    editingNoteId.value = null
-    editingNoteContent.value = ''
-  } catch (e) {
-    console.error('Failed to edit note:', e)
-  }
-}
-
-async function saveNote(npcId: string) {
-  if (!newNoteContent.value.trim()) return
-  savingNote.value = true
-  try {
-    const note: Omit<NpcNote, 'id'> = {
-      npcId,
-      userId: auth.firebaseUser!.uid,
-      authorName: auth.appUser?.displayName || 'Unknown',
-      content: newNoteContent.value.trim(),
-      isPrivate: newNotePrivate.value,
-      replies: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }
-    const docRef = await addDoc(collection(db, 'npcNotes'), note)
-    const saved: NpcNote = { id: docRef.id, ...note }
-    if (!npcNotes.value[npcId]) npcNotes.value[npcId] = []
-    npcNotes.value[npcId]!.unshift(saved)
-    newNoteNpc.value = null
-    newNoteContent.value = ''
-  } catch (e) {
-    console.error('Failed to save note:', e)
-    alert('Failed to save note.')
-  } finally {
-    savingNote.value = false
-  }
-}
-
-async function deleteNote(note: NpcNote) {
-  if (!confirm('Delete this note?')) return
-  try {
-    await updateDoc(doc(db, 'npcNotes', note.id), { content: '', deleted: true, deletedBy: auth.firebaseUser?.uid, updatedAt: new Date() })
-    ;(note as any).deleted = true
-    note.content = ''
-  } catch (e) {
-    console.error('Failed to delete note:', e)
-  }
-}
-
-function canEditNote(note: NpcNote) {
-  return note.userId === auth.firebaseUser?.uid && !(note as any).deleted
-}
-
-function canDeleteNote(note: NpcNote) {
-  return (note.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin) && !(note as any).deleted
-}
-
-function formatDate(date: any): string {
-  if (!date) return ''
-  const d = date.toDate ? date.toDate() : new Date(date)
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-}
-
 // --- Hover card ---
 </script>
 
@@ -285,129 +187,61 @@ function formatDate(date: any): string {
     </div>
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-      <div
+      <RouterLink
         v-for="npc in filteredNpcs" :key="npc.id"
         :id="npc.id"
-        :class="['card relative z-10 cursor-pointer', isDeceased(npc) ? 'opacity-50' : '']"
-        @click="toggleExpand(npc.id)"
+        :to="'/npcs/' + npc.id"
+        :class="['card relative z-10 cursor-pointer hover:border-white/15 transition-colors block no-underline', isDeceased(npc) ? 'opacity-50' : '']"
       >
         <div class="relative z-10">
-          <!-- Portrait -->
-          <div v-if="npc.imageUrl" class="overflow-hidden">
-            <img :src="npc.imageUrl" class="w-full h-40 object-cover rounded-t-xl" />
-          </div>
           <div class="p-5">
-            <!-- Header -->
-            <div class="flex items-start justify-between mb-2">
-              <div>
-                <RouterLink
-                  :to="'/npcs/' + npc.id"
-                  class="text-base font-semibold hover:text-[#ef233c] transition-colors"
-                  :class="isDeceased(npc) ? 'line-through text-zinc-500' : 'text-white'"
-                  style="font-family: Manrope, sans-serif"
-                  @click.stop
-                >{{ npc.name }}</RouterLink>
-                <div class="text-zinc-500 text-sm">{{ npc.race }}</div>
+            <!-- Header with portrait -->
+            <div class="flex gap-4 mb-2">
+              <!-- Square portrait thumbnail -->
+              <div class="shrink-0 w-20 h-20 rounded-lg overflow-hidden border border-white/10">
+                <img v-if="npc.imageUrl" :src="npc.imageUrl" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full bg-white/[0.03] flex items-center justify-center text-2xl">👤</div>
               </div>
-              <div class="flex items-center gap-1.5">
-                <span v-if="noteCount(npc.id)" class="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500/80" :title="noteCount(npc.id) + ' note(s)'">📝 {{ noteCount(npc.id) }}</span>
-                <span v-if="getRoleBadge(npc)" class="badge bg-[#ef233c]/15 text-[#ef233c]">{{ getRoleBadge(npc) }}</span>
-                <span v-if="getUnitAbbrev(npc)" class="badge bg-white/5 text-zinc-400">{{ getUnitAbbrev(npc) }}</span>
-                <span v-if="isDeceased(npc)" class="badge bg-zinc-800 text-zinc-500">☠️ Dead</span>
-                <button
-                  v-if="auth.isDm || auth.isAdmin"
-                  @click.stop="openEditModal(npc)"
-                  class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors ml-1"
-                  title="Edit NPC"
-                >✏️</button>
+              <!-- Name / Race / Badges -->
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <span
+                      class="text-base font-semibold"
+                      :class="isDeceased(npc) ? 'line-through text-zinc-500' : 'text-white'"
+                      style="font-family: Manrope, sans-serif"
+                    >{{ npc.name }}</span>
+                    <div class="text-zinc-500 text-sm">{{ npc.race }}</div>
+                  </div>
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <span v-if="noteCount(npc.id)" class="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500/80" :title="noteCount(npc.id) + ' note(s)'">📝 {{ noteCount(npc.id) }}</span>
+                    <span v-if="getRoleBadge(npc)" class="badge bg-[#ef233c]/15 text-[#ef233c]">{{ getRoleBadge(npc) }}</span>
+                    <span v-if="getUnitAbbrev(npc)" class="badge bg-white/5 text-zinc-400">{{ getUnitAbbrev(npc) }}</span>
+                    <span v-if="isDeceased(npc)" class="badge bg-zinc-800 text-zinc-500">☠️ Dead</span>
+                    <button
+                      v-if="auth.isDm || auth.isAdmin"
+                      @click.prevent="openEditModal(npc)"
+                      class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors ml-1"
+                      title="Edit NPC"
+                    >✏️</button>
+                  </div>
+                </div>
+                <div class="flex flex-wrap gap-1.5 mt-1">
+                  <span v-for="tag in (npc.tags || []).filter(t => !['commander','leader','subleader','deceased','ZFC','LDU','DDU','GDU','PCU','EFDU','UEU','VIU'].includes(t)).slice(0, 3)" :key="tag" class="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-white/5 text-zinc-600">{{ tag }}</span>
+                </div>
               </div>
             </div>
 
             <!-- Description preview -->
-            <p :class="['text-sm mt-2', expandedNpc === npc.id ? 'text-zinc-300' : 'text-zinc-500 line-clamp-2']">{{ npc.description }}</p>
+            <p class="text-sm mt-2 text-zinc-500 line-clamp-2">{{ npc.description }}</p>
 
-            <!-- Expanded details -->
-            <div v-if="expandedNpc === npc.id" class="mt-3 pt-3 border-t border-white/[0.06] space-y-2">
-              <div v-if="npc.locationEncountered" class="text-sm">
-                <span class="text-zinc-600">📍 Encountered at:</span>
-                <span class="text-zinc-400 ml-1">{{ npc.locationEncountered }}</span>
-              </div>
-              <div v-if="npc.tags?.length" class="flex flex-wrap gap-1.5 mt-2">
-                <span v-for="tag in npc.tags" :key="tag" class="text-[0.65rem] px-2 py-0.5 rounded-full bg-white/5 text-zinc-500">{{ tag }}</span>
-              </div>
-              <div v-if="getOrgsForNpc(npc).length" class="mt-2">
-                <span class="text-zinc-600 text-xs">🏛️ </span>
-                <RouterLink
-                  v-for="(org, i) in getOrgsForNpc(npc)" :key="org.id"
-                  :to="'/organizations#' + org.id"
-                  class="text-xs text-zinc-400 hover:text-[#ef233c] transition-colors"
-                  @click.stop
-                >{{ org.name }}<span v-if="i < getOrgsForNpc(npc).length - 1">, </span></RouterLink>
-              </div>
-
-              <!-- Action buttons -->
-              <div class="flex flex-wrap gap-2 mt-3" @click.stop>
-                <button v-if="auth.isAuthenticated && !auth.isDm && !auth.isAdmin" @click.stop="openEditModal(npc)" class="btn !text-[0.65rem] !py-1.5 !px-3">✏️ Edit</button>
-                <button v-if="auth.isAuthenticated" @click.stop="startNote(npc.id)" class="btn !text-[0.65rem] !py-1.5 !px-3 !bg-white/5 !text-zinc-400">📝 Add Note</button>
-                <RouterLink :to="'/npcs/' + npc.id" class="btn !text-[0.65rem] !py-1.5 !px-3 !bg-white/5 !text-zinc-400" @click.stop>📄 Detail Page</RouterLink>
-              </div>
-
-              <!-- Add Note Form -->
-              <div v-if="newNoteNpc === npc.id" class="mt-3 pt-3 border-t border-white/[0.06] space-y-2" @click.stop>
-                <textarea v-model="newNoteContent" class="input w-full text-sm" rows="2" placeholder="Write a note about this NPC..." />
-                <div class="flex items-center justify-between">
-                  <label class="flex items-center gap-2 text-xs text-zinc-500 cursor-pointer">
-                    <input type="checkbox" v-model="newNotePrivate" class="rounded border-white/10 bg-white/5" />
-                    <span>🔒 Private (only you {{ auth.isDm || auth.isAdmin ? '' : '& DMs' }} can see)</span>
-                  </label>
-                  <div class="flex gap-2">
-                    <button @click.stop="newNoteNpc = null" class="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
-                    <button @click.stop="saveNote(npc.id)" :disabled="savingNote || !newNoteContent.trim()" class="btn !text-xs !py-1 !px-3">Save</button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Notes list -->
-              <div v-if="npcNotes[npc.id]?.length" class="mt-3 pt-3 border-t border-white/[0.06] space-y-2">
-                <h4 class="label text-xs">Notes</h4>
-                <div
-                  v-for="note in npcNotes[npc.id]" :key="note.id"
-                  :class="['p-2.5 rounded-lg text-sm', (note as any).deleted ? 'bg-white/[0.01]' : note.isPrivate ? 'bg-amber-500/5 border border-amber-500/10' : 'bg-white/[0.03]']"
-                  @click.stop
-                >
-                  <div v-if="(note as any).deleted" class="text-zinc-600 text-xs italic">🗑️ This note was deleted</div>
-                  <template v-else>
-                    <div class="flex items-center justify-between mb-1">
-                      <div class="flex items-center gap-2">
-                        <span class="text-zinc-400 text-xs font-medium">{{ note.authorName }}</span>
-                        <span v-if="note.isPrivate" class="text-[0.6rem] text-amber-500/70">🔒 Private</span>
-                        <span class="text-zinc-600 text-[0.65rem]">{{ formatDate(note.createdAt) }}</span>
-                      </div>
-                      <div class="flex items-center gap-2">
-                        <button v-if="canEditNote(note)" @click.stop="startEditNote(note)" class="text-zinc-500 hover:text-[#ef233c] text-xs transition-colors">Edit</button>
-                        <button v-if="canDeleteNote(note)" @click.stop="deleteNote(note)" class="text-zinc-500 hover:text-red-400 text-xs transition-colors">Delete</button>
-                      </div>
-                    </div>
-                    <div v-if="editingNoteId === note.id" class="space-y-2">
-                      <textarea v-model="editingNoteContent" class="input w-full text-sm" rows="2" />
-                      <div class="flex gap-2 justify-end">
-                        <button @click.stop="cancelEditNote" class="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
-                        <button @click.stop="saveEditNote(note)" class="btn !text-xs !py-1 !px-3">Save</button>
-                      </div>
-                    </div>
-                    <p v-else class="text-zinc-400 text-sm whitespace-pre-wrap">{{ note.content }}</p>
-                  </template>
-                </div>
-              </div>
-            </div>
-
-            <!-- Collapsed footer -->
-            <div v-if="expandedNpc !== npc.id" class="mt-2 flex items-center gap-2">
+            <!-- Footer -->
+            <div class="mt-2 flex items-center gap-2">
               <span v-if="npc.locationEncountered" class="text-xs text-zinc-600">📍 {{ npc.locationEncountered }}</span>
             </div>
           </div>
         </div>
-      </div>
+      </RouterLink>
     </div>
 
     <!-- Edit Modal -->
@@ -449,8 +283,8 @@ function formatDate(date: any): string {
                 <input v-model="editForm.locationEncountered" class="input w-full" />
               </div>
               <div>
-                <label class="label text-xs mb-1 block">Tags (comma-separated)</label>
-                <input v-model="editForm.tags" class="input w-full" placeholder="e.g. ZFC, leader, quest-giver" />
+                <label class="label text-xs mb-1 block">Tags</label>
+                <TagInput v-model="editForm.tags" />
               </div>
 
               <!-- Portrait Generation -->
@@ -460,9 +294,13 @@ function formatDate(date: any): string {
                 <button
                   @click="generatePortrait"
                   :disabled="generatingForNpc === editingNpcData.id"
-                  class="btn !text-xs !py-1.5 mt-2 w-full"
+                  class="btn !text-xs !py-1.5 mt-2 w-full flex items-center justify-center gap-2"
                 >
-                  {{ generatingForNpc === editingNpcData.id ? '🎨 Generating portrait...' : '🎨 Generate Portrait' }}
+                  <svg v-if="generatingForNpc === editingNpcData.id" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  {{ generatingForNpc === editingNpcData.id ? 'Generating portrait...' : '🎨 Generate Portrait' }}
                 </button>
                 <div v-if="genError && generatingForNpc === editingNpcData.id" class="text-red-400 text-xs mt-1">{{ genError }}</div>
               </div>

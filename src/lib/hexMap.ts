@@ -39,6 +39,16 @@ export interface HexCoord {
   y: number
 }
 
+export interface HexMarkerData {
+  locationType?: string
+  featureCount: number
+  noteCount: number
+  markerCount?: number
+  markerTypes?: string[]  // marker types present in this hex
+  hidden?: boolean  // true if ALL locations/features in this hex are hidden
+  hasHiddenItems?: boolean  // true if ANY location/feature in this hex is hidden
+}
+
 export class HexMap {
   canvas: HTMLCanvasElement
   ctx: CanvasRenderingContext2D
@@ -56,12 +66,16 @@ export class HexMap {
   camera: Camera
   loadedPatterns: Record<number, CanvasPattern | null>
   tagImages: Record<number, HTMLImageElement>
+  /** Preloaded icon images for hex indicators (location/feature/marker types) */
+  iconImages: Record<string, HTMLImageElement>
   imagesLoaded: number
   dpr: number
 
   // Input state
   isPanning: boolean
   isLeftMouseDown: boolean
+  leftDownStart: { x: number; y: number }
+  hasDragged: boolean
   lastMouse: { x: number; y: number }
   initialPinchDist: number | null
   initialCamZoom: number
@@ -108,12 +122,15 @@ export class HexMap {
     this.camera = { x: 50, y: 50, zoom: 1 }
     this.loadedPatterns = {}
     this.tagImages = {}
+    this.iconImages = {}
     this.imagesLoaded = 0
     this.dpr = 1
 
     // Input state
     this.isPanning = false
     this.isLeftMouseDown = false
+    this.leftDownStart = { x: 0, y: 0 }
+    this.hasDragged = false
     this.lastMouse = { x: 0, y: 0 }
     this.initialPinchDist = null
     this.initialCamZoom = 1
@@ -138,6 +155,49 @@ export class HexMap {
     window.addEventListener('resize', this._boundResize)
     this.setupInputListeners()
     this.loadTextures()
+    this.loadIconImages()
+  }
+
+  /**
+   * Preload PNG icon images for hex map indicators.
+   */
+  loadIconImages(): void {
+    const iconPaths: Record<string, string> = {
+      // Location types
+      city: '/icons/locations/city.png',
+      town: '/icons/locations/town.png',
+      village: '/icons/locations/village.png',
+      castle: '/icons/locations/castle.png',
+      fortress: '/icons/locations/fortress.png',
+      monastery: '/icons/locations/monastery.png',
+      camp: '/icons/locations/camp.png',
+      ruins: '/icons/locations/ruins.png',
+      other: '/icons/locations/other.png',
+      // Marker types
+      clue: '/icons/markers/clue.png',
+      battle: '/icons/markers/battle.png',
+      danger: '/icons/markers/danger.png',
+      puzzle: '/icons/markers/puzzle.png',
+      mystery: '/icons/markers/mystery.png',
+      waypoint: '/icons/markers/waypoint.png',
+      quest: '/icons/markers/quest.png',
+      locked: '/icons/markers/locked.png',
+      unlocked: '/icons/markers/unlocked.png',
+      // Feature fallback
+      feature: '/icons/features/other.png',
+    }
+
+    for (const [key, path] of Object.entries(iconPaths)) {
+      const img = new Image()
+      img.src = path
+      img.onload = () => {
+        this.iconImages[key] = img
+        this.requestDraw()
+      }
+      img.onerror = () => {
+        console.warn(`Failed to load icon: ${path}`)
+      }
+    }
   }
 
   destroy(): void {
@@ -306,6 +366,34 @@ export class HexMap {
     return { c: col + o.c, r: row + o.r }
   }
 
+  fitToView(): void {
+    const rect = this.container.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+
+    // Calculate zoom to fit the entire grid, but position at top-left
+    const bottomRight = this.getHexCenter(this.CONFIG.gridW, this.CONFIG.gridH)
+    const size = this.CONFIG.hexSize
+
+    const mapLeft = -size * 2
+    const mapTop = -size
+    const mapRight = bottomRight.x + size * 2
+    const mapBottom = bottomRight.y + size * 2
+    const mapWidth = mapRight - mapLeft
+    const mapHeight = mapBottom - mapTop
+
+    const margin = 20
+    const availW = rect.width - margin * 2
+    const availH = rect.height - margin * 2
+    const zoom = Math.min(availW / mapWidth, availH / mapHeight, 2.0)
+
+    this.camera.zoom = zoom
+    // Align to top-left instead of centering
+    this.camera.x = margin - mapLeft * zoom
+    this.camera.y = margin - mapTop * zoom
+
+    this.requestDraw()
+  }
+
   focusOnHex(x: number, y: number): void {
     if (x < 1 || x > this.CONFIG.gridW || y < 1 || y > this.CONFIG.gridH) return
     const center = this.getHexCenter(x, y)
@@ -317,7 +405,7 @@ export class HexMap {
     this.requestDraw()
   }
 
-  draw(hexData: Record<string, HexData>, selectedHex: HexCoord | null, isPaintMode: boolean, userRole: string = 'Player'): void {
+  draw(hexData: Record<string, HexData>, selectedHex: HexCoord | null, isPaintMode: boolean, userRole: string = 'Player', markers?: Record<string, HexMarkerData>): void {
     if (!Number.isFinite(this.camera.x)) this.camera = { x: 50, y: 50, zoom: 1 }
 
     this.ctx.setTransform(1, 0, 0, 1, 0, 0)
@@ -371,6 +459,7 @@ export class HexMap {
     }
 
     this.drawLabels(selectedHex)
+    if (markers) this.drawHexIndicators(markers, userRole)
     if (!isPaintMode && selectedHex) this.drawSelectionHighlight(selectedHex)
   }
 
@@ -510,6 +599,117 @@ export class HexMap {
     this.ctx.restore()
   }
 
+  drawHexIndicators(markers: Record<string, HexMarkerData>, userRole: string = 'player'): void {
+    const size = this.CONFIG.hexSize
+    const isDmOrAdmin = userRole === 'dm' || userRole === 'admin'
+
+    // Compensate for zoom so icons stay readable at any zoom level
+    const zoomScale = Math.min(1 / Math.max(this.camera.zoom, 0.15), 4)
+    // When zoomed far out, only show the highest-priority icon per hex
+    const isZoomedOut = this.camera.zoom < 0.8
+
+    for (const [hexKey, data] of Object.entries(markers)) {
+      const parts = hexKey.split('_')
+      const col = parseInt(parts[0]!)
+      const row = parseInt(parts[1]!)
+      if (isNaN(col) || isNaN(row)) continue
+      if (col < 1 || col > this.CONFIG.gridW || row < 1 || row > this.CONFIG.gridH) continue
+
+      // For players, skip entirely hidden markers
+      if (data.hidden && !isDmOrAdmin) continue
+
+      const center = this.getHexCenter(col, row)
+      const isHidden = data.hasHiddenItems || data.hidden
+      let drewPrimary = false
+
+      // Location or feature indicator at bottom of hex
+      if (data.locationType || data.featureCount > 0) {
+        const iconY = center.y + size * 0.5
+        const iconDrawSize = Math.max(20, size * 0.9) * zoomScale
+
+        if (data.locationType) {
+          const iconImg = this.iconImages[data.locationType] || this.iconImages['other']
+          this.ctx.save()
+          if (isHidden && isDmOrAdmin) this.ctx.globalAlpha = 0.3
+          if (iconImg) {
+            this.ctx.shadowColor = 'rgba(0,0,0,0.7)'
+            this.ctx.shadowBlur = 4 * zoomScale
+            this.ctx.drawImage(iconImg, center.x - iconDrawSize / 2, iconY - iconDrawSize / 2, iconDrawSize, iconDrawSize)
+          } else {
+            // Fallback to text if icon not loaded
+            this.ctx.font = `${iconDrawSize}px sans-serif`
+            this.ctx.textAlign = 'center'
+            this.ctx.textBaseline = 'middle'
+            this.ctx.shadowColor = 'rgba(0,0,0,0.7)'
+            this.ctx.shadowBlur = 4 * zoomScale
+            this.ctx.fillText('📍', center.x, iconY)
+          }
+          this.ctx.restore()
+          drewPrimary = true
+        } else {
+          // Feature-only: use generic feature icon or cyan dot
+          const featureImg = this.iconImages['feature']
+          const dotSize = iconDrawSize * 0.7
+          this.ctx.save()
+          if (isHidden && isDmOrAdmin) this.ctx.globalAlpha = 0.3
+          if (featureImg) {
+            this.ctx.shadowColor = 'rgba(0,0,0,0.5)'
+            this.ctx.shadowBlur = 3 * zoomScale
+            this.ctx.drawImage(featureImg, center.x - dotSize / 2, iconY - dotSize / 2, dotSize, dotSize)
+          } else {
+            const dotRadius = size * 0.22 * zoomScale
+            this.ctx.beginPath()
+            this.ctx.arc(center.x, iconY, dotRadius, 0, Math.PI * 2)
+            this.ctx.fillStyle = '#06b6d4'
+            this.ctx.fill()
+            this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
+            this.ctx.lineWidth = 1.5 * zoomScale
+            this.ctx.stroke()
+          }
+          this.ctx.restore()
+          drewPrimary = true
+        }
+      }
+
+      // Marker indicators (clue, battle, danger, etc.) at top-left
+      if (data.markerTypes && data.markerTypes.length > 0) {
+        const markerDrawSize = Math.max(16, size * 0.7) * zoomScale
+        const maxShow = isZoomedOut ? 1 : Math.min(data.markerTypes.length, 3)
+        for (let i = 0; i < maxShow; i++) {
+          const markerType = data.markerTypes[i]!
+          const markerImg = this.iconImages[markerType]
+          if (!markerImg) continue
+          const mx = center.x - size * 0.5 + (i * markerDrawSize * 0.6)
+          const my = center.y - size * 0.5
+          this.ctx.save()
+          if (isHidden && isDmOrAdmin) this.ctx.globalAlpha = 0.3
+          this.ctx.shadowColor = 'rgba(0,0,0,0.6)'
+          this.ctx.shadowBlur = 3 * zoomScale
+          this.ctx.drawImage(markerImg, mx - markerDrawSize / 2, my - markerDrawSize / 2, markerDrawSize, markerDrawSize)
+          this.ctx.restore()
+        }
+        drewPrimary = true
+      }
+
+      // Note indicator at top-right corner
+      // When zoomed out and we already drew a location/feature icon, skip the comment icon
+      if (data.noteCount > 0 && !(isZoomedOut && drewPrimary)) {
+        const nx = center.x + size * 0.5
+        const ny = center.y - size * 0.5
+        const noteSize = Math.max(18, size * 0.7) * zoomScale
+
+        this.ctx.save()
+        this.ctx.font = `${noteSize}px sans-serif`
+        this.ctx.textAlign = 'center'
+        this.ctx.textBaseline = 'middle'
+        this.ctx.shadowColor = 'rgba(0,0,0,0.7)'
+        this.ctx.shadowBlur = 3 * zoomScale
+        this.ctx.fillText('💬', nx, ny)
+        this.ctx.restore()
+      }
+    }
+  }
+
   getSeededRandom(x: number, y: number, edgeIndex: number, stepIndex: number, axis: number): number {
     const seed = x * 374761393 + y * 668265263 + edgeIndex * 19283 + stepIndex * 5347 + axis * 29384
     const val = Math.sin(seed) * 10000
@@ -560,14 +760,22 @@ export class HexMap {
   }
 
   private handleMouseMove(e: MouseEvent): void {
-    if (this.isPanning) {
-      this.camera.x += e.clientX - this.lastMouse.x
-      this.camera.y += e.clientY - this.lastMouse.y
+    if (this.isPanning || this.isLeftMouseDown) {
+      const dx = e.clientX - this.lastMouse.x
+      const dy = e.clientY - this.lastMouse.y
+      // Track drag distance for left-click
+      if (this.isLeftMouseDown && !this.hasDragged) {
+        const totalDx = e.clientX - this.leftDownStart.x
+        const totalDy = e.clientY - this.leftDownStart.y
+        if (Math.hypot(totalDx, totalDy) > 5) {
+          this.hasDragged = true
+        }
+      }
+      // Pan with any held button (left, middle, right)
+      this.camera.x += dx
+      this.camera.y += dy
+      this.container.style.cursor = 'grabbing'
       if (this.onCameraChange) this.onCameraChange()
-    } else if (this.isLeftMouseDown) {
-      const worldPos = this.toWorld(e.clientX, e.clientY)
-      const hex = this.getHexAt(worldPos.x, worldPos.y)
-      if (hex && this.onHexClick) this.onHexClick(hex, e.clientX, e.clientY, 'drag')
     }
     this.lastMouse = { x: e.clientX, y: e.clientY }
   }
@@ -589,9 +797,8 @@ export class HexMap {
       } else if (e.button === 0) {
         this.isPanning = false
         this.isLeftMouseDown = true
-        const worldPos = this.toWorld(e.clientX, e.clientY)
-        const hex = this.getHexAt(worldPos.x, worldPos.y)
-        if (this.onHexClick) this.onHexClick(hex, e.clientX, e.clientY, 'down')
+        this.hasDragged = false
+        this.leftDownStart = { x: e.clientX, y: e.clientY }
       }
       this.lastMouse = { x: e.clientX, y: e.clientY }
     })
@@ -600,7 +807,7 @@ export class HexMap {
     window.addEventListener('mouseup', this._boundMouseUp)
 
     this.canvas.addEventListener('click', (e: MouseEvent) => {
-      if (e.button !== 0 || this.isPanning) return
+      if (e.button !== 0 || this.hasDragged) return
       const worldPos = this.toWorld(e.clientX, e.clientY)
       const hex = this.getHexAt(worldPos.x, worldPos.y)
       if (hex && this.onHexClick) this.onHexClick(hex, e.clientX, e.clientY, 'click')
