@@ -143,3 +143,14 @@ export interface LootEntry {
   quantity: number
   recipient?: string  // character name or "party"
 }
+
+export interface SessionNote {
+  id: string
+  sessionId: string
+  userId: string
+  authorName: string
+  content: string
+  isPrivate: boolean  // private = only visible to author and DMs
+  createdAt: Date
+  updatedAt: Date
+}

@@ -86,5 +86,24 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create, update, delete: if isDm();
     }
+
+    // Session Notes
+    match /sessionNotes/{noteId} {
+      allow read: if isAuthenticated() && (!resource.data.isPrivate || isDm() || resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDm());
+    }
+
+    // Map data
+    match /maps/{mapId} {
+      allow read: if isAuthenticated();
+      allow write: if isDm();
+    }
+
+    // Config (terrain, tags)
+    match /config/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
   }
 }
