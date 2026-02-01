@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../../firebase/config'
@@ -17,18 +17,18 @@ const loading = ref(true)
 const saving = ref(false)
 const savedKey = ref<string | null>(null)
 
-// Edit state
-const editingKey = ref<string | null>(null)
-const editForm = ref({ name: '', color: '#666666', scale: 1.0 })
-
-// Add state
-const showAdd = ref(false)
-const addForm = ref({ name: '', color: '#666666', scale: 1.0 })
+// Edit/Add modal state (unified)
+const editingKey = ref<string | null>(null)  // null = adding new
+const isAdding = ref(false)
+const editForm = ref({ name: '', color: '#666666' })
 
 // AI generation state
 const generatingKey = ref<string | null>(null)
 const genPrompt = ref('')
 const { generating: genBusy, error: genError, generateImage } = useImageGen()
+
+// Hex preview canvas
+const hexPreviewRef = ref<HTMLCanvasElement | null>(null)
 
 onMounted(async () => {
   try {
@@ -63,72 +63,150 @@ function getTextureUrl(texture?: string): string | null {
 function startEdit(name: string) {
   const conf = terrainConfig.value[name]
   if (!conf) return
+  isAdding.value = false
   editingKey.value = name
-  editForm.value = {
-    name,
-    color: conf.color || '#666666',
-    scale: conf.scale || 1.0
+  editForm.value = { name, color: conf.color || '#666666' }
+  nextTick(drawHexPreview)
+}
+
+function startAdd() {
+  isAdding.value = true
+  editingKey.value = '__new__'
+  editForm.value = { name: '', color: '#666666' }
+}
+
+function closeEdit() {
+  editingKey.value = null
+  isAdding.value = false
+}
+
+// Get the texture URL for the terrain currently being edited
+const editingTextureUrl = computed(() => {
+  if (isAdding.value || !editingKey.value) return null
+  const conf = terrainConfig.value[editingKey.value]
+  return conf?.texture ? getTextureUrl(conf.texture) : null
+})
+
+function drawHexPreview() {
+  const canvas = hexPreviewRef.value
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  const dpr = 2
+  const w = 280
+  const h = 120
+  canvas.width = w * dpr
+  canvas.height = h * dpr
+  canvas.style.width = `${w}px`
+  canvas.style.height = `${h}px`
+  ctx.scale(dpr, dpr)
+  ctx.clearRect(0, 0, w, h)
+
+  const hexSize = 35
+  const hexes = [
+    { x: w / 2, y: h / 2 },
+    { x: w / 2 - hexSize * 1.5, y: h / 2 - hexSize * 0.866 },
+    { x: w / 2 + hexSize * 1.5, y: h / 2 - hexSize * 0.866 },
+  ]
+
+  const textureUrl = editingTextureUrl.value
+  if (textureUrl) {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const pattern = ctx.createPattern(img, 'repeat')
+      if (pattern) {
+        drawHexes(ctx, hexes, hexSize, editForm.value.color, pattern)
+      }
+    }
+    img.onerror = () => {
+      drawHexes(ctx, hexes, hexSize, editForm.value.color, null)
+    }
+    img.src = textureUrl
+  } else {
+    drawHexes(ctx, hexes, hexSize, editForm.value.color, null)
+  }
+}
+
+function drawHexes(ctx: CanvasRenderingContext2D, hexes: { x: number; y: number }[], size: number, color: string, pattern: CanvasPattern | null) {
+  const angle = (2 * Math.PI) / 6
+  for (const hex of hexes) {
+    ctx.beginPath()
+    for (let i = 0; i < 6; i++) {
+      ctx.lineTo(hex.x + size * Math.cos(angle * i), hex.y + size * Math.sin(angle * i))
+    }
+    ctx.closePath()
+
+    if (pattern) {
+      ctx.fillStyle = pattern
+      ctx.fill()
+    } else {
+      ctx.fillStyle = color
+      ctx.fill()
+    }
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)'
+    ctx.lineWidth = 1.5
+    ctx.stroke()
   }
 }
 
 async function saveEdit() {
-  if (!editingKey.value || !editForm.value.name.trim()) return
-  saving.value = true
-  try {
-    const oldKey = editingKey.value
-    const newKey = editForm.value.name.trim()
-    const conf = { ...terrainConfig.value[oldKey]! }
-    conf.color = editForm.value.color
-    conf.scale = editForm.value.scale
+  if (!editForm.value.name.trim()) return
 
-    const newConfig = { ...terrainConfig.value }
-    if (oldKey !== newKey) {
-      delete newConfig[oldKey]
+  if (isAdding.value) {
+    // Adding new
+    const name = editForm.value.name.trim()
+    if (terrainConfig.value[name]) {
+      alert('Terrain with this name already exists.')
+      return
     }
-    newConfig[newKey] = conf
-
-    await setDoc(doc(db, 'config', 'terrain'), newConfig)
-    terrainConfig.value = newConfig
-    savedKey.value = newKey
-    setTimeout(() => savedKey.value = null, 2000)
-    editingKey.value = null
-  } catch (e) {
-    console.error('Failed to save terrain:', e)
-    alert('Failed to save.')
-  } finally {
-    saving.value = false
-  }
-}
-
-async function addTerrain() {
-  if (!addForm.value.name.trim()) return
-  const name = addForm.value.name.trim()
-  if (terrainConfig.value[name]) {
-    alert('Terrain with this name already exists.')
-    return
-  }
-  saving.value = true
-  try {
-    const newConf: TerrainEntry = {
-      id: nextId(),
-      color: addForm.value.color,
-      scale: addForm.value.scale
+    saving.value = true
+    try {
+      const newConf: TerrainEntry = { id: nextId(), color: editForm.value.color }
+      const newConfig = { ...terrainConfig.value, [name]: newConf }
+      await setDoc(doc(db, 'config', 'terrain'), newConfig)
+      terrainConfig.value = newConfig
+      savedKey.value = name
+      setTimeout(() => savedKey.value = null, 2000)
+      closeEdit()
+    } catch (e) {
+      console.error('Failed to add terrain:', e)
+      alert('Failed to add.')
+    } finally {
+      saving.value = false
     }
-    const newConfig = { ...terrainConfig.value, [name]: newConf }
-    await setDoc(doc(db, 'config', 'terrain'), newConfig)
-    terrainConfig.value = newConfig
-    addForm.value = { name: '', color: '#666666', scale: 1.0 }
-    showAdd.value = false
-  } catch (e) {
-    console.error('Failed to add terrain:', e)
-    alert('Failed to add.')
-  } finally {
-    saving.value = false
+  } else {
+    // Editing existing
+    if (!editingKey.value) return
+    saving.value = true
+    try {
+      const oldKey = editingKey.value
+      const newKey = editForm.value.name.trim()
+      const conf = { ...terrainConfig.value[oldKey]! }
+      conf.color = editForm.value.color
+
+      const newConfig = { ...terrainConfig.value }
+      if (oldKey !== newKey) delete newConfig[oldKey]
+      newConfig[newKey] = conf
+
+      await setDoc(doc(db, 'config', 'terrain'), newConfig)
+      terrainConfig.value = newConfig
+      savedKey.value = newKey
+      setTimeout(() => savedKey.value = null, 2000)
+      closeEdit()
+    } catch (e) {
+      console.error('Failed to save terrain:', e)
+      alert('Failed to save.')
+    } finally {
+      saving.value = false
+    }
   }
 }
 
 async function deleteTerrain(name: string) {
-  if (!confirm(`Delete terrain "${name}"? This won't affect hexes already using it, but they'll fall back to default.`)) return
+  if (!confirm(`Delete terrain "${name}"? Hexes using it will fall back to default.`)) return
   saving.value = true
   try {
     const newConfig = { ...terrainConfig.value }
@@ -154,7 +232,6 @@ async function generateTexture() {
   const storagePath = `textures/terrain/${name.toLowerCase().replace(/\s+/g, '-')}`
   const url = await generateImage(genPrompt.value, storagePath)
   if (url) {
-    // Update config with new texture URL
     const newConfig = { ...terrainConfig.value }
     newConfig[name] = { ...newConfig[name]!, texture: url }
     try {
@@ -172,14 +249,12 @@ async function generateTexture() {
 async function uploadTexture(name: string, event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
-
   saving.value = true
   try {
     const ext = file.name.split('.').pop() || 'png'
     const fileRef = storageRef(storage, `textures/terrain/${name.toLowerCase().replace(/\s+/g, '-')}.${ext}`)
     await uploadBytes(fileRef, file, { contentType: file.type })
     const url = await getDownloadURL(fileRef)
-
     const newConfig = { ...terrainConfig.value }
     newConfig[name] = { ...newConfig[name]!, texture: url }
     await setDoc(doc(db, 'config', 'terrain'), newConfig)
@@ -215,21 +290,7 @@ async function removeTexture(name: string) {
   <div>
     <div class="flex items-center justify-between mb-4">
       <p class="text-zinc-500 text-sm">Manage terrain types used on the hex map. Edit colors, textures, and generate new ones with AI.</p>
-      <button @click="showAdd = !showAdd" class="btn !text-xs !py-1.5">{{ showAdd ? 'Cancel' : '+ Add Terrain' }}</button>
-    </div>
-
-    <!-- Add Form -->
-    <div v-if="showAdd" class="card-flat p-4 mb-5 space-y-3">
-      <h3 class="label">New Terrain Type</h3>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <input v-model="addForm.name" placeholder="Name (e.g. Tundra)" class="input" />
-        <div class="flex items-center gap-2">
-          <label class="text-xs text-zinc-500 shrink-0">Color</label>
-          <input v-model="addForm.color" type="color" class="w-10 h-8 rounded border border-white/10 bg-transparent cursor-pointer" />
-          <input v-model="addForm.color" class="input flex-1 !font-mono text-xs" placeholder="#666666" />
-        </div>
-        <button @click="addTerrain" :disabled="!addForm.name.trim() || saving" class="btn !py-2">Add</button>
-      </div>
+      <button @click="startAdd" class="btn !text-xs !py-1.5">+ Add Terrain</button>
     </div>
 
     <div v-if="loading" class="text-zinc-500 animate-pulse">Loading terrain config...</div>
@@ -257,17 +318,13 @@ async function removeTexture(name: string) {
 
         <!-- Info -->
         <div class="p-3">
-          <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center justify-between mb-2">
             <h4 class="text-sm font-semibold text-zinc-200" style="font-family: Manrope, sans-serif">{{ terrain.name }}</h4>
             <div class="w-4 h-4 rounded-full border border-white/20 shrink-0" :style="{ backgroundColor: terrain.color }"></div>
           </div>
-          <div class="text-[0.6rem] text-zinc-600 mb-2">
-            Scale: {{ terrain.scale || 1.0 }}
-            <span v-if="terrain.texture" class="ml-2">· Has texture</span>
-          </div>
 
           <!-- Actions -->
-          <div class="flex flex-wrap gap-1.5 mt-1">
+          <div class="flex flex-wrap gap-1.5">
             <button @click="startEdit(terrain.name)" class="btn-action">✏️ Edit</button>
             <button @click="startGenerate(terrain.name)" class="btn-action !text-purple-400 hover:!bg-purple-500/15">🎨 AI Gen</button>
             <label class="btn-action cursor-pointer">
@@ -281,34 +338,45 @@ async function removeTexture(name: string) {
       </div>
     </div>
 
-    <!-- Edit Modal -->
+    <!-- Edit / Add Modal -->
     <Teleport to="body">
       <transition enter-active-class="transition-opacity duration-150" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0">
         <div v-if="editingKey" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="editingKey = null" />
-          <div class="relative w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-5 space-y-3 z-10">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="closeEdit" />
+          <div class="relative w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-5 space-y-4 z-10">
             <div class="flex items-center justify-between">
-              <h3 class="text-sm font-semibold text-white" style="font-family: Manrope, sans-serif">✏️ Edit Terrain</h3>
-              <button @click="editingKey = null" class="text-zinc-500 hover:text-white transition-colors">✕</button>
+              <h3 class="text-sm font-semibold text-white" style="font-family: Manrope, sans-serif">{{ isAdding ? '🗺️ New Terrain' : '✏️ Edit Terrain' }}</h3>
+              <button @click="closeEdit" class="text-zinc-500 hover:text-white transition-colors">✕</button>
             </div>
+
+            <!-- Hex preview (edit mode only, when texture exists) -->
+            <div v-if="!isAdding && editingTextureUrl" class="flex flex-col items-center">
+              <label class="block text-xs text-zinc-600 mb-1.5 self-start">Preview</label>
+              <div class="bg-zinc-950 rounded-lg border border-white/[0.06] p-2">
+                <canvas ref="hexPreviewRef" class="block" style="width: 280px; height: 120px" />
+              </div>
+            </div>
+
+            <!-- Color-only preview for new or textureless terrains -->
+            <div v-else class="flex flex-col items-center">
+              <label class="block text-xs text-zinc-600 mb-1.5 self-start">Color Preview</label>
+              <div class="w-full h-16 rounded-lg border border-white/[0.06]" :style="{ backgroundColor: editForm.color }"></div>
+            </div>
+
             <div>
               <label class="block text-xs text-zinc-500 mb-1">Name</label>
-              <input v-model="editForm.name" class="input w-full" />
+              <input v-model="editForm.name" class="input w-full" :placeholder="isAdding ? 'e.g. Tundra' : ''" />
             </div>
             <div>
-              <label class="block text-xs text-zinc-500 mb-1">Color</label>
+              <label class="block text-xs text-zinc-500 mb-1">Fallback Color</label>
               <div class="flex items-center gap-2">
                 <input v-model="editForm.color" type="color" class="w-12 h-9 rounded border border-white/10 bg-transparent cursor-pointer" />
                 <input v-model="editForm.color" class="input flex-1 !font-mono text-sm" />
               </div>
             </div>
-            <div>
-              <label class="block text-xs text-zinc-500 mb-1">Texture Scale ({{ editForm.scale.toFixed(2) }})</label>
-              <input v-model.number="editForm.scale" type="range" min="0.1" max="3.0" step="0.05" class="w-full accent-[#ef233c]" />
-            </div>
-            <div class="flex justify-end gap-2">
-              <button @click="editingKey = null" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
-              <button @click="saveEdit" :disabled="!editForm.name.trim() || saving" class="btn text-sm">Save</button>
+            <div class="flex justify-end gap-2 pt-1">
+              <button @click="closeEdit" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+              <button @click="saveEdit" :disabled="!editForm.name.trim() || saving" class="btn text-sm">{{ isAdding ? 'Create' : 'Save' }}</button>
             </div>
           </div>
         </div>
