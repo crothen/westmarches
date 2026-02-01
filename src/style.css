@@ -89,6 +89,11 @@ h1, h2, h3, h4 {
 /* Select styling */
 select.input {
   cursor: pointer;
+  color-scheme: dark;
+}
+select.input option {
+  background: #18181b;
+  color: #e4e4e7;
 }
 
 /* Primary button */
