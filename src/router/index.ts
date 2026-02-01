@@ -26,8 +26,13 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
+
+  // Wait for Firebase auth to resolve before checking auth state
+  if (authStore.loading) {
+    await authStore.waitForAuth()
+  }
 
   if (to.meta.auth && !authStore.isAuthenticated) {
     return next({ name: 'login' })

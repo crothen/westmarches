@@ -8,6 +8,8 @@ export const useAuthStore = defineStore('auth', () => {
   const firebaseUser = ref<User | null>(null)
   const appUser = ref<AppUser | null>(null)
   const loading = ref(true)
+  let resolveReady: () => void
+  const ready = new Promise<void>(r => { resolveReady = r })
 
   const isAuthenticated = computed(() => !!firebaseUser.value)
   const roles = computed(() => appUser.value?.roles || ['player'])
@@ -36,7 +38,13 @@ export const useAuthStore = defineStore('auth', () => {
         appUser.value = null
       }
       loading.value = false
+      resolveReady()
     })
+  }
+
+  /** Wait for Firebase auth to resolve before making auth decisions */
+  function waitForAuth() {
+    return ready
   }
 
   async function logout() {
@@ -45,5 +53,5 @@ export const useAuthStore = defineStore('auth', () => {
     appUser.value = null
   }
 
-  return { firebaseUser, appUser, loading, isAuthenticated, isAdmin, isDm, isPlayer, roles, primaryRole, role, hasRole, init, logout }
+  return { firebaseUser, appUser, loading, isAuthenticated, isAdmin, isDm, isPlayer, roles, primaryRole, role, hasRole, init, waitForAuth, logout }
 })
