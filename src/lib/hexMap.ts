@@ -258,7 +258,7 @@ export class HexMap {
         const conf = this.TERRAIN_CONFIG[key]
         if (!conf || !conf.texture) return
         const img = new Image()
-        img.src = `textures/${conf.texture}`
+        img.src = conf.texture.startsWith('http') ? conf.texture : `textures/${conf.texture}`
         img.onload = () => {
           if (conf.id) this.loadedPatterns[conf.id] = this.ctx.createPattern(img, 'repeat')
           onImageLoad()
@@ -277,7 +277,7 @@ export class HexMap {
         const conf = this.TAGS_CONFIG[key]
         if (!conf || !conf.texture) return
         const img = new Image()
-        img.src = `tags_images/${conf.texture}`
+        img.src = conf.texture.startsWith('http') ? conf.texture : `tags_images/${conf.texture}`
         img.onload = () => {
           if (conf.id) this.tagImages[conf.id] = img
           onImageLoad()

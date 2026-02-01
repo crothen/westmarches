@@ -1,0 +1,343 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from '../../firebase/config'
+import { locationTypeIcons, featureTypeIcons, markerTypeIcons } from '../../lib/icons'
+
+interface TypeEntry {
+  label: string
+  iconUrl: string
+}
+
+interface MarkerTypesConfig {
+  locationTypes: Record<string, TypeEntry>
+  featureTypes: Record<string, TypeEntry>
+  hexMarkerTypes: Record<string, TypeEntry>
+}
+
+// Build defaults from current hardcoded icons
+function buildDefaults(): MarkerTypesConfig {
+  const locationTypes: Record<string, TypeEntry> = {}
+  for (const [key, path] of Object.entries(locationTypeIcons)) {
+    locationTypes[key] = { label: key.charAt(0).toUpperCase() + key.slice(1), iconUrl: path }
+  }
+
+  const featureTypes: Record<string, TypeEntry> = {}
+  for (const [key, path] of Object.entries(featureTypeIcons)) {
+    featureTypes[key] = { label: key.charAt(0).toUpperCase() + key.slice(1), iconUrl: path }
+  }
+
+  const hexMarkerTypes: Record<string, TypeEntry> = {}
+  for (const [key, path] of Object.entries(markerTypeIcons)) {
+    hexMarkerTypes[key] = { label: key.charAt(0).toUpperCase() + key.slice(1), iconUrl: path }
+  }
+
+  return { locationTypes, featureTypes, hexMarkerTypes }
+}
+
+const config = ref<MarkerTypesConfig>(buildDefaults())
+const loading = ref(true)
+const saving = ref(false)
+const savedSection = ref<string | null>(null)
+
+// Edit state
+const editingSection = ref<'locationTypes' | 'featureTypes' | 'hexMarkerTypes' | null>(null)
+const editingKey = ref<string | null>(null)
+const editForm = ref({ label: '', key: '' })
+
+// Add state
+const addingSection = ref<'locationTypes' | 'featureTypes' | 'hexMarkerTypes' | null>(null)
+const addForm = ref({ key: '', label: '' })
+
+// Active tab within marker management
+const activeCategory = ref<'locationTypes' | 'featureTypes' | 'hexMarkerTypes'>('locationTypes')
+
+const categoryLabels: Record<string, string> = {
+  locationTypes: '📍 Location Types',
+  featureTypes: '📌 Feature Types',
+  hexMarkerTypes: '🏷️ Hex Marker Types'
+}
+
+const categoryDescriptions: Record<string, string> = {
+  locationTypes: 'Icons shown on the hex map for cities, towns, etc.',
+  featureTypes: 'Icons for points of interest within locations.',
+  hexMarkerTypes: 'Icons for player-placed tags like clues, battles, etc.'
+}
+
+onMounted(async () => {
+  try {
+    const snap = await getDoc(doc(db, 'config', 'markerTypes'))
+    if (snap.exists()) {
+      const data = snap.data() as MarkerTypesConfig
+      // Merge with defaults (keep defaults for missing keys)
+      const defaults = buildDefaults()
+      config.value = {
+        locationTypes: { ...defaults.locationTypes, ...data.locationTypes },
+        featureTypes: { ...defaults.featureTypes, ...data.featureTypes },
+        hexMarkerTypes: { ...defaults.hexMarkerTypes, ...data.hexMarkerTypes }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load marker types config:', e)
+  } finally {
+    loading.value = false
+  }
+})
+
+const currentTypes = computed(() => {
+  return Object.entries(config.value[activeCategory.value] || {})
+    .map(([key, entry]) => ({ key, ...entry }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+})
+
+function getIconUrl(url: string): string {
+  if (!url) return '/icons/locations/other.png'
+  return url
+}
+
+function startEdit(section: typeof activeCategory.value, key: string) {
+  const entry = config.value[section][key]
+  if (!entry) return
+  editingSection.value = section
+  editingKey.value = key
+  editForm.value = { label: entry.label, key }
+}
+
+async function saveEdit() {
+  if (!editingSection.value || !editingKey.value || !editForm.value.label.trim()) return
+  saving.value = true
+  try {
+    const section = editingSection.value
+    const oldKey = editingKey.value
+    const newKey = editForm.value.key.trim().toLowerCase().replace(/\s+/g, '_')
+    const entry = { ...config.value[section][oldKey]!, label: editForm.value.label.trim() }
+
+    const newSection = { ...config.value[section] }
+    if (oldKey !== newKey && newKey) {
+      delete newSection[oldKey]
+      newSection[newKey] = entry
+    } else {
+      newSection[oldKey] = entry
+    }
+
+    const newConfig = { ...config.value, [section]: newSection }
+    await setDoc(doc(db, 'config', 'markerTypes'), newConfig)
+    config.value = newConfig
+    savedSection.value = (oldKey !== newKey && newKey) ? newKey : oldKey
+    setTimeout(() => savedSection.value = null, 2000)
+    editingSection.value = null
+    editingKey.value = null
+  } catch (e) {
+    console.error('Failed to save:', e)
+    alert('Failed to save.')
+  } finally {
+    saving.value = false
+  }
+}
+
+function startAdd() {
+  addingSection.value = activeCategory.value
+  addForm.value = { key: '', label: '' }
+}
+
+async function addType() {
+  if (!addingSection.value || !addForm.value.key.trim() || !addForm.value.label.trim()) return
+  const key = addForm.value.key.trim().toLowerCase().replace(/\s+/g, '_')
+  const section = addingSection.value
+
+  if (config.value[section][key]) {
+    alert('A type with this key already exists.')
+    return
+  }
+
+  saving.value = true
+  try {
+    // Default icon based on category
+    const defaultIcons: Record<string, string> = {
+      locationTypes: '/icons/locations/other.png',
+      featureTypes: '/icons/features/other.png',
+      hexMarkerTypes: '/icons/markers/waypoint.png'
+    }
+
+    const newSection = {
+      ...config.value[section],
+      [key]: { label: addForm.value.label.trim(), iconUrl: defaultIcons[section]! }
+    }
+    const newConfig = { ...config.value, [section]: newSection }
+    await setDoc(doc(db, 'config', 'markerTypes'), newConfig)
+    config.value = newConfig
+    addingSection.value = null
+    savedSection.value = key
+    setTimeout(() => savedSection.value = null, 2000)
+  } catch (e) {
+    console.error('Failed to add type:', e)
+    alert('Failed to add.')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function deleteType(key: string) {
+  if (!confirm(`Delete type "${key}"? Existing items using this type won't be affected but will show a fallback icon.`)) return
+  saving.value = true
+  try {
+    const section = activeCategory.value
+    const newSection = { ...config.value[section] }
+    delete newSection[key]
+    const newConfig = { ...config.value, [section]: newSection }
+    await setDoc(doc(db, 'config', 'markerTypes'), newConfig)
+    config.value = newConfig
+  } catch (e) {
+    console.error('Failed to delete:', e)
+    alert('Failed to delete.')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function uploadIcon(key: string, event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+
+  saving.value = true
+  try {
+    const section = activeCategory.value
+    const folder = section === 'locationTypes' ? 'locations' : section === 'featureTypes' ? 'features' : 'markers'
+    const ext = file.name.split('.').pop() || 'png'
+    const fileRef = storageRef(storage, `icons/${folder}/${key}.${ext}`)
+    await uploadBytes(fileRef, file, { contentType: file.type })
+    const url = await getDownloadURL(fileRef)
+
+    const newSection = { ...config.value[section] }
+    newSection[key] = { ...newSection[key]!, iconUrl: url }
+    const newConfig = { ...config.value, [section]: newSection }
+    await setDoc(doc(db, 'config', 'markerTypes'), newConfig)
+    config.value = newConfig
+    savedSection.value = key
+    setTimeout(() => savedSection.value = null, 2000)
+  } catch (e) {
+    console.error('Failed to upload icon:', e)
+    alert('Failed to upload.')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function seedDefaults() {
+  if (!confirm('This will reset all marker types to their defaults. Custom labels and icons will be lost. Continue?')) return
+  saving.value = true
+  try {
+    const defaults = buildDefaults()
+    await setDoc(doc(db, 'config', 'markerTypes'), defaults)
+    config.value = defaults
+  } catch (e) {
+    console.error('Failed to seed:', e)
+    alert('Failed to seed defaults.')
+  } finally {
+    saving.value = false
+  }
+}
+</script>
+
+<template>
+  <div>
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-zinc-500 text-sm">Manage marker types — edit labels, upload custom icons, add or remove types.</p>
+      <button @click="seedDefaults" class="text-[0.6rem] text-zinc-600 hover:text-amber-400 transition-colors">🔄 Reset to defaults</button>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="flex gap-1 mb-5 border-b border-white/[0.06] pb-px">
+      <button
+        v-for="cat in (['locationTypes', 'featureTypes', 'hexMarkerTypes'] as const)" :key="cat"
+        @click="activeCategory = cat"
+        :class="[
+          'text-sm px-4 py-2 rounded-t-lg transition-colors relative',
+          activeCategory === cat
+            ? 'text-white bg-white/[0.04] border border-white/[0.06] border-b-transparent -mb-px'
+            : 'text-zinc-600 hover:text-zinc-400'
+        ]"
+      >
+        {{ categoryLabels[cat] }}
+      </button>
+    </div>
+
+    <p class="text-zinc-600 text-xs mb-4">{{ categoryDescriptions[activeCategory] }}</p>
+
+    <div v-if="loading" class="text-zinc-500 animate-pulse">Loading config...</div>
+
+    <div v-else>
+      <!-- Add button -->
+      <div class="flex justify-end mb-3">
+        <button @click="startAdd" class="btn !text-xs !py-1.5">+ Add Type</button>
+      </div>
+
+      <!-- Add Form -->
+      <div v-if="addingSection" class="card-flat p-4 mb-4 space-y-3">
+        <h3 class="label">Add New Type</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <input v-model="addForm.key" placeholder="Key (e.g. harbor)" class="input !font-mono" />
+          <input v-model="addForm.label" placeholder="Label (e.g. Harbor)" class="input" />
+          <button @click="addType" :disabled="!addForm.key.trim() || !addForm.label.trim() || saving" class="btn !py-2">Add</button>
+        </div>
+        <button @click="addingSection = null" class="text-xs text-zinc-500 hover:text-zinc-300">Cancel</button>
+      </div>
+
+      <!-- Type Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+        <div
+          v-for="t in currentTypes" :key="t.key"
+          :class="['card-flat p-3 transition-all', savedSection === t.key ? '!border-green-500/40' : '']"
+        >
+          <div class="flex items-center gap-2 mb-2">
+            <img :src="getIconUrl(t.iconUrl)" class="w-8 h-8 object-contain shrink-0" :alt="t.key" />
+            <div class="min-w-0">
+              <div class="text-sm font-semibold text-zinc-200 truncate" style="font-family: Manrope, sans-serif">{{ t.label }}</div>
+              <div class="text-[0.55rem] text-zinc-600 font-mono">{{ t.key }}</div>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-1">
+            <button @click="startEdit(activeCategory, t.key)" class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10">✏️ Edit</button>
+            <label class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 cursor-pointer">
+              📤 Icon
+              <input type="file" accept="image/png,image/webp,image/svg+xml" class="hidden" @change="uploadIcon(t.key, $event)" />
+            </label>
+            <button @click="deleteType(t.key)" class="text-[0.6rem] text-zinc-500 hover:text-red-400 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10">✕</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <Teleport to="body">
+      <transition enter-active-class="transition-opacity duration-150" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0">
+        <div v-if="editingKey" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="editingKey = null" />
+          <div class="relative w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-5 space-y-3 z-10">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-semibold text-white" style="font-family: Manrope, sans-serif">✏️ Edit Type</h3>
+              <button @click="editingKey = null" class="text-zinc-500 hover:text-white transition-colors">✕</button>
+            </div>
+            <div class="flex items-center gap-3 mb-2">
+              <img :src="getIconUrl(config[editingSection!]?.[editingKey]?.iconUrl || '')" class="w-10 h-10 object-contain" />
+              <span class="text-zinc-600 font-mono text-xs">{{ editingKey }}</span>
+            </div>
+            <div>
+              <label class="block text-xs text-zinc-500 mb-1">Key (internal identifier)</label>
+              <input v-model="editForm.key" class="input w-full !font-mono text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-zinc-500 mb-1">Label (display name)</label>
+              <input v-model="editForm.label" class="input w-full" />
+            </div>
+            <div class="flex justify-end gap-2">
+              <button @click="editingKey = null" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+              <button @click="saveEdit" :disabled="!editForm.label.trim() || saving" class="btn text-sm">Save</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
+  </div>
+</template>
