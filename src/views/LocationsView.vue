@@ -12,7 +12,9 @@ const features = ref<LocationFeature[]>([])
 const loading = ref(true)
 const searchQuery = ref('')
 const showAddForm = ref(false)
-const showHidden = ref(true)
+type VisibilityFilter = 'all' | 'visible' | 'hidden'
+const visibilityFilter = ref<VisibilityFilter>('all')
+const typeFilter = ref<string>('')
 
 // Mini map hover/tap state
 const miniMapHex = ref<string | null>(null)
@@ -75,13 +77,18 @@ onMounted(async () => {
 const filteredLocations = computed(() => {
   let result = locations.value
 
-  // Filter hidden locations
+  // Visibility filter
   if (!(auth.isDm || auth.isAdmin)) {
-    // Players never see hidden locations
     result = result.filter(l => !l.hidden)
-  } else if (!showHidden.value) {
-    // DM/Admin with showHidden off: hide them too
+  } else if (visibilityFilter.value === 'visible') {
     result = result.filter(l => !l.hidden)
+  } else if (visibilityFilter.value === 'hidden') {
+    result = result.filter(l => l.hidden)
+  }
+
+  // Type filter
+  if (typeFilter.value) {
+    result = result.filter(l => l.type === typeFilter.value)
   }
 
   if (searchQuery.value) {
@@ -212,12 +219,36 @@ async function saveEditLocation() {
       </div>
     </div>
 
-    <div class="flex items-center gap-3 mb-5">
-      <input v-model="searchQuery" type="text" placeholder="Search locations..." class="input w-full max-w-md" />
-      <label v-if="auth.isDm || auth.isAdmin" class="flex items-center gap-1.5 text-xs text-zinc-500 whitespace-nowrap cursor-pointer select-none">
-        <input v-model="showHidden" type="checkbox" class="accent-[#ef233c]" />
-        👁️ Show hidden
-      </label>
+    <!-- Filters -->
+    <div class="card-flat p-3 mb-5 flex flex-wrap items-center gap-3">
+      <input v-model="searchQuery" type="text" placeholder="Search..." class="input flex-1 min-w-[180px] max-w-sm !bg-white/[0.03]" />
+
+      <!-- Type filter -->
+      <select v-model="typeFilter" class="input !w-auto !bg-white/[0.03] text-sm">
+        <option value="">All types</option>
+        <option v-for="t in locationTypes" :key="t" :value="t">{{ typeIcons[t] || '📍' }} {{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
+      </select>
+
+      <!-- Visibility filter (DM/Admin only) -->
+      <div v-if="auth.isDm || auth.isAdmin" class="flex rounded-lg overflow-hidden border border-white/[0.08]">
+        <button
+          v-for="opt in ([
+            { key: 'all', label: 'All', icon: '🌐' },
+            { key: 'visible', label: 'Visible', icon: '👁️' },
+            { key: 'hidden', label: 'Hidden', icon: '🚫' }
+          ] as const)" :key="opt.key"
+          @click="visibilityFilter = opt.key"
+          :class="[
+            'text-xs px-3 py-1.5 transition-all whitespace-nowrap',
+            visibilityFilter === opt.key
+              ? opt.key === 'hidden' ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-zinc-200'
+              : 'bg-white/[0.02] text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.05]'
+          ]"
+        >{{ opt.icon }} {{ opt.label }}</button>
+      </div>
+
+      <!-- Result count -->
+      <span class="text-zinc-600 text-xs ml-auto">{{ filteredLocations.length }} result{{ filteredLocations.length !== 1 ? 's' : '' }}</span>
     </div>
 
     <div v-if="loading" class="text-zinc-500 animate-pulse">Loading...</div>

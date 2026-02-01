@@ -16,7 +16,10 @@ const searchQuery = ref('')
 const showAddForm = ref(false)
 
 const newFeat = ref({ name: '', type: 'other' as any, description: '', locationId: '', hexKey: '' })
-const showHidden = ref(true)
+type VisibilityFilter = 'all' | 'visible' | 'hidden'
+const visibilityFilter = ref<VisibilityFilter>('all')
+const typeFilter = ref<string>('')
+const locationFilter = ref<string>('')
 
 // Edit state
 const editingFeature = ref<LocationFeature | null>(null)
@@ -41,9 +44,26 @@ onMounted(async () => {
 
 const filteredFeatures = computed(() => {
   let result = features.value
-  if (!showHidden.value) {
+
+  // Visibility filter
+  if (!(auth.isDm || auth.isAdmin)) {
     result = result.filter(f => !f.hidden)
+  } else if (visibilityFilter.value === 'visible') {
+    result = result.filter(f => !f.hidden)
+  } else if (visibilityFilter.value === 'hidden') {
+    result = result.filter(f => f.hidden)
   }
+
+  // Type filter
+  if (typeFilter.value) {
+    result = result.filter(f => f.type === typeFilter.value)
+  }
+
+  // Location filter
+  if (locationFilter.value) {
+    result = result.filter(f => f.locationId === locationFilter.value)
+  }
+
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
     result = result.filter(f => f.name.toLowerCase().includes(q) || f.description?.toLowerCase().includes(q))
@@ -193,12 +213,42 @@ async function deleteFeature(feat: LocationFeature) {
       </div>
     </div>
 
-    <div class="flex items-center gap-3 mb-5">
-      <input v-model="searchQuery" type="text" placeholder="Search POIs..." class="input w-full max-w-md" />
-      <label v-if="auth.isDm || auth.isAdmin" class="flex items-center gap-1.5 text-xs text-zinc-500 whitespace-nowrap cursor-pointer select-none">
-        <input v-model="showHidden" type="checkbox" class="accent-[#ef233c]" />
-        👁️ Show hidden
-      </label>
+    <!-- Filters -->
+    <div class="card-flat p-3 mb-5 flex flex-wrap items-center gap-3">
+      <input v-model="searchQuery" type="text" placeholder="Search..." class="input flex-1 min-w-[180px] max-w-sm !bg-white/[0.03]" />
+
+      <!-- Type filter -->
+      <select v-model="typeFilter" class="input !w-auto !bg-white/[0.03] text-sm">
+        <option value="">All types</option>
+        <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
+      </select>
+
+      <!-- Location filter -->
+      <select v-model="locationFilter" class="input !w-auto !bg-white/[0.03] text-sm max-w-[200px]">
+        <option value="">All locations</option>
+        <option v-for="loc in locations" :key="loc.id" :value="loc.id">{{ loc.name }}</option>
+      </select>
+
+      <!-- Visibility filter (DM/Admin only) -->
+      <div v-if="auth.isDm || auth.isAdmin" class="flex rounded-lg overflow-hidden border border-white/[0.08]">
+        <button
+          v-for="opt in ([
+            { key: 'all', label: 'All', icon: '🌐' },
+            { key: 'visible', label: 'Visible', icon: '👁️' },
+            { key: 'hidden', label: 'Hidden', icon: '🚫' }
+          ] as const)" :key="opt.key"
+          @click="visibilityFilter = opt.key"
+          :class="[
+            'text-xs px-3 py-1.5 transition-all whitespace-nowrap',
+            visibilityFilter === opt.key
+              ? opt.key === 'hidden' ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-zinc-200'
+              : 'bg-white/[0.02] text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.05]'
+          ]"
+        >{{ opt.icon }} {{ opt.label }}</button>
+      </div>
+
+      <!-- Result count -->
+      <span class="text-zinc-600 text-xs ml-auto">{{ filteredFeatures.length }} result{{ filteredFeatures.length !== 1 ? 's' : '' }}</span>
     </div>
 
     <div v-if="loading" class="text-zinc-500 animate-pulse">Loading...</div>
