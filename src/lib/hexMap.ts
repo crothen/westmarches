@@ -346,7 +346,7 @@ export class HexMap {
           mainTagId = this.resolveTagId(data.mainTag)
         }
 
-        if (userRole === 'Player' && data.mainTagIsPrivate) mainTagId = null
+        if (userRole === 'player' && data.mainTagIsPrivate) mainTagId = null
 
         const sideTags = (data.tags || []).map((t) => this.resolveTagId(t)).filter((t): t is number => t !== null)
 

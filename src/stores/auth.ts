@@ -10,9 +10,22 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(true)
 
   const isAuthenticated = computed(() => !!firebaseUser.value)
-  const isAdmin = computed(() => appUser.value?.role === 'admin')
-  const isDm = computed(() => appUser.value?.role === 'dm')
-  const role = computed(() => appUser.value?.role || 'player')
+  const roles = computed(() => appUser.value?.roles || ['player'])
+  const isAdmin = computed(() => roles.value.includes('admin'))
+  const isDm = computed(() => roles.value.includes('dm'))
+  const isPlayer = computed(() => roles.value.includes('player'))
+  /** Highest privilege role for display purposes */
+  const primaryRole = computed(() => {
+    if (roles.value.includes('admin')) return 'admin'
+    if (roles.value.includes('dm')) return 'dm'
+    return 'player'
+  })
+  /** @deprecated Use `roles` or `primaryRole` instead */
+  const role = computed(() => primaryRole.value)
+
+  function hasRole(r: string) {
+    return roles.value.includes(r as any)
+  }
 
   function init() {
     onAuth(async (user) => {
@@ -32,5 +45,5 @@ export const useAuthStore = defineStore('auth', () => {
     appUser.value = null
   }
 
-  return { firebaseUser, appUser, loading, isAuthenticated, isAdmin, isDm, role, init, logout }
+  return { firebaseUser, appUser, loading, isAuthenticated, isAdmin, isDm, isPlayer, roles, primaryRole, role, hasRole, init, logout }
 })

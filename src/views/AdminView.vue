@@ -3,14 +3,19 @@ import { ref, computed, onMounted } from 'vue'
 import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
+import type { UserRole } from '../types'
 
 interface UserRecord {
   uid: string
   email: string
   displayName: string
-  role: string
+  roles: UserRole[]
+  /** @deprecated legacy field */
+  role?: string
   createdAt: any
 }
+
+const ALL_ROLES: UserRole[] = ['player', 'dm', 'admin']
 
 const auth = useAuthStore()
 const users = ref<UserRecord[]>([])
@@ -22,7 +27,12 @@ const savedUid = ref<string | null>(null)
 onMounted(async () => {
   try {
     const snap = await getDocs(query(collection(db, 'users'), orderBy('displayName', 'asc')))
-    users.value = snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserRecord))
+    users.value = snap.docs.map(d => {
+      const data = d.data() as any
+      // Normalize legacy single-role to roles array
+      const roles: UserRole[] = data.roles || (data.role ? [data.role] : ['player'])
+      return { uid: d.id, ...data, roles } as UserRecord
+    })
   } catch (e) {
     console.error('Failed to load users:', e)
   } finally {
@@ -36,25 +46,34 @@ const filteredUsers = computed(() => {
   return users.value.filter(u =>
     u.displayName?.toLowerCase().includes(q) ||
     u.email?.toLowerCase().includes(q) ||
-    u.role?.toLowerCase().includes(q)
+    u.roles?.some(r => r.toLowerCase().includes(q))
   )
 })
 
-async function changeRole(user: UserRecord, newRole: string) {
-  if (newRole === user.role) return
-  if (user.uid === auth.firebaseUser?.uid && newRole !== 'admin') {
+async function toggleRole(user: UserRecord, role: UserRole) {
+  const hasRole = user.roles.includes(role)
+
+  // Prevent removing your own admin access
+  if (hasRole && role === 'admin' && user.uid === auth.firebaseUser?.uid) {
     if (!confirm('You are about to remove your own admin access. Are you sure?')) return
   }
-  
+
+  // Must have at least one role
+  if (hasRole && user.roles.length <= 1) return
+
+  const newRoles = hasRole
+    ? user.roles.filter(r => r !== role)
+    : [...user.roles, role]
+
   savingUid.value = user.uid
   try {
-    await updateDoc(doc(db, 'users', user.uid), { role: newRole })
-    user.role = newRole
+    await updateDoc(doc(db, 'users', user.uid), { roles: newRoles })
+    user.roles = newRoles
     savedUid.value = user.uid
     setTimeout(() => { if (savedUid.value === user.uid) savedUid.value = null }, 2000)
   } catch (e) {
-    console.error('Failed to update role:', e)
-    alert('Failed to update role. Make sure you have admin permissions.')
+    console.error('Failed to update roles:', e)
+    alert('Failed to update roles. Make sure you have admin permissions.')
   } finally {
     savingUid.value = null
   }
@@ -71,6 +90,15 @@ function getRoleBadgeClass(role: string): string {
     case 'admin': return 'bg-[#ef233c]/15 text-[#ef233c]'
     case 'dm': return 'bg-purple-500/15 text-purple-400'
     default: return 'bg-white/5 text-zinc-400'
+  }
+}
+
+function getRoleToggleClass(role: string, active: boolean): string {
+  if (!active) return 'bg-white/5 text-zinc-600 hover:bg-white/10 hover:text-zinc-400'
+  switch (role) {
+    case 'admin': return 'bg-[#ef233c]/20 text-[#ef233c] ring-1 ring-[#ef233c]/30'
+    case 'dm': return 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/30'
+    default: return 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
   }
 }
 </script>
@@ -93,10 +121,10 @@ function getRoleBadgeClass(role: string): string {
       <div v-else class="card relative z-10 overflow-hidden hidden md:block">
         <div class="relative z-10">
           <!-- Table header -->
-          <div class="grid grid-cols-[1fr_1fr_140px_100px] gap-4 px-5 py-3 border-b border-white/[0.06] text-zinc-600">
+          <div class="grid grid-cols-[1fr_1fr_1fr_100px] gap-4 px-5 py-3 border-b border-white/[0.06] text-zinc-600">
             <span class="label">Name</span>
             <span class="label">Email</span>
-            <span class="label">Role</span>
+            <span class="label">Roles</span>
             <span class="label">Joined</span>
           </div>
 
@@ -105,24 +133,22 @@ function getRoleBadgeClass(role: string): string {
 
           <div
             v-for="user in filteredUsers" :key="user.uid"
-            class="grid grid-cols-[1fr_1fr_140px_100px] gap-4 px-5 py-3 border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors items-center"
+            class="grid grid-cols-[1fr_1fr_1fr_100px] gap-4 px-5 py-3 border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors items-center"
           >
             <div>
               <span class="text-sm text-zinc-200 font-medium">{{ user.displayName || 'Unnamed' }}</span>
               <span v-if="user.uid === auth.firebaseUser?.uid" class="text-[0.6rem] text-zinc-600 ml-1.5">(you)</span>
             </div>
             <span class="text-sm text-zinc-500 truncate">{{ user.email || '—' }}</span>
-            <div class="relative">
-              <select
-                :value="user.role || 'player'"
-                @change="(e: any) => changeRole(user, e.target.value)"
+            <div class="flex gap-1.5">
+              <button
+                v-for="r in ALL_ROLES" :key="r"
+                :class="['text-[0.65rem] px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider transition-all cursor-pointer', getRoleToggleClass(r, user.roles.includes(r))]"
                 :disabled="savingUid === user.uid"
-                class="input !py-1 !text-xs w-full"
+                @click="toggleRole(user, r)"
               >
-                <option value="player">Player</option>
-                <option value="dm">DM</option>
-                <option value="admin">Admin</option>
-              </select>
+                {{ r }}
+              </button>
               <transition
                 enter-active-class="transition-opacity duration-200"
                 enter-from-class="opacity-0"
@@ -131,7 +157,7 @@ function getRoleBadgeClass(role: string): string {
                 leave-from-class="opacity-100"
                 leave-to-class="opacity-0"
               >
-                <span v-if="savedUid === user.uid" class="absolute -right-6 top-1/2 -translate-y-1/2 text-green-400 text-xs">✓</span>
+                <span v-if="savedUid === user.uid" class="text-green-400 text-xs self-center ml-1">✓</span>
               </transition>
             </div>
             <span class="text-xs text-zinc-600">{{ formatDate(user.createdAt) }}</span>
@@ -149,18 +175,21 @@ function getRoleBadgeClass(role: string): string {
               <span class="text-sm text-zinc-200 font-medium">{{ user.displayName || 'Unnamed' }}</span>
               <span v-if="user.uid === auth.firebaseUser?.uid" class="text-[0.6rem] text-zinc-600 ml-1">(you)</span>
             </div>
-            <span :class="['badge', getRoleBadgeClass(user.role)]">{{ user.role || 'player' }}</span>
+            <div class="flex gap-1">
+              <span v-for="r in user.roles" :key="r" :class="['badge', getRoleBadgeClass(r)]">{{ r }}</span>
+            </div>
           </div>
-          <div class="text-xs text-zinc-600 mb-2">{{ user.email }}</div>
-          <select
-            :value="user.role || 'player'"
-            @change="(e: any) => changeRole(user, e.target.value)"
-            class="input !py-1 !text-xs w-full"
-          >
-            <option value="player">Player</option>
-            <option value="dm">DM</option>
-            <option value="admin">Admin</option>
-          </select>
+          <div class="text-xs text-zinc-600 mb-3">{{ user.email }}</div>
+          <div class="flex gap-1.5">
+            <button
+              v-for="r in ALL_ROLES" :key="r"
+              :class="['text-[0.65rem] px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider transition-all cursor-pointer', getRoleToggleClass(r, user.roles.includes(r))]"
+              :disabled="savingUid === user.uid"
+              @click="toggleRole(user, r)"
+            >
+              {{ r }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -171,7 +200,7 @@ function getRoleBadgeClass(role: string): string {
       <div class="space-y-2 text-sm">
         <div class="flex items-start gap-3">
           <span :class="['badge shrink-0', getRoleBadgeClass('player')]">Player</span>
-          <span class="text-zinc-500">View content, edit own character, add notes, vote on missions, sign up for sessions</span>
+          <span class="text-zinc-500">View content, edit own character, edit NPCs, add notes, vote on missions, sign up for sessions</span>
         </div>
         <div class="flex items-start gap-3">
           <span :class="['badge shrink-0', getRoleBadgeClass('dm')]">DM</span>
@@ -179,9 +208,10 @@ function getRoleBadgeClass(role: string): string {
         </div>
         <div class="flex items-start gap-3">
           <span :class="['badge shrink-0', getRoleBadgeClass('admin')]">Admin</span>
-          <span class="text-zinc-500">Manage users and roles, system configuration. Cannot see DM-private content.</span>
+          <span class="text-zinc-500">Full system access: manage users, roles, configuration, and all DM capabilities</span>
         </div>
       </div>
+      <p class="text-zinc-600 text-xs mt-3">Users can hold multiple roles. Click a role badge to toggle it.</p>
     </div>
   </div>
 </template>

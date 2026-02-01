@@ -5,14 +5,19 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    function getUserRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function hasRole(role) {
+      let data = getUserData();
+      // Support both new `roles` array and legacy `role` string
+      return ('roles' in data && role in data.roles) || ('role' in data && data.role == role);
     }
     function isAdmin() {
-      return isAuthenticated() && getUserRole() == 'admin';
+      return isAuthenticated() && hasRole('admin');
     }
     function isDm() {
-      return isAuthenticated() && getUserRole() == 'dm';
+      return isAuthenticated() && hasRole('dm');
     }
     function isDmOrAdmin() {
       return isDm() || isAdmin();
@@ -28,28 +33,28 @@ service cloud.firestore {
     match /characters/{charId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDm());
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
     }
 
     // Campaign Locations (cities, towns, etc.)
     match /locations/{locId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isDm();
+      allow update, delete: if isDmOrAdmin();
     }
 
     // Location Features (POIs)
     match /features/{featId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isDm();
+      allow update, delete: if isDmOrAdmin();
     }
 
     // Hex tags
     match /hexTags/{tagId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (resource.data.addedBy == request.auth.uid || isDm());
+      allow update, delete: if isAuthenticated() && (resource.data.addedBy == request.auth.uid || isDmOrAdmin());
     }
 
     // Party inventory
@@ -58,25 +63,33 @@ service cloud.firestore {
       allow create, update, delete: if isAuthenticated();
     }
 
-    // NPCs
+    // NPCs — any authenticated user can edit
     match /npcs/{npcId} {
-      allow read, write: if true; // TEMP
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isDm();
+      allow update: if isAuthenticated();
+      allow delete: if isDmOrAdmin();
+    }
+
+    // NPC Notes
+    match /npcNotes/{noteId} {
+      allow read: if isAuthenticated() && (!resource.data.isPrivate || isDmOrAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
     }
 
     // Organizations
     match /organizations/{orgId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isDm();
+      allow update, delete: if isDmOrAdmin();
     }
 
     // Comments
     match /comments/{commentId} {
-      allow read: if isAuthenticated() && (!resource.data.isPrivate || isDm() || resource.data.authorId == request.auth.uid);
+      allow read: if isAuthenticated() && (!resource.data.isPrivate || isDmOrAdmin() || resource.data.authorId == request.auth.uid);
       allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || isDm());
+      allow update, delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || isDmOrAdmin());
     }
 
     // Votes
@@ -94,26 +107,26 @@ service cloud.firestore {
     // Sessions
     match /sessions/{sessionId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isDm();
+      allow create, update, delete: if isDmOrAdmin();
     }
 
     // Session Notes
     match /sessionNotes/{noteId} {
-      allow read: if isAuthenticated() && (!resource.data.isPrivate || isDm() || resource.data.userId == request.auth.uid);
+      allow read: if isAuthenticated() && (!resource.data.isPrivate || isDmOrAdmin() || resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDm());
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
     }
 
     // Missions
     match /missions/{missionId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isDm();
+      allow create, update, delete: if isDmOrAdmin();
     }
 
     // Scheduled Sessions
     match /scheduledSessions/{sessionId} {
       allow read: if isAuthenticated();
-      allow create, delete: if isDm();
+      allow create, delete: if isDmOrAdmin();
       allow update: if isAuthenticated();
     }
 
@@ -121,14 +134,14 @@ service cloud.firestore {
     match /hexNotes/{noteId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDm());
-      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDm());
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDmOrAdmin());
     }
 
     // Map data
     match /maps/{mapId} {
       allow read: if isAuthenticated();
-      allow write: if isDm();
+      allow write: if isDmOrAdmin();
     }
 
     // Config (terrain, tags)

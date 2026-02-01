@@ -35,7 +35,7 @@ const navItems = [
     <nav class="p-3 space-y-0.5 mt-1">
       <template v-for="item in navItems" :key="item.to">
         <RouterLink
-          v-if="item.show === 'all' || (item.show === 'dm' && auth.isDm) || (item.show === 'admin' && auth.isAdmin)"
+          v-if="item.show === 'all' || (item.show === 'dm' && (auth.isDm || auth.isAdmin)) || (item.show === 'admin' && auth.isAdmin)"
           :to="item.to"
           class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-all duration-150"
           active-class="!text-[#ef233c] bg-[#ef233c]/[0.06] hover:!bg-[#ef233c]/[0.1]"

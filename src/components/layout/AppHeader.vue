@@ -27,7 +27,7 @@ async function handleLogout() {
       <div class="flex items-center gap-4">
         <template v-if="auth.isAuthenticated">
           <span class="text-zinc-500 text-sm hidden sm:block">{{ auth.appUser?.displayName }}</span>
-          <span class="text-[0.6rem] px-2.5 py-1 rounded-full bg-[#ef233c]/10 text-[#ef233c] font-bold uppercase tracking-widest" style="font-family: Manrope, sans-serif">{{ auth.role }}</span>
+          <span v-for="r in auth.roles" :key="r" class="text-[0.6rem] px-2.5 py-1 rounded-full font-bold uppercase tracking-widest" :class="r === 'admin' ? 'bg-[#ef233c]/10 text-[#ef233c]' : r === 'dm' ? 'bg-purple-500/10 text-purple-400' : 'bg-white/5 text-zinc-400'" style="font-family: Manrope, sans-serif">{{ r }}</span>
           <button @click="handleLogout" class="text-zinc-600 hover:text-white text-sm transition-colors">Logout</button>
         </template>
         <template v-else>

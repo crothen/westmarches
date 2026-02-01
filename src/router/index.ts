@@ -38,7 +38,7 @@ router.beforeEach((to, _from, next) => {
   if (to.meta.role === 'admin' && !authStore.isAdmin) {
     return next({ name: 'home' })
   }
-  if (to.meta.role === 'dm' && !authStore.isDm) {
+  if (to.meta.role === 'dm' && !authStore.isDm && !authStore.isAdmin) {
     return next({ name: 'home' })
   }
   next()
