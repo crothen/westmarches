@@ -234,7 +234,7 @@ async function saveEditLocation() {
       >
         <div class="relative z-10">
           <!-- Hidden banner -->
-          <div v-if="loc.hidden" class="absolute top-0 left-0 right-0 bg-amber-500/20 border-b-2 border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-widest text-center py-1.5 z-10" style="font-family: Manrope, sans-serif">🚫 Hidden from players</div>
+          <div v-if="loc.hidden" :class="['bg-amber-500/20 border-b-2 border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-widest text-center py-1.5 z-10', (loc.mapImageUrl || loc.imageUrl) ? 'absolute top-0 left-0 right-0' : '']" style="font-family: Manrope, sans-serif">🚫 Hidden from players</div>
           <img v-if="loc.mapImageUrl || loc.imageUrl" :src="loc.mapImageUrl || loc.imageUrl" :class="['w-full h-36 object-cover rounded-t-xl -mt-px -mx-px', loc.hidden ? 'grayscale opacity-60' : '']" style="width: calc(100% + 2px)" />
           <div class="p-5">
             <div class="flex items-start justify-between gap-2 mb-1">
