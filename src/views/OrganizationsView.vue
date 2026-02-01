@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { collection, getDocs, query, orderBy, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
+import NpcLink from '../components/common/NpcLink.vue'
 import type { Organization, OrgMember, OrgRank, Npc } from '../types'
 
 const auth = useAuthStore()
@@ -336,14 +337,11 @@ function toggleExpand(id: string) {
                   </template>
                   <div v-else class="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 text-xs">🧙</div>
 
-                  <RouterLink
+                  <NpcLink
                     v-if="member.entityType === 'npc'"
-                    :to="'/npcs#' + member.entityId"
-                    class="text-sm text-zinc-200 hover:text-[#ef233c] transition-colors"
-                    @click.stop
-                  >
-                    {{ member.name }}
-                  </RouterLink>
+                    :npcId="member.entityId"
+                    :name="member.name"
+                  />
                   <span v-else class="text-sm text-zinc-200">{{ member.name }}</span>
 
                   <span class="text-[0.6rem] px-2 py-0.5 rounded-full" :class="getRankBadgeClass(member.rank)">

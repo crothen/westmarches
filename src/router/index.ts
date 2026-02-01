@@ -12,6 +12,7 @@ const routes = [
   { path: '/map', name: 'map', component: () => import('../views/MapView.vue'), meta: { auth: true } },
   { path: '/inventory', name: 'inventory', component: () => import('../views/InventoryView.vue'), meta: { auth: true } },
   { path: '/npcs', name: 'npcs', component: () => import('../views/NpcsView.vue'), meta: { auth: true } },
+  { path: '/npcs/:id', name: 'npc-detail', component: () => import('../views/NpcDetailView.vue'), meta: { auth: true } },
   { path: '/organizations', name: 'organizations', component: () => import('../views/OrganizationsView.vue'), meta: { auth: true } },
   { path: '/sessions', name: 'sessions', component: () => import('../views/SessionsView.vue'), meta: { auth: true } },
   { path: '/sessions/:id', name: 'session-detail', component: () => import('../views/SessionDetailView.vue'), meta: { auth: true } },
