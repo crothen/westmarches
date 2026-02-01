@@ -10,6 +10,7 @@ interface NavItem {
   label: string
   icon: string
   show: 'all' | 'dm' | 'admin'
+  sub?: boolean
 }
 
 interface NavSection {
@@ -60,6 +61,9 @@ const sections: NavSection[] = [
     items: [
       { to: '/dm', label: 'DM Panel', icon: '📋', show: 'dm' },
       { to: '/admin', label: 'Admin', icon: '⚙️', show: 'admin' },
+      { to: '/admin/users', label: 'Users', icon: '👥', show: 'admin', sub: true },
+      { to: '/admin/markers', label: 'Markers', icon: '📌', show: 'admin', sub: true },
+      { to: '/admin/tiles', label: 'Tiles', icon: '🗺️', show: 'admin', sub: true },
     ]
   },
 ]
@@ -99,11 +103,14 @@ function hasVisibleItems(section: NavSection): boolean {
           <RouterLink
             v-for="item in section.items.filter(isVisible)" :key="item.to"
             :to="item.to"
-            class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-all duration-150"
+            :class="[
+              'flex items-center gap-2.5 py-2 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-all duration-150',
+              item.sub ? 'pl-8 pr-3 text-xs' : 'px-3 text-sm'
+            ]"
             active-class="!text-[#ef233c] bg-[#ef233c]/[0.06] hover:!bg-[#ef233c]/[0.1]"
             @click="$emit('close')"
           >
-            <span class="text-sm w-5 text-center">{{ item.icon }}</span>
+            <span :class="['text-center', item.sub ? 'text-xs w-4' : 'text-sm w-5']">{{ item.icon }}</span>
             <span class="font-medium">{{ item.label }}</span>
           </RouterLink>
         </div>

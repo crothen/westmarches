@@ -21,6 +21,9 @@ const routes = [
   { path: '/schedule', name: 'schedule', component: () => import('../views/ScheduleView.vue'), meta: { auth: true } },
   { path: '/my-notes', name: 'my-notes', component: () => import('../views/MyNotesView.vue'), meta: { auth: true } },
   { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { auth: true, role: 'admin' } },
+  { path: '/admin/users', name: 'admin-users', component: () => import('../views/AdminUsersView.vue'), meta: { auth: true, role: 'admin' } },
+  { path: '/admin/markers', name: 'admin-markers', component: () => import('../views/AdminMarkersView.vue'), meta: { auth: true, role: 'admin' } },
+  { path: '/admin/tiles', name: 'admin-tiles', component: () => import('../views/AdminTilesView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/dm', name: 'dm', component: () => import('../views/DmView.vue'), meta: { auth: true, role: 'dm' } },
 ]
 

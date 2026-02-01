@@ -1,49 +1,26 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import AdminUsers from '../components/admin/AdminUsers.vue'
-import AdminMarkers from '../components/admin/AdminMarkers.vue'
-import AdminTiles from '../components/admin/AdminTiles.vue'
-
-type AdminTab = 'users' | 'markers' | 'tiles'
-
-const activeTab = ref<AdminTab>('users')
-
-const tabs: { key: AdminTab; label: string; icon: string }[] = [
-  { key: 'users', label: 'Users', icon: '👥' },
-  { key: 'markers', label: 'Markers', icon: '📌' },
-  { key: 'tiles', label: 'Tiles', icon: '🗺️' },
+const sections = [
+  { to: '/admin/users', icon: '👥', label: 'User Management', desc: 'Manage users, assign roles (player, DM, admin).' },
+  { to: '/admin/markers', icon: '📌', label: 'Marker Management', desc: 'Edit marker types, labels, and icons for locations, features, and hex tags.' },
+  { to: '/admin/tiles', icon: '🗺️', label: 'Tile Management', desc: 'Manage terrain types, colors, and textures. Generate textures with AI.' },
 ]
 </script>
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">⚙️ Admin Panel</h1>
-    </div>
+    <h1 class="text-2xl font-bold tracking-tight text-white mb-2" style="font-family: Manrope, sans-serif">⚙️ Admin Panel</h1>
+    <p class="text-zinc-500 text-sm mb-8">Campaign configuration and management.</p>
 
-    <!-- Tab Navigation -->
-    <div class="flex gap-1 mb-6 border-b border-white/[0.06]">
-      <button
-        v-for="tab in tabs" :key="tab.key"
-        @click="activeTab = tab.key"
-        :class="[
-          'flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-t-lg transition-all relative',
-          activeTab === tab.key
-            ? 'text-white bg-white/[0.04] border border-white/[0.08] border-b-transparent -mb-px z-10'
-            : 'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.02]'
-        ]"
-        style="font-family: Manrope, sans-serif"
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <RouterLink
+        v-for="s in sections" :key="s.to"
+        :to="s.to"
+        class="card-flat p-6 hover:border-white/15 transition-all duration-200 group"
       >
-        <span>{{ tab.icon }}</span>
-        <span>{{ tab.label }}</span>
-      </button>
+        <div class="text-3xl mb-3">{{ s.icon }}</div>
+        <h3 class="text-base font-semibold text-zinc-200 group-hover:text-[#ef233c] transition-colors mb-1" style="font-family: Manrope, sans-serif">{{ s.label }}</h3>
+        <p class="text-sm text-zinc-500">{{ s.desc }}</p>
+      </RouterLink>
     </div>
-
-    <!-- Tab Content -->
-    <KeepAlive>
-      <AdminUsers v-if="activeTab === 'users'" />
-      <AdminMarkers v-else-if="activeTab === 'markers'" />
-      <AdminTiles v-else-if="activeTab === 'tiles'" />
-    </KeepAlive>
   </div>
 </template>

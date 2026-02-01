@@ -285,25 +285,25 @@ async function seedDefaults() {
       </div>
 
       <!-- Type Grid -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         <div
           v-for="t in currentTypes" :key="t.key"
-          :class="['card-flat p-3 transition-all', savedSection === t.key ? '!border-green-500/40' : '']"
+          :class="['card-flat p-4 transition-all', savedSection === t.key ? '!border-green-500/40' : '']"
         >
-          <div class="flex items-center gap-2 mb-2">
-            <img :src="getIconUrl(t.iconUrl)" class="w-8 h-8 object-contain shrink-0" :alt="t.key" />
+          <div class="flex items-center gap-3 mb-3">
+            <img :src="getIconUrl(t.iconUrl)" class="w-10 h-10 object-contain shrink-0" :alt="t.key" />
             <div class="min-w-0">
               <div class="text-sm font-semibold text-zinc-200 truncate" style="font-family: Manrope, sans-serif">{{ t.label }}</div>
-              <div class="text-[0.55rem] text-zinc-600 font-mono">{{ t.key }}</div>
+              <div class="text-xs text-zinc-600 font-mono">{{ t.key }}</div>
             </div>
           </div>
-          <div class="flex flex-wrap gap-1">
-            <button @click="startEdit(activeCategory, t.key)" class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10">✏️ Edit</button>
-            <label class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 cursor-pointer">
-              📤 Icon
+          <div class="flex flex-wrap gap-1.5 mt-1">
+            <button @click="startEdit(activeCategory, t.key)" class="btn-action">✏️ Edit</button>
+            <label class="btn-action cursor-pointer">
+              📤 Upload Icon
               <input type="file" accept="image/png,image/webp,image/svg+xml" class="hidden" @change="uploadIcon(t.key, $event)" />
             </label>
-            <button @click="deleteType(t.key)" class="text-[0.6rem] text-zinc-500 hover:text-red-400 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10">✕</button>
+            <button @click="deleteType(t.key)" class="btn-action !text-red-400/70 hover:!text-red-400 hover:!bg-red-500/15">✕ Delete</button>
           </div>
         </div>
       </div>

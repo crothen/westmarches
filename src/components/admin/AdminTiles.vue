@@ -267,15 +267,15 @@ async function removeTexture(name: string) {
           </div>
 
           <!-- Actions -->
-          <div class="flex flex-wrap gap-1">
-            <button @click="startEdit(terrain.name)" class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10">✏️ Edit</button>
-            <button @click="startGenerate(terrain.name)" class="text-[0.6rem] text-zinc-500 hover:text-purple-400 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10">🎨 AI Gen</button>
-            <label class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 cursor-pointer">
+          <div class="flex flex-wrap gap-1.5 mt-1">
+            <button @click="startEdit(terrain.name)" class="btn-action">✏️ Edit</button>
+            <button @click="startGenerate(terrain.name)" class="btn-action !text-purple-400 hover:!bg-purple-500/15">🎨 AI Gen</button>
+            <label class="btn-action cursor-pointer">
               📤 Upload
               <input type="file" accept="image/*" class="hidden" @change="uploadTexture(terrain.name, $event)" />
             </label>
-            <button v-if="terrain.texture" @click="removeTexture(terrain.name)" class="text-[0.6rem] text-zinc-500 hover:text-red-400 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10">🗑️</button>
-            <button @click="deleteTerrain(terrain.name)" class="text-[0.6rem] text-zinc-500 hover:text-red-400 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10">✕ Del</button>
+            <button v-if="terrain.texture" @click="removeTexture(terrain.name)" class="btn-action !text-red-400/70 hover:!text-red-400 hover:!bg-red-500/15">🗑️ Texture</button>
+            <button @click="deleteTerrain(terrain.name)" class="btn-action !text-red-400/70 hover:!text-red-400 hover:!bg-red-500/15">✕ Delete</button>
           </div>
         </div>
       </div>
