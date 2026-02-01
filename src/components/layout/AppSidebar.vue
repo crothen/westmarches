@@ -7,42 +7,44 @@ defineEmits<{ close: [] }>()
 const auth = useAuthStore()
 
 const navItems = [
-  { to: '/', label: '🏠 Home', show: 'all' },
-  { to: '/characters', label: '🧙 Characters', show: 'all' },
-  { to: '/locations', label: '📍 Locations', show: 'all' },
-  { to: '/map', label: '🗺️ Map', show: 'all' },
-  { to: '/inventory', label: '🎒 Inventory', show: 'all' },
-  { to: '/npcs', label: '👤 NPCs', show: 'all' },
-  { to: '/organizations', label: '🏛️ Organizations', show: 'all' },
-  { to: '/sessions', label: '📖 Session Log', show: 'all' },
-  { to: '/missions', label: '⚔️ Missions', show: 'all' },
-  { to: '/schedule', label: '📅 Schedule', show: 'all' },
-  { to: '/dm', label: '📋 DM Panel', show: 'dm' },
-  { to: '/admin', label: '⚙️ Admin', show: 'admin' },
+  { to: '/', label: 'Home', icon: '🏠', show: 'all' },
+  { to: '/characters', label: 'Characters', icon: '🧙', show: 'all' },
+  { to: '/locations', label: 'Locations', icon: '📍', show: 'all' },
+  { to: '/map', label: 'Map', icon: '🗺️', show: 'all' },
+  { to: '/inventory', label: 'Inventory', icon: '🎒', show: 'all' },
+  { to: '/npcs', label: 'NPCs', icon: '👤', show: 'all' },
+  { to: '/organizations', label: 'Organizations', icon: '🏛️', show: 'all' },
+  { to: '/sessions', label: 'Session Log', icon: '📖', show: 'all' },
+  { to: '/missions', label: 'Missions', icon: '⚔️', show: 'all' },
+  { to: '/schedule', label: 'Schedule', icon: '📅', show: 'all' },
+  { to: '/dm', label: 'DM Panel', icon: '📋', show: 'dm' },
+  { to: '/admin', label: 'Admin', icon: '⚙️', show: 'admin' },
 ]
 </script>
 
 <template>
   <!-- Overlay for mobile -->
-  <div v-if="open" class="fixed inset-0 bg-black/50 z-20 lg:hidden" @click="$emit('close')" />
+  <div v-if="open" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-20 lg:hidden" @click="$emit('close')" />
 
   <aside
     :class="[
-      'w-56 bg-stone-800 border-r border-stone-700 min-h-[calc(100vh-3.5rem)]',
-      'fixed lg:static z-30 transition-transform lg:translate-x-0',
+      'w-56 min-h-[calc(100vh-3.5rem)] border-r border-white/[0.06]',
+      'bg-[var(--bg-secondary)]/50 backdrop-blur-xl',
+      'fixed lg:static z-30 transition-transform duration-200 lg:translate-x-0',
       open ? 'translate-x-0' : '-translate-x-full'
     ]"
   >
-    <nav class="p-4 space-y-1">
+    <nav class="p-3 space-y-0.5 mt-2">
       <template v-for="item in navItems" :key="item.to">
         <RouterLink
           v-if="item.show === 'all' || (item.show === 'dm' && auth.isDm) || (item.show === 'admin' && auth.isAdmin)"
           :to="item.to"
-          class="block px-3 py-2 rounded text-stone-300 hover:bg-stone-700 hover:text-amber-500 transition-colors"
-          active-class="bg-stone-700 text-amber-500"
+          class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-100 hover:bg-white/[0.05] transition-all duration-150"
+          active-class="!text-amber-500 bg-amber-500/[0.08] hover:!bg-amber-500/[0.12]"
           @click="$emit('close')"
         >
-          {{ item.label }}
+          <span class="text-base w-5 text-center">{{ item.icon }}</span>
+          <span>{{ item.label }}</span>
         </RouterLink>
       </template>
     </nav>

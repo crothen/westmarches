@@ -163,53 +163,53 @@ async function removeVote(session: ScheduledSession) {
 <template>
   <div>
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-3xl font-bold text-amber-500">📅 Session Schedule</h1>
-      <button v-if="auth.isDm" @click="showCreateForm = !showCreateForm" class="bg-amber-600 hover:bg-amber-500 text-stone-900 text-sm font-medium px-4 py-2 rounded transition-colors">
+      <h1 class="text-2xl font-bold text-slate-100">📅 Session Schedule</h1>
+      <button v-if="auth.isDm" @click="showCreateForm = !showCreateForm" class="btn-primary text-sm">
         {{ showCreateForm ? 'Cancel' : '+ Schedule Session' }}
       </button>
     </div>
 
     <!-- Create Form (DM only) -->
-    <div v-if="showCreateForm" class="bg-stone-800 border border-stone-700 rounded-lg p-4 mb-6">
-      <h3 class="text-stone-200 font-semibold mb-3">Schedule New Session</h3>
+    <div v-if="showCreateForm" class="glass-card p-5 mb-6">
+      <h3 class="text-slate-200 font-semibold mb-3">Schedule New Session</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="block text-stone-400 text-sm mb-1">Date *</label>
-          <input v-model="newDate" type="datetime-local" class="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-stone-100 focus:border-amber-500 focus:outline-none" />
+          <label class="block text-slate-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Date *</label>
+          <input v-model="newDate" type="datetime-local" class="modern-input w-full" />
         </div>
         <div>
-          <label class="block text-stone-400 text-sm mb-1">Title (optional)</label>
-          <input v-model="newTitle" type="text" placeholder="e.g. Session 2" class="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-stone-100 focus:border-amber-500 focus:outline-none" />
+          <label class="block text-slate-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Title (optional)</label>
+          <input v-model="newTitle" type="text" placeholder="e.g. Session 2" class="modern-input w-full" />
         </div>
         <div class="md:col-span-2">
-          <label class="block text-stone-400 text-sm mb-1">Description (optional)</label>
-          <textarea v-model="newDescription" rows="2" class="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-stone-100 focus:border-amber-500 focus:outline-none" />
+          <label class="block text-slate-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Description (optional)</label>
+          <textarea v-model="newDescription" rows="2" class="modern-input w-full" />
         </div>
         <div>
-          <label class="block text-stone-400 text-sm mb-1">Max Players (optional)</label>
-          <input v-model.number="newMaxPlayers" type="number" min="1" class="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-stone-100 focus:border-amber-500 focus:outline-none" />
+          <label class="block text-slate-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Max Players (optional)</label>
+          <input v-model.number="newMaxPlayers" type="number" min="1" class="modern-input w-full" />
         </div>
       </div>
-      <button @click="createSession" :disabled="!newDate" class="mt-3 bg-amber-600 hover:bg-amber-500 text-stone-900 text-sm font-medium px-4 py-2 rounded transition-colors disabled:opacity-50">Create</button>
+      <button @click="createSession" :disabled="!newDate" class="btn-primary text-sm mt-3">Create</button>
     </div>
 
-    <div v-if="loading" class="text-stone-400 animate-pulse">Loading schedule...</div>
+    <div v-if="loading" class="text-slate-400 animate-pulse">Loading schedule...</div>
 
     <!-- Upcoming Sessions -->
     <div v-if="upcomingSessions.length > 0" class="space-y-4 mb-8">
-      <div v-for="session in upcomingSessions" :key="session.id" class="bg-stone-800 border border-stone-700 rounded-lg p-5">
+      <div v-for="session in upcomingSessions" :key="session.id" class="glass-card p-5">
         <div class="flex items-start justify-between mb-3">
           <div>
             <div class="flex items-center gap-3">
-              <span class="text-xl font-bold text-stone-100">{{ session.title || 'Game Session' }}</span>
-              <span class="text-xs px-2 py-0.5 rounded bg-green-900/50 text-green-400 border border-green-700">{{ session.status }}</span>
+              <span class="text-xl font-bold text-slate-100">{{ session.title || 'Game Session' }}</span>
+              <span class="text-xs px-2 py-0.5 rounded-md bg-green-500/15 text-green-400">{{ session.status }}</span>
             </div>
             <p class="text-amber-500 font-medium mt-1">📅 {{ formatDate(session.date) }}</p>
-            <p v-if="session.description" class="text-stone-400 text-sm mt-1">{{ session.description }}</p>
+            <p v-if="session.description" class="text-slate-400 text-sm mt-1">{{ session.description }}</p>
           </div>
           <button @click="toggleSignup(session)" :class="[
-            'px-4 py-2 rounded text-sm font-medium transition-colors',
-            isSignedUp(session) ? 'bg-red-900/50 text-red-400 border border-red-700 hover:bg-red-900' : 'bg-green-900/50 text-green-400 border border-green-700 hover:bg-green-900'
+            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150',
+            isSignedUp(session) ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20'
           ]">
             {{ isSignedUp(session) ? '✖ Withdraw' : '✋ Sign Up' }}
           </button>
@@ -217,23 +217,23 @@ async function removeVote(session: ScheduledSession) {
 
         <!-- Signups -->
         <div class="mb-4">
-          <h4 class="text-stone-400 text-sm mb-2">
+          <h4 class="text-slate-400 text-sm mb-2">
             Signed up: {{ session.signups?.length || 0 }}{{ session.maxPlayers ? ` / ${session.maxPlayers}` : '' }}
           </h4>
           <div class="flex flex-wrap gap-2">
-            <span v-for="s in session.signups" :key="s.userId" class="bg-stone-700 text-stone-200 text-sm px-2 py-1 rounded">
+            <span v-for="s in session.signups" :key="s.userId" class="bg-white/[0.05] text-slate-200 text-sm px-2.5 py-1 rounded-lg border border-white/[0.06]">
               {{ s.characterName }}
             </span>
-            <span v-if="!session.signups?.length" class="text-stone-500 text-sm">No signups yet</span>
+            <span v-if="!session.signups?.length" class="text-slate-500 text-sm">No signups yet</span>
           </div>
         </div>
 
         <!-- Mission Voting (only if signed up) -->
-        <div v-if="isSignedUp(session)" class="border-t border-stone-700 pt-4">
-          <h4 class="text-stone-300 font-medium mb-2">🗳️ Vote for a Mission</h4>
+        <div v-if="isSignedUp(session)" class="border-t border-white/[0.06] pt-4">
+          <h4 class="text-slate-300 font-medium mb-2">🗳️ Vote for a Mission</h4>
 
           <div class="mb-3">
-            <select @change="(e: any) => { if (e.target.value) voteMission(session, e.target.value); e.target.value = '' }" class="bg-stone-700 border border-stone-600 rounded px-3 py-2 text-stone-200 text-sm focus:border-amber-500 focus:outline-none w-full max-w-lg">
+            <select @change="(e: any) => { if (e.target.value) voteMission(session, e.target.value); e.target.value = '' }" class="modern-input w-full max-w-lg text-sm">
               <option value="">Select a mission to vote for...</option>
               <optgroup v-for="(unitMissions, unitName) in missionsByUnit" :key="unitName" :label="unitName">
                 <option v-for="m in unitMissions" :key="m.id" :value="m.id">
@@ -243,21 +243,21 @@ async function removeVote(session: ScheduledSession) {
             </select>
           </div>
 
-          <div v-if="getMyVote(session)" class="text-sm text-stone-400 mb-2">
+          <div v-if="getMyVote(session)" class="text-sm text-slate-400 mb-2">
             Your vote: <span class="text-amber-500">{{ getMissionTitle(getMyVote(session)!) }}</span>
-            <button @click="removeVote(session)" class="text-red-400 hover:text-red-300 ml-2">(remove)</button>
+            <button @click="removeVote(session)" class="text-red-400 hover:text-red-300 ml-2 transition-colors">(remove)</button>
           </div>
         </div>
 
         <!-- Vote Results (visible to all) -->
         <div v-if="getVoteCounts(session).length > 0" class="mt-3">
-          <h4 class="text-stone-400 text-sm mb-2">Current Votes:</h4>
+          <h4 class="text-slate-400 text-sm mb-2">Current Votes:</h4>
           <div class="space-y-1">
             <div v-for="vc in getVoteCounts(session)" :key="vc.missionId" class="flex items-center gap-2 text-sm">
               <span class="text-amber-500 font-bold w-6 text-right">{{ vc.count }}</span>
-              <span class="text-stone-500">|</span>
-              <span class="text-stone-300">{{ getMissionTitle(vc.missionId) }}</span>
-              <span class="text-stone-600 text-xs">({{ getMissionUnit(vc.missionId) }})</span>
+              <span class="text-slate-600">|</span>
+              <span class="text-slate-300">{{ getMissionTitle(vc.missionId) }}</span>
+              <span class="text-slate-600 text-xs">({{ getMissionUnit(vc.missionId) }})</span>
             </div>
           </div>
         </div>
@@ -266,8 +266,8 @@ async function removeVote(session: ScheduledSession) {
 
     <div v-if="!loading && upcomingSessions.length === 0" class="text-center py-12">
       <div class="text-4xl mb-3">📅</div>
-      <p class="text-stone-400">No sessions scheduled yet.</p>
-      <p v-if="auth.isDm" class="text-stone-500 text-sm mt-1">Use the button above to schedule one!</p>
+      <p class="text-slate-400">No sessions scheduled yet.</p>
+      <p v-if="auth.isDm" class="text-slate-500 text-sm mt-1">Use the button above to schedule one!</p>
     </div>
   </div>
 </template>

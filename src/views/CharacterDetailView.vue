@@ -1,6 +1,8 @@
 <template>
   <div>
-    <h1 class="text-3xl font-bold text-amber-500 mb-6">🧙 Character Details</h1>
-    <p class="text-stone-400">Coming soon...</p>
+    <h1 class="text-2xl font-bold text-slate-100 mb-6">🧙 Character Details</h1>
+    <div class="glass-card p-8 text-center">
+      <p class="text-slate-500">Coming soon...</p>
+    </div>
   </div>
 </template>

@@ -12,8 +12,8 @@ function onHexClick(hex: { x: number; y: number }) {
 <template>
   <div class="h-[calc(100vh-8rem)]">
     <div class="flex items-center justify-between mb-4">
-      <h1 class="text-3xl font-bold text-amber-500">🗺️ World Map</h1>
-      <div v-if="selectedHex" class="text-stone-400 text-sm">
+      <h1 class="text-2xl font-bold text-slate-100">🗺️ World Map</h1>
+      <div v-if="selectedHex" class="text-slate-400 text-sm">
         Selected: <span class="text-amber-500 font-mono">{{ selectedHex.x }}, {{ selectedHex.y }}</span>
       </div>
     </div>

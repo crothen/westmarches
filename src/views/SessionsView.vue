@@ -23,15 +23,15 @@ onMounted(async () => {
 <template>
   <div>
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-3xl font-bold text-amber-500">📖 Session Log</h1>
+      <h1 class="text-2xl font-bold text-slate-100">📖 Session Log</h1>
     </div>
 
-    <div v-if="loading" class="text-stone-400 animate-pulse">Loading sessions...</div>
+    <div v-if="loading" class="text-slate-400 animate-pulse">Loading sessions...</div>
 
     <div v-else-if="sessions.length === 0" class="text-center py-12">
       <div class="text-4xl mb-3">📜</div>
-      <p class="text-stone-400">No sessions recorded yet.</p>
-      <p class="text-stone-500 text-sm mt-1">The adventure awaits...</p>
+      <p class="text-slate-400">No sessions recorded yet.</p>
+      <p class="text-slate-500 text-sm mt-1">The adventure awaits...</p>
     </div>
 
     <div v-else class="space-y-3">
@@ -39,23 +39,23 @@ onMounted(async () => {
         v-for="session in sessions"
         :key="session.id"
         :to="`/sessions/${session.id}`"
-        class="block bg-stone-800 border border-stone-700 rounded-lg p-4 hover:border-amber-500/50 transition-colors group"
+        class="block glass-card p-4 group"
       >
         <div class="flex items-start justify-between">
           <div>
             <div class="flex items-center gap-3 mb-1">
               <span class="text-amber-500 font-bold text-lg">Session {{ session.sessionNumber }}</span>
-              <span class="text-stone-500 text-sm">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
+              <span class="text-slate-500 text-sm">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
             </div>
-            <h2 class="text-stone-100 font-semibold group-hover:text-amber-500 transition-colors">{{ session.title }}</h2>
-            <p class="text-stone-400 text-sm mt-1 line-clamp-2">{{ session.summary }}</p>
+            <h2 class="text-slate-100 font-semibold group-hover:text-amber-500 transition-colors">{{ session.title }}</h2>
+            <p class="text-slate-400 text-sm mt-1 line-clamp-2">{{ session.summary }}</p>
           </div>
-          <div class="text-stone-500 text-sm shrink-0 ml-4">
+          <div class="text-slate-500 text-sm shrink-0 ml-4">
             {{ session.participants?.length || 0 }} adventurers
           </div>
         </div>
         <div v-if="session.tags?.length" class="flex gap-2 mt-3 flex-wrap">
-          <span v-for="tag in session.tags" :key="tag" class="text-xs bg-stone-700 text-stone-400 px-2 py-0.5 rounded">{{ tag }}</span>
+          <span v-for="tag in session.tags" :key="tag" class="text-xs bg-white/[0.05] text-slate-400 px-2 py-0.5 rounded-md border border-white/[0.06]">{{ tag }}</span>
         </div>
       </RouterLink>
     </div>

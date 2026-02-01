@@ -29,34 +29,37 @@ async function handleRegister() {
 </script>
 
 <template>
-  <div class="max-w-md mx-auto mt-20">
-    <div class="bg-stone-800 rounded-lg border border-stone-700 p-8">
-      <h1 class="text-2xl font-bold text-amber-500 mb-6 text-center">📜 Join the Expedition</h1>
+  <div class="max-w-sm mx-auto mt-20">
+    <div class="text-center mb-8">
+      <div class="text-4xl mb-3">📜</div>
+      <h1 class="text-2xl font-bold bg-gradient-to-r from-amber-400 to-amber-600 bg-clip-text text-transparent">Join the Expedition</h1>
+    </div>
 
-      <div v-if="error" class="bg-red-900/50 border border-red-700 text-red-300 rounded p-3 mb-4 text-sm">
+    <div class="glass-card p-6">
+      <div v-if="error" class="bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg p-3 mb-4 text-sm">
         {{ error }}
       </div>
 
-      <form @submit.prevent="handleRegister" class="space-y-4">
+      <form @submit.prevent="handleRegister" class="space-y-3">
         <div>
-          <label class="block text-stone-400 text-sm mb-1">Email</label>
-          <input v-model="email" type="email" required class="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-stone-100 focus:border-amber-500 focus:outline-none" />
+          <label class="block text-slate-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Email</label>
+          <input v-model="email" type="email" required class="modern-input w-full" />
         </div>
         <div>
-          <label class="block text-stone-400 text-sm mb-1">Password</label>
-          <input v-model="password" type="password" required minlength="6" class="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-stone-100 focus:border-amber-500 focus:outline-none" />
+          <label class="block text-slate-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Password</label>
+          <input v-model="password" type="password" required minlength="6" class="modern-input w-full" />
         </div>
         <div>
-          <label class="block text-stone-400 text-sm mb-1">Confirm Password</label>
-          <input v-model="confirmPassword" type="password" required class="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-stone-100 focus:border-amber-500 focus:outline-none" />
+          <label class="block text-slate-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Confirm Password</label>
+          <input v-model="confirmPassword" type="password" required class="modern-input w-full" />
         </div>
-        <button type="submit" :disabled="loading" class="w-full bg-amber-600 hover:bg-amber-500 text-stone-900 font-semibold py-2 rounded transition-colors disabled:opacity-50">
+        <button type="submit" :disabled="loading" class="btn-primary w-full !py-2.5 mt-1">
           {{ loading ? 'Registering...' : 'Register' }}
         </button>
       </form>
 
-      <p class="text-center text-stone-500 text-sm mt-6">
-        Already registered? <RouterLink to="/login" class="text-amber-500 hover:text-amber-400">Sign In</RouterLink>
+      <p class="text-center text-slate-600 text-sm mt-5">
+        Already registered? <RouterLink to="/login" class="text-amber-500 hover:text-amber-400 transition-colors">Sign In</RouterLink>
       </p>
     </div>
   </div>

@@ -6,8 +6,11 @@ const auth = useAuthStore()
 </script>
 
 <template>
-  <div v-if="auth.loading" class="min-h-screen flex items-center justify-center bg-stone-900">
-    <div class="text-amber-500 text-xl animate-pulse">Loading...</div>
+  <div v-if="auth.loading" class="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
+    <div class="text-center">
+      <div class="text-3xl mb-3 animate-pulse">⚔️</div>
+      <div class="text-amber-500/60 text-sm">Loading...</div>
+    </div>
   </div>
   <AppLayout v-else>
     <RouterView />
