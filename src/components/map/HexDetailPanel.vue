@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore'
-import { db } from '../../firebase/config'
+import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
+import { db, storage } from '../../firebase/config'
 import { useAuthStore } from '../../stores/auth'
+import DetailMapViewer from './DetailMapViewer.vue'
 import type { HexNote } from '../../types'
 
 const props = defineProps<{
@@ -17,6 +19,7 @@ const emit = defineEmits<{
   'update-terrain': [hexKey: string, terrainId: number]
   'toggle-tag': [hexKey: string, tagId: number]
   'set-main-tag': [hexKey: string, tagId: number | null, isPrivate: boolean]
+  'update-detail-map': [hexKey: string, url: string | null]
 }>()
 
 const auth = useAuthStore()
@@ -26,6 +29,9 @@ const newNotePrivate = ref(false)
 const replyingTo = ref<string | null>(null)
 const replyContent = ref('')
 let unsubNotes: (() => void) | null = null
+const uploadProgress = ref(0)
+const isUploading = ref(false)
+const showDetailMapViewer = ref(false)
 
 const hexKey = computed(() => props.hex ? `${props.hex.x}_${props.hex.y}` : null)
 
@@ -180,6 +186,50 @@ function formatDate(date: any): string {
   const d = date.toDate ? date.toDate() : new Date(date)
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
+
+const detailMapUrl = computed(() => currentHexData.value?.detailMapUrl || null)
+
+async function uploadDetailMap(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file || !hexKey.value) return
+
+  isUploading.value = true
+  uploadProgress.value = 0
+
+  const ext = file.name.split('.').pop() || 'png'
+  const fileRef = storageRef(storage, `detail-maps/${hexKey.value}/map.${ext}`)
+  const uploadTask = uploadBytesResumable(fileRef, file)
+
+  uploadTask.on('state_changed',
+    (snapshot) => {
+      uploadProgress.value = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
+    },
+    (error) => {
+      console.error('Upload failed:', error)
+      isUploading.value = false
+    },
+    async () => {
+      const url = await getDownloadURL(uploadTask.snapshot.ref)
+      emit('update-detail-map', hexKey.value!, url)
+      isUploading.value = false
+      uploadProgress.value = 0
+    }
+  )
+}
+
+async function removeDetailMap() {
+  if (!hexKey.value || !confirm('Remove the detail map?')) return
+  try {
+    for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
+      try {
+        const fileRef = storageRef(storage, `detail-maps/${hexKey.value}/map.${ext}`)
+        await deleteObject(fileRef)
+        break
+      } catch { /* try next */ }
+    }
+  } catch { /* storage cleanup is best-effort */ }
+  emit('update-detail-map', hexKey.value!, null)
+}
 </script>
 
 <template>
@@ -240,6 +290,28 @@ function formatDate(date: any): string {
             >{{ t.name }}</button>
           </div>
         </div>
+
+        <!-- Detail Map -->
+        <div class="mt-3">
+          <label class="block text-xs text-zinc-500 mb-1">Detail Map</label>
+          <div v-if="detailMapUrl" class="mb-2">
+            <img :src="detailMapUrl" class="w-full rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors" @click="showDetailMapViewer = true" />
+            <button @click="removeDetailMap" class="text-xs text-zinc-600 hover:text-red-400 mt-1 transition-colors">Remove map</button>
+          </div>
+          <div v-if="isUploading" class="mb-2">
+            <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div class="h-full bg-[#ef233c] rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+            </div>
+            <span class="text-xs text-zinc-500 mt-1">{{ uploadProgress }}%</span>
+          </div>
+          <input v-if="!isUploading" type="file" accept="image/*" @change="uploadDetailMap" class="text-xs text-zinc-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border file:border-white/10 file:bg-white/5 file:text-zinc-400 file:text-xs file:cursor-pointer hover:file:bg-white/10 file:transition-colors" />
+        </div>
+      </div>
+
+      <!-- Detail Map Preview (visible to non-DMs) -->
+      <div v-if="detailMapUrl && !auth.isDm">
+        <h4 class="label mb-2">Detail Map</h4>
+        <img :src="detailMapUrl" class="w-full rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors" @click="showDetailMapViewer = true" />
       </div>
 
       <!-- Notes Section -->
@@ -303,5 +375,13 @@ function formatDate(date: any): string {
         </div>
       </div>
     </div>
+
+    <!-- Detail Map Viewer Modal -->
+    <DetailMapViewer
+      v-if="showDetailMapViewer && detailMapUrl"
+      :image-url="detailMapUrl"
+      :hex-label="`Hex ${hex.x}, ${hex.y}`"
+      @close="showDetailMapViewer = false"
+    />
   </div>
 </template>

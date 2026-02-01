@@ -37,6 +37,18 @@ async function setMainTag(hexKey: string, tagId: number | null, isPrivate: boole
   }
 }
 
+async function updateDetailMap(hexKey: string, url: string | null) {
+  try {
+    if (url) {
+      await updateDoc(mapDocRef, { [`hexes.${hexKey}.detailMapUrl`]: url })
+    } else {
+      await updateDoc(mapDocRef, { [`hexes.${hexKey}.detailMapUrl`]: null })
+    }
+  } catch (e) {
+    console.error('Failed to update detail map:', e)
+  }
+}
+
 async function toggleTag(hexKey: string, tagId: number) {
   const currentTags = hexData.value[hexKey]?.tags || []
   let newTags: number[]
@@ -89,6 +101,7 @@ async function toggleTag(hexKey: string, tagId: number) {
         @update-terrain="updateTerrain"
         @set-main-tag="setMainTag"
         @toggle-tag="toggleTag"
+        @update-detail-map="updateDetailMap"
       />
     </transition>
   </div>
