@@ -154,3 +154,53 @@ export interface SessionNote {
   createdAt: Date
   updatedAt: Date
 }
+
+export type MissionStatus = 'available' | 'in_progress' | 'completed' | 'failed'
+
+export interface Mission {
+  id: string
+  unitId: string  // organization/unit this belongs to
+  unitName: string
+  title: string
+  description: string
+  tier: number
+  expectedDurationDays?: number
+  missionDurationDays?: number
+  durationNote?: string  // for "unknown, up to 1 month" etc
+  pay: {
+    amount: number
+    type: 'each' | 'total' | 'per_day' | 'performance'
+    currency: 'silver' | 'gold'
+    note?: string  // for "most likely more than 50 gold each" etc
+  }
+  status: MissionStatus
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface ScheduledSession {
+  id: string
+  date: Date
+  title?: string
+  description?: string
+  maxPlayers?: number
+  signups: SessionSignup[]
+  missionVotes: MissionVote[]
+  selectedMissionId?: string
+  status: 'upcoming' | 'in_progress' | 'completed' | 'cancelled'
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface SessionSignup {
+  userId: string
+  characterId?: string
+  characterName: string
+  signedUpAt: Date
+}
+
+export interface MissionVote {
+  userId: string
+  missionId: string
+  votedAt: Date
+}

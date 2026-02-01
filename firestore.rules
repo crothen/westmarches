@@ -94,6 +94,19 @@ service cloud.firestore {
       allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDm());
     }
 
+    // Missions
+    match /missions/{missionId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isDm();
+    }
+
+    // Scheduled Sessions
+    match /scheduledSessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isDm();
+      allow update: if isAuthenticated();
+    }
+
     // Map data
     match /maps/{mapId} {
       allow read: if isAuthenticated();

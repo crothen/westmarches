@@ -24,6 +24,8 @@ const auth = useAuthStore()
           { to: '/organizations', icon: '🏛️', title: 'Organizations', desc: 'Factions and guilds' },
           { to: '/inventory', icon: '🎒', title: 'Party Inventory', desc: 'Shared loot and supplies' },
           { to: '/sessions', icon: '📖', title: 'Session Log', desc: 'Campaign session history' },
+          { to: '/missions', icon: '⚔️', title: 'Missions', desc: 'Available missions by unit' },
+          { to: '/schedule', icon: '📅', title: 'Schedule', desc: 'Upcoming sessions & voting' },
         ]" :key="card.to" :to="card.to"
           class="bg-stone-800 border border-stone-700 rounded-lg p-6 hover:border-amber-500/50 transition-colors group"
         >
