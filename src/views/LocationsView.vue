@@ -4,6 +4,8 @@ import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, query, orderBy,
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import HexMiniMap from '../components/map/HexMiniMap.vue'
+import TypeSelect from '../components/common/TypeSelect.vue'
+import { useTypeConfig } from '../composables/useTypeConfig'
 import type { CampaignLocation, LocationFeature } from '../types'
 
 const auth = useAuthStore()
@@ -53,7 +55,7 @@ const newLoc = ref({ name: '', type: 'city' as any, description: '', hexKey: '' 
 const editingLocation = ref<CampaignLocation | null>(null)
 const editLocForm = ref({ name: '', type: 'city' as any, description: '', hexKey: '' })
 
-const locationTypes = ['city', 'town', 'village', 'castle', 'fortress', 'monastery', 'camp', 'ruins', 'other']
+const { locationTypes: locationTypeOptions } = useTypeConfig()
 const typeIcons: Record<string, string> = {
   city: '🏛️', town: '🏠', village: '🛖', castle: '🏰', fortress: '🛡️',
   monastery: '📿', camp: '⛺', ruins: '🪨', other: '📍'
@@ -208,9 +210,7 @@ async function saveEditLocation() {
         <h3 class="label mb-3">Add Location</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input v-model="newLoc.name" placeholder="Name" class="input" />
-          <select v-model="newLoc.type" class="input">
-            <option v-for="t in locationTypes" :key="t" :value="t">{{ typeIcons[t] || '' }} {{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-          </select>
+          <TypeSelect v-model="newLoc.type" :options="locationTypeOptions" />
           <input v-model="newLoc.hexKey" placeholder="Hex (e.g. 25_30)" class="input" />
           <div></div>
           <textarea v-model="newLoc.description" placeholder="Description..." class="input md:col-span-2" rows="2" />
@@ -224,10 +224,13 @@ async function saveEditLocation() {
       <input v-model="searchQuery" type="text" placeholder="Search..." class="input flex-1 min-w-[180px] max-w-sm !bg-white/[0.03]" />
 
       <!-- Type filter -->
-      <select v-model="typeFilter" class="input !w-auto !bg-white/[0.03] text-sm">
-        <option value="">All types</option>
-        <option v-for="t in locationTypes" :key="t" :value="t">{{ typeIcons[t] || '📍' }} {{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-      </select>
+      <div class="flex items-center gap-1.5">
+        <img v-if="typeFilter" :src="locationTypeOptions.find(o => o.key === typeFilter)?.iconUrl || ''" class="w-4 h-4 object-contain" />
+        <select v-model="typeFilter" class="input !w-auto !bg-white/[0.03] text-sm">
+          <option value="">All types</option>
+          <option v-for="t in locationTypeOptions" :key="t.key" :value="t.key">{{ t.label }}</option>
+        </select>
+      </div>
 
       <!-- Visibility filter (DM/Admin only) -->
       <div v-if="auth.isDm || auth.isAdmin" class="flex rounded-lg overflow-hidden border border-white/[0.08]">
@@ -308,9 +311,7 @@ async function saveEditLocation() {
               <button @click="editingLocation = null" class="text-zinc-500 hover:text-white transition-colors">✕</button>
             </div>
             <input v-model="editLocForm.name" placeholder="Name" class="input w-full" />
-            <select v-model="editLocForm.type" class="input w-full">
-              <option v-for="t in locationTypes" :key="t" :value="t">{{ typeIcons[t] || '' }} {{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-            </select>
+            <TypeSelect v-model="editLocForm.type" :options="locationTypeOptions" input-class="w-full" />
             <input v-model="editLocForm.hexKey" placeholder="Hex (e.g. 25_30)" class="input w-full" />
             <textarea v-model="editLocForm.description" placeholder="Description..." class="input w-full" rows="3" />
             <div class="flex justify-end gap-2">

@@ -56,13 +56,13 @@ const activeCategory = ref<'locationTypes' | 'featureTypes' | 'hexMarkerTypes'>(
 const categoryLabels: Record<string, string> = {
   locationTypes: '📍 Location Types',
   featureTypes: '📌 Feature Types',
-  hexMarkerTypes: '🏷️ Hex Marker Types'
+  hexMarkerTypes: '📍 Pin Types'
 }
 
 const categoryDescriptions: Record<string, string> = {
   locationTypes: 'Icons shown on the hex map for cities, towns, etc.',
   featureTypes: 'Icons for points of interest within locations.',
-  hexMarkerTypes: 'Icons for player-placed tags like clues, battles, etc.'
+  hexMarkerTypes: 'Pins that players and DMs place on hex maps and city maps — clues, battles, waypoints, etc.'
 }
 
 onMounted(async () => {

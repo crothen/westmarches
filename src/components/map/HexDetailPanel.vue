@@ -8,6 +8,8 @@ import DetailMapViewer from './DetailMapViewer.vue'
 import MentionTextarea from '../common/MentionTextarea.vue'
 import NotesSection from '../common/NotesSection.vue'
 import { getIconPath, markerTypeIcons } from '../../lib/icons'
+import { useTypeConfig } from '../../composables/useTypeConfig'
+import TypeSelect from '../common/TypeSelect.vue'
 import type { HexMarker, MarkerType } from '../../types'
 
 const props = defineProps<{
@@ -44,9 +46,7 @@ const hexMarkersList = ref<HexMarker[]>([])
 const showCreateHexMarker = ref(false)
 const newHexMarkerForm = ref({ name: '', type: 'clue' as MarkerType, description: '', isPrivate: false })
 
-const locationTypes = ['city', 'town', 'village', 'castle', 'fortress', 'monastery', 'camp', 'ruins', 'other']
-const featureTypes = ['inn', 'shop', 'temple', 'shrine', 'blacksmith', 'tavern', 'guild', 'market', 'gate', 'tower', 'ruins', 'cave', 'bridge', 'well', 'monument', 'graveyard', 'dock', 'warehouse', 'barracks', 'library', 'other']
-const markerTypes: MarkerType[] = ['clue', 'battle', 'danger', 'puzzle', 'mystery', 'waypoint', 'quest', 'locked', 'unlocked']
+const { locationTypes: locationTypeOptions, featureTypes: featureTypeOptions, pinTypes: pinTypeOptions } = useTypeConfig()
 
 const hexKey = computed(() => props.hex ? `${props.hex.x}_${props.hex.y}` : null)
 
@@ -434,7 +434,7 @@ async function removeDetailMap() {
           <div v-if="auth.isAuthenticated" class="flex gap-2">
             <button @click="openAddPoi(); showCreateMarker = false; showCreateHexMarker = false" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Existing</button>
             <button @click="showCreateMarker = !showCreateMarker; showAddPoi = false; showCreateHexMarker = false" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ POI</button>
-            <button @click="showCreateHexMarker = !showCreateHexMarker; showAddPoi = false; showCreateMarker = false" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Tag</button>
+            <button @click="showCreateHexMarker = !showCreateHexMarker; showAddPoi = false; showCreateMarker = false" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Pin</button>
           </div>
         </div>
         <div class="space-y-1.5">
@@ -491,14 +491,7 @@ async function removeDetailMap() {
             <button @click="newMarkerKind = 'feature'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', newMarkerKind === 'feature' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">Feature</button>
           </div>
           <input v-model="newMarkerForm.name" class="input w-full text-sm" placeholder="Name" @keyup.enter="createMarker" />
-          <select v-model="newMarkerForm.type" class="input w-full text-sm">
-            <template v-if="newMarkerKind === 'location'">
-              <option v-for="t in locationTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-            </template>
-            <template v-else>
-              <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-            </template>
-          </select>
+          <TypeSelect v-model="newMarkerForm.type" :options="newMarkerKind === 'location' ? locationTypeOptions : featureTypeOptions" input-class="w-full text-sm" />
           <MentionTextarea v-model="newMarkerForm.description" input-class="text-sm" :rows="2" placeholder="Description (optional)" />
           <button @click="createMarker" :disabled="!newMarkerForm.name.trim()" class="btn !text-xs !py-1.5 w-full">Create {{ newMarkerKind === 'location' ? 'Location' : 'Feature' }}</button>
         </div>
@@ -506,19 +499,17 @@ async function removeDetailMap() {
         <!-- Create Hex Marker form (clue, battle, etc.) -->
         <div v-if="showCreateHexMarker" class="mt-3 card-flat !rounded-lg p-3 space-y-2">
           <div class="flex items-center justify-between">
-            <span class="text-xs text-zinc-400 font-medium">🏷️ New Hex Tag</span>
+            <span class="text-xs text-zinc-400 font-medium">📍 New Pin</span>
             <button @click="showCreateHexMarker = false" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">✕</button>
           </div>
           <input v-model="newHexMarkerForm.name" class="input w-full text-sm" placeholder="Name" @keyup.enter="createHexMarker" />
-          <select v-model="newHexMarkerForm.type" class="input w-full text-sm">
-            <option v-for="t in markerTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-          </select>
+          <TypeSelect v-model="newHexMarkerForm.type" :options="pinTypeOptions" input-class="w-full text-sm" />
           <MentionTextarea v-model="newHexMarkerForm.description" input-class="text-sm" :rows="2" placeholder="Description (optional)" />
           <label class="flex items-center gap-1.5 text-xs text-zinc-500">
             <input v-model="newHexMarkerForm.isPrivate" type="checkbox" class="accent-purple-500" />
             🔒 Private (only you & admins)
           </label>
-          <button @click="createHexMarker" :disabled="!newHexMarkerForm.name.trim()" class="btn !text-xs !py-1.5 w-full">Create Tag</button>
+          <button @click="createHexMarker" :disabled="!newHexMarkerForm.name.trim()" class="btn !text-xs !py-1.5 w-full">Create Pin</button>
         </div>
 
         <!-- Add POI picker -->

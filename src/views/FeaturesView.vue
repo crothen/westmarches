@@ -6,6 +6,8 @@ import { useAuthStore } from '../stores/auth'
 import HexMiniMap from '../components/map/HexMiniMap.vue'
 import type { CampaignLocation, LocationFeature } from '../types'
 import { getIconPath } from '../lib/icons'
+import { useTypeConfig } from '../composables/useTypeConfig'
+import TypeSelect from '../components/common/TypeSelect.vue'
 import MentionTextarea from '../components/common/MentionTextarea.vue'
 
 const auth = useAuthStore()
@@ -25,7 +27,7 @@ const locationFilter = ref<string>('')
 const editingFeature = ref<LocationFeature | null>(null)
 const editForm = ref({ name: '', type: 'other' as any, description: '' })
 
-const featureTypes = ['inn', 'shop', 'temple', 'shrine', 'blacksmith', 'tavern', 'guild', 'market', 'gate', 'tower', 'ruins', 'cave', 'bridge', 'well', 'monument', 'graveyard', 'dock', 'warehouse', 'barracks', 'library', 'other']
+const { featureTypes: featureTypeOptions } = useTypeConfig()
 
 onMounted(async () => {
   try {
@@ -199,9 +201,7 @@ async function deleteFeature(feat: LocationFeature) {
         <h3 class="label mb-3">Add Point of Interest</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input v-model="newFeat.name" placeholder="Name" class="input" />
-          <select v-model="newFeat.type" class="input">
-            <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-          </select>
+          <TypeSelect v-model="newFeat.type" :options="featureTypeOptions" />
           <select v-model="newFeat.locationId" class="input">
             <option value="">No parent location (standalone)</option>
             <option v-for="loc in locations" :key="loc.id" :value="loc.id">{{ loc.name }}</option>
@@ -218,10 +218,13 @@ async function deleteFeature(feat: LocationFeature) {
       <input v-model="searchQuery" type="text" placeholder="Search..." class="input flex-1 min-w-[180px] max-w-sm !bg-white/[0.03]" />
 
       <!-- Type filter -->
-      <select v-model="typeFilter" class="input !w-auto !bg-white/[0.03] text-sm">
-        <option value="">All types</option>
-        <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-      </select>
+      <div class="flex items-center gap-1.5">
+        <img v-if="typeFilter" :src="featureTypeOptions.find(o => o.key === typeFilter)?.iconUrl || ''" class="w-4 h-4 object-contain" />
+        <select v-model="typeFilter" class="input !w-auto !bg-white/[0.03] text-sm">
+          <option value="">All types</option>
+          <option v-for="t in featureTypeOptions" :key="t.key" :value="t.key">{{ t.label }}</option>
+        </select>
+      </div>
 
       <!-- Location filter -->
       <select v-model="locationFilter" class="input !w-auto !bg-white/[0.03] text-sm max-w-[200px]">
@@ -303,9 +306,7 @@ async function deleteFeature(feat: LocationFeature) {
                 <button @click="editingFeature = null" class="text-zinc-500 hover:text-white transition-colors">✕</button>
               </div>
               <input v-model="editForm.name" placeholder="Name" class="input w-full" />
-              <select v-model="editForm.type" class="input w-full">
-                <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-              </select>
+              <TypeSelect v-model="editForm.type" :options="featureTypeOptions" input-class="w-full" />
               <MentionTextarea v-model="editForm.description" placeholder="Description..." :rows="3" />
               <div class="flex justify-end gap-2">
                 <button @click="editingFeature = null" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>

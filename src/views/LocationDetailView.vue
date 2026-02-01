@@ -10,7 +10,9 @@ import HexMiniMap from '../components/map/HexMiniMap.vue'
 import MentionTextarea from '../components/common/MentionTextarea.vue'
 import MentionText from '../components/common/MentionText.vue'
 import { getIconPath, markerTypeIcons } from '../lib/icons'
-import type { CampaignLocation, LocationFeature, HexMarker } from '../types'
+import { useTypeConfig } from '../composables/useTypeConfig'
+import TypeSelect from '../components/common/TypeSelect.vue'
+import type { CampaignLocation, LocationFeature, HexMarker, MarkerType } from '../types'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,14 +58,19 @@ const uploadProgress = ref(0)
 const placingFeature = ref<string | null>(null)
 const highlightedFeature = ref<string | null>(null)
 
+const { featureTypes: featureTypeOptions, pinTypes: pinTypeOptions } = useTypeConfig()
+
 // Quick-add from map click
 const showQuickAdd = ref(false)
 const quickAddPos = ref({ x: 0, y: 0 })
+const quickAddKind = ref<'feature' | 'pin'>('feature')
 const quickAddForm = ref({ name: '', type: 'other' as any, description: '' })
+const quickAddPinForm = ref({ name: '', type: 'clue' as MarkerType, description: '', isPrivate: false })
 
 const newFeat = ref({ name: '', type: 'other' as any, description: '' })
 
-const featureTypes = ['inn', 'shop', 'temple', 'shrine', 'blacksmith', 'tavern', 'guild', 'market', 'gate', 'tower', 'ruins', 'cave', 'bridge', 'well', 'monument', 'graveyard', 'dock', 'warehouse', 'barracks', 'library', 'other']
+// featureTypes kept for backward compat fallback
+// const featureTypes = ['inn', 'shop', 'temple', 'shrine', 'blacksmith', 'tavern', 'guild', 'market', 'gate', 'tower', 'ruins', 'cave', 'bridge', 'well', 'monument', 'graveyard', 'dock', 'warehouse', 'barracks', 'library', 'other']
 
 // Sub-locations (Feature 3 - nested/recursive locations)
 const subLocations = ref<CampaignLocation[]>([])
@@ -140,7 +147,9 @@ function onMapClick(x: number, y: number) {
   // Only show quick-add if not placing an existing feature
   if (placingFeature.value) return
   quickAddPos.value = { x, y }
+  quickAddKind.value = 'feature'
   quickAddForm.value = { name: '', type: 'other', description: '' }
+  quickAddPinForm.value = { name: '', type: 'clue' as MarkerType, description: '', isPrivate: false }
   showQuickAdd.value = true
 }
 
@@ -169,6 +178,36 @@ async function quickAddFeature() {
     createdAt: new Date(),
     updatedAt: new Date()
   } as LocationFeature)
+  showQuickAdd.value = false
+}
+
+async function quickAddPin() {
+  if (!quickAddPinForm.value.name.trim() || !location.value) return
+  const docRef = await addDoc(collection(db, 'markers'), {
+    name: quickAddPinForm.value.name.trim(),
+    type: quickAddPinForm.value.type,
+    description: quickAddPinForm.value.description.trim(),
+    locationId: location.value.id,
+    hexKey: location.value.hexKey || null,
+    mapPosition: quickAddPos.value,
+    isPrivate: quickAddPinForm.value.isPrivate,
+    tags: [],
+    createdBy: auth.firebaseUser?.uid || null,
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now()
+  })
+  locationMarkers.value.push({
+    id: docRef.id,
+    name: quickAddPinForm.value.name.trim(),
+    type: quickAddPinForm.value.type,
+    description: quickAddPinForm.value.description.trim(),
+    locationId: location.value.id,
+    mapPosition: quickAddPos.value,
+    isPrivate: quickAddPinForm.value.isPrivate,
+    tags: [],
+    createdAt: new Date(),
+    updatedAt: new Date()
+  } as unknown as HexMarker)
   showQuickAdd.value = false
 }
 
@@ -376,7 +415,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
         </div>
       </div>
 
-      <!-- Quick Add POI Modal -->
+      <!-- Quick Add Modal (Feature or Pin) -->
       <Teleport to="body">
         <transition
           enter-active-class="transition-opacity duration-150"
@@ -388,18 +427,41 @@ async function toggleFeatureHidden(feat: LocationFeature) {
             <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showQuickAdd = false" />
             <div class="relative w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-5 space-y-3 z-10">
               <div class="flex items-center justify-between">
-                <h3 class="text-sm font-semibold text-white" style="font-family: Manrope, sans-serif">📌 Add Marker</h3>
+                <h3 class="text-sm font-semibold text-white" style="font-family: Manrope, sans-serif">📌 Add to Map</h3>
                 <button @click="showQuickAdd = false" class="text-zinc-500 hover:text-white transition-colors">✕</button>
               </div>
-              <input v-model="quickAddForm.name" placeholder="Name" class="input w-full" @keyup.enter="quickAddFeature" />
-              <select v-model="quickAddForm.type" class="input w-full">
-                <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-              </select>
-              <MentionTextarea v-model="quickAddForm.description" placeholder="Description (optional)" :rows="2" />
-              <div class="flex justify-end gap-2">
-                <button @click="showQuickAdd = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
-                <button @click="quickAddFeature" :disabled="!quickAddForm.name.trim()" class="btn text-sm">Add & Place</button>
+
+              <!-- Kind toggle -->
+              <div class="flex gap-1">
+                <button @click="quickAddKind = 'feature'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', quickAddKind === 'feature' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">📌 Feature</button>
+                <button @click="quickAddKind = 'pin'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', quickAddKind === 'pin' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">📍 Pin</button>
               </div>
+
+              <!-- Feature form -->
+              <template v-if="quickAddKind === 'feature'">
+                <input v-model="quickAddForm.name" placeholder="Name" class="input w-full" @keyup.enter="quickAddFeature" />
+                <TypeSelect v-model="quickAddForm.type" :options="featureTypeOptions" input-class="w-full" />
+                <MentionTextarea v-model="quickAddForm.description" placeholder="Description (optional)" :rows="2" />
+                <div class="flex justify-end gap-2">
+                  <button @click="showQuickAdd = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+                  <button @click="quickAddFeature" :disabled="!quickAddForm.name.trim()" class="btn text-sm">Add Feature</button>
+                </div>
+              </template>
+
+              <!-- Pin form -->
+              <template v-else>
+                <input v-model="quickAddPinForm.name" placeholder="Name" class="input w-full" @keyup.enter="quickAddPin" />
+                <TypeSelect v-model="quickAddPinForm.type" :options="pinTypeOptions" input-class="w-full" />
+                <MentionTextarea v-model="quickAddPinForm.description" placeholder="Description (optional)" :rows="2" />
+                <label class="flex items-center gap-1.5 text-xs text-zinc-500">
+                  <input v-model="quickAddPinForm.isPrivate" type="checkbox" class="accent-purple-500" />
+                  🔒 Private (only you & admins)
+                </label>
+                <div class="flex justify-end gap-2">
+                  <button @click="showQuickAdd = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+                  <button @click="quickAddPin" :disabled="!quickAddPinForm.name.trim()" class="btn text-sm">Add Pin</button>
+                </div>
+              </template>
             </div>
           </div>
         </transition>
@@ -450,9 +512,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
         <div v-if="showAddFeature" class="card-flat p-4 mb-4">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <input v-model="newFeat.name" placeholder="Feature name" class="input" />
-            <select v-model="newFeat.type" class="input">
-              <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-            </select>
+            <TypeSelect v-model="newFeat.type" :options="featureTypeOptions" />
             <button @click="addFeature" :disabled="!newFeat.name.trim()" class="btn !py-2">Add</button>
           </div>
           <MentionTextarea v-model="newFeat.description" placeholder="Description..." input-class="mt-2" :rows="2" />
@@ -471,9 +531,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
             <!-- Edit mode -->
             <div v-if="editingFeature?.id === feat.id" class="space-y-2" @click.stop>
               <input v-model="editFeatForm.name" class="input w-full !text-xs" placeholder="Name" />
-              <select v-model="editFeatForm.type" class="input w-full !text-xs">
-                <option v-for="t in featureTypes" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
-              </select>
+              <TypeSelect v-model="editFeatForm.type" :options="featureTypeOptions" input-class="w-full !text-xs" />
               <MentionTextarea v-model="editFeatForm.description" input-class="!text-xs" :rows="2" placeholder="Description..." />
               <div class="flex justify-end gap-1">
                 <button @click="editingFeature = null" class="text-zinc-600 text-[0.6rem] hover:text-zinc-400">Cancel</button>
