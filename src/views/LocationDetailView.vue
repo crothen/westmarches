@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, Timestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
+import LocationMapViewer from '../components/map/LocationMapViewer.vue'
 import type { CampaignLocation, LocationFeature } from '../types'
 
 const route = useRoute()
 const auth = useAuthStore()
-const { generating, generateImage } = useImageGen()
+const { generating, error: genError, generateImage } = useImageGen()
 
 const location = ref<CampaignLocation | null>(null)
 const features = ref<LocationFeature[]>([])
@@ -19,6 +20,11 @@ const showAddFeature = ref(false)
 const uploadingMap = ref(false)
 const uploadProgress = ref(0)
 const placingFeature = ref<string | null>(null)
+
+// Quick-add from map click
+const showQuickAdd = ref(false)
+const quickAddPos = ref({ x: 0, y: 0 })
+const quickAddForm = ref({ name: '', type: 'other' as any, description: '' })
 
 const newFeat = ref({ name: '', type: 'other' as any, description: '' })
 
@@ -42,7 +48,6 @@ onMounted(async () => {
     if (locSnap.exists()) {
       location.value = { id: locSnap.id, ...locSnap.data() } as CampaignLocation
     }
-    
     const featSnap = await getDocs(query(collection(db, 'features'), where('locationId', '==', route.params.id)))
     features.value = featSnap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
   } catch (e) {
@@ -52,19 +57,17 @@ onMounted(async () => {
   }
 })
 
-const placedFeatures = computed(() => features.value.filter(f => f.mapPosition))
-
 async function uploadMapImage(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file || !location.value) return
-  
+
   uploadingMap.value = true
   uploadProgress.value = 0
-  
+
   const ext = file.name.split('.').pop() || 'png'
   const fileRef = storageRef(storage, `location-maps/${location.value.id}/map.${ext}`)
   const uploadTask = uploadBytesResumable(fileRef, file)
-  
+
   uploadTask.on('state_changed',
     (snapshot) => { uploadProgress.value = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) },
     (error) => { console.error('Upload failed:', error); uploadingMap.value = false },
@@ -78,24 +81,60 @@ async function uploadMapImage(event: Event) {
   )
 }
 
-function onMapClick(event: MouseEvent) {
-  if (!placingFeature.value) return
-  const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-  const x = ((event.clientX - rect.left) / rect.width) * 100
-  const y = ((event.clientY - rect.top) / rect.height) * 100
-  
-  placeFeatureOnMap(placingFeature.value, x, y)
-}
-
-async function placeFeatureOnMap(featureId: string, x: number, y: number) {
+async function onPlaceFeature(featureId: string, x: number, y: number) {
+  // Cancel signal
+  if (!featureId) {
+    placingFeature.value = null
+    return
+  }
   await updateDoc(doc(db, 'features', featureId), { mapPosition: { x, y } })
   const idx = features.value.findIndex(f => f.id === featureId)
   if (idx >= 0) {
-    const existing = features.value[idx]
-    features.value[idx] = { ...existing, mapPosition: { x, y } } as LocationFeature
+    features.value[idx] = { ...features.value[idx], mapPosition: { x, y } } as LocationFeature
   }
   placingFeature.value = null
+}
+
+function onMapClick(x: number, y: number) {
+  // Only show quick-add if not placing an existing feature
+  if (placingFeature.value) return
+  quickAddPos.value = { x, y }
+  quickAddForm.value = { name: '', type: 'other', description: '' }
+  showQuickAdd.value = true
+}
+
+async function quickAddFeature() {
+  if (!quickAddForm.value.name.trim() || !location.value) return
+  const docRef = await addDoc(collection(db, 'features'), {
+    name: quickAddForm.value.name.trim(),
+    type: quickAddForm.value.type,
+    description: quickAddForm.value.description.trim(),
+    locationId: location.value.id,
+    hexKey: location.value.hexKey || null,
+    mapPosition: quickAddPos.value,
+    tags: [],
+    discoveredBy: auth.firebaseUser?.uid,
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now()
+  })
+  features.value.push({
+    id: docRef.id,
+    name: quickAddForm.value.name.trim(),
+    type: quickAddForm.value.type,
+    description: quickAddForm.value.description.trim(),
+    locationId: location.value.id,
+    mapPosition: quickAddPos.value,
+    tags: [],
+    createdAt: new Date(),
+    updatedAt: new Date()
+  } as LocationFeature)
+  showQuickAdd.value = false
+}
+
+function onClickFeature(feat: LocationFeature) {
+  // Could navigate to feature detail in the future; for now scroll to it in the list
+  const el = document.getElementById('feat-' + feat.id)
+  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 async function addFeature() {
@@ -151,33 +190,29 @@ async function generateLocationImage() {
       <button v-if="!location.imageUrl && auth.isAuthenticated" @click="generateLocationImage" :disabled="generating" class="btn !text-xs !py-1.5 mb-6">
         {{ generating ? '🎨 Generating...' : '🎨 Generate Image' }}
       </button>
+      <div v-if="genError" class="text-red-400 text-xs mb-4">{{ genError }}</div>
 
-      <!-- Map Section -->
+      <!-- Interactive Map Section -->
       <div class="mb-8">
-        <h2 class="label mb-3">Location Map</h2>
-        
-        <div v-if="location.mapImageUrl" class="relative">
-          <div
-            :class="['relative rounded-xl overflow-hidden border border-white/10', placingFeature ? 'cursor-crosshair' : '']"
-            @click="onMapClick"
-          >
-            <img :src="location.mapImageUrl" class="w-full" />
-            
-            <!-- Feature markers -->
-            <div
-              v-for="feat in placedFeatures" :key="feat.id"
-              class="absolute w-6 h-6 -ml-3 -mt-3 flex items-center justify-center text-sm cursor-pointer hover:scale-125 transition-transform"
-              :style="{ left: feat.mapPosition!.x + '%', top: feat.mapPosition!.y + '%' }"
-              :title="feat.name"
-            >
-              <span class="drop-shadow-lg">{{ typeIcons[feat.type] || '📌' }}</span>
-            </div>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="label">Location Map</h2>
+          <div v-if="location.mapImageUrl && (auth.isDm || auth.isAdmin)" class="flex gap-2">
+            <input type="file" accept="image/*" @change="uploadMapImage" class="hidden" id="reupload-map" />
+            <label for="reupload-map" class="btn-ghost !text-[0.6rem] !py-1 !px-2 cursor-pointer">📤 Re-upload</label>
           </div>
-          
-          <div v-if="placingFeature" class="mt-2 text-xs text-[#ef233c] animate-pulse">
-            Click on the map to place the feature...
-            <button @click="placingFeature = null" class="text-zinc-500 ml-2 hover:text-white">Cancel</button>
-          </div>
+        </div>
+
+        <div v-if="location.mapImageUrl">
+          <LocationMapViewer
+            :mapUrl="location.mapImageUrl"
+            :features="features"
+            :placingFeature="placingFeature"
+            :isInteractive="true"
+            @place="onPlaceFeature"
+            @click-feature="onClickFeature"
+            @map-click="onMapClick"
+          />
+          <p class="text-zinc-600 text-[0.6rem] mt-1.5">Scroll to zoom · Drag to pan · Click map to add a POI</p>
         </div>
 
         <div v-else class="card-flat p-6 text-center">
@@ -192,6 +227,35 @@ async function generateLocationImage() {
           </div>
         </div>
       </div>
+
+      <!-- Quick Add POI Modal -->
+      <Teleport to="body">
+        <transition
+          enter-active-class="transition-opacity duration-150"
+          enter-from-class="opacity-0" enter-to-class="opacity-100"
+          leave-active-class="transition-opacity duration-150"
+          leave-from-class="opacity-100" leave-to-class="opacity-0"
+        >
+          <div v-if="showQuickAdd" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showQuickAdd = false" />
+            <div class="relative w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-5 space-y-3 z-10">
+              <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-white" style="font-family: Manrope, sans-serif">📌 Add Point of Interest</h3>
+                <button @click="showQuickAdd = false" class="text-zinc-500 hover:text-white transition-colors">✕</button>
+              </div>
+              <input v-model="quickAddForm.name" placeholder="Name" class="input w-full" @keyup.enter="quickAddFeature" />
+              <select v-model="quickAddForm.type" class="input w-full">
+                <option v-for="t in featureTypes" :key="t" :value="t">{{ typeIcons[t] || '' }} {{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
+              </select>
+              <textarea v-model="quickAddForm.description" placeholder="Description (optional)" class="input w-full" rows="2" />
+              <div class="flex justify-end gap-2">
+                <button @click="showQuickAdd = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+                <button @click="quickAddFeature" :disabled="!quickAddForm.name.trim()" class="btn text-sm">Add & Place</button>
+              </div>
+            </div>
+          </div>
+        </transition>
+      </Teleport>
 
       <!-- Features Section -->
       <div>
@@ -217,7 +281,11 @@ async function generateLocationImage() {
         <div v-if="features.length === 0" class="text-zinc-600 text-sm">No features discovered yet.</div>
 
         <div class="space-y-2">
-          <div v-for="feat in features" :key="feat.id" class="card-flat p-4 flex items-start justify-between">
+          <div
+            v-for="feat in features" :key="feat.id"
+            :id="'feat-' + feat.id"
+            class="card-flat p-4 flex items-start justify-between"
+          >
             <div class="flex items-start gap-3">
               <span class="text-lg mt-0.5">{{ typeIcons[feat.type] || '📌' }}</span>
               <div>
