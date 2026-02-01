@@ -75,6 +75,7 @@ export interface Npc {
   hexCoords?: { q: number; r: number }
   tags: string[]
   organizationIds: string[]
+  imageUrl?: string
   createdAt: Date
   updatedAt: Date
 }

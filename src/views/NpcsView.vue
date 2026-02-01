@@ -1,14 +1,20 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { collection, getDocs, query, orderBy } from 'firebase/firestore'
+import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import { useAuthStore } from '../stores/auth'
+import { useImageGen } from '../composables/useImageGen'
 import type { Npc } from '../types'
+
+const auth = useAuthStore()
+const { error: genError, generateImage } = useImageGen()
 
 const npcs = ref<Npc[]>([])
 const loading = ref(true)
 const searchQuery = ref('')
 const filterTag = ref<string | null>(null)
 const expandedNpc = ref<string | null>(null)
+const generatingForNpc = ref<string | null>(null)
 
 onMounted(async () => {
   try {
@@ -57,6 +63,19 @@ function getRoleBadge(npc: Npc): string | null {
   if ((npc.tags || []).includes('subleader')) return 'Vice-Leader'
   return null
 }
+
+async function generatePortrait(npc: Npc) {
+  generatingForNpc.value = npc.id
+  const prompt = `Create a fantasy character portrait for a D&D RPG character. The character is ${npc.name}, a ${npc.race}. ${npc.description}. Style: detailed fantasy art portrait, medieval setting, dramatic lighting, painterly style. Head and shoulders portrait only.`
+
+  const url = await generateImage(prompt, `npc-portraits/${npc.id}`)
+  if (url) {
+    await updateDoc(doc(db, 'npcs', npc.id), { imageUrl: url })
+    const idx = npcs.value.findIndex(n => n.id === npc.id)
+    if (idx >= 0) npcs.value[idx]!.imageUrl = url
+  }
+  generatingForNpc.value = null
+}
 </script>
 
 <template>
@@ -89,7 +108,12 @@ function getRoleBadge(npc: Npc): string | null {
         :class="['card relative z-10 cursor-pointer', isDeceased(npc) ? 'opacity-50' : '']"
         @click="toggleExpand(npc.id)"
       >
-        <div class="relative z-10 p-5">
+        <div class="relative z-10">
+          <!-- Portrait -->
+          <div v-if="npc.imageUrl" class="overflow-hidden">
+            <img :src="npc.imageUrl" class="w-full h-40 object-cover rounded-t-xl" />
+          </div>
+          <div class="p-5">
           <!-- Header -->
           <div class="flex items-start justify-between mb-2">
             <div>
@@ -121,9 +145,21 @@ function getRoleBadge(npc: Npc): string | null {
             </div>
           </div>
 
+          <!-- Generate Portrait button -->
+          <button
+            v-if="auth.isAuthenticated && expandedNpc === npc.id"
+            @click.stop="generatePortrait(npc)"
+            :disabled="generatingForNpc === npc.id"
+            class="btn !text-[0.65rem] !py-1.5 !px-3 mt-2"
+          >
+            {{ generatingForNpc === npc.id ? '🎨 Generating...' : '🎨 Generate Portrait' }}
+          </button>
+          <div v-if="genError && generatingForNpc === npc.id" class="text-red-400 text-xs mt-1">{{ genError }}</div>
+
           <!-- Tags row (collapsed) -->
           <div v-if="expandedNpc !== npc.id && npc.locationEncountered" class="mt-2">
             <span class="text-xs text-zinc-600">📍 {{ npc.locationEncountered }}</span>
+          </div>
           </div>
         </div>
       </div>

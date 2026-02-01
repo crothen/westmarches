@@ -4,10 +4,12 @@ import { useRoute } from 'vue-router'
 import { doc, getDoc, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
+import { useImageGen } from '../composables/useImageGen'
 import type { SessionLog, SessionNote } from '../types'
 
 const route = useRoute()
 const auth = useAuthStore()
+const { generating: genLoading, error: genError, generateImage } = useImageGen()
 const session = ref<SessionLog | null>(null)
 const notes = ref<SessionNote[]>([])
 const loading = ref(true)
@@ -96,6 +98,18 @@ async function deleteNote(noteId: string) {
   await deleteDoc(doc(db, 'sessionNotes', noteId))
 }
 
+async function generateSessionArt() {
+  if (!session.value) return
+  const participants = session.value.participants?.map(p => p.characterName).join(', ') || 'adventurers'
+  const prompt = `Create a dramatic D&D fantasy scene illustration. Session title: "${session.value.title}". Summary: ${session.value.summary?.substring(0, 500)}. Characters involved: ${participants}. Style: epic fantasy art, dramatic lighting, painterly, wide landscape composition, medieval setting.`
+
+  const url = await generateImage(prompt, `session-art/${session.value.id}`)
+  if (url) {
+    await updateDoc(doc(db, 'sessions', session.value.id), { imageUrl: url })
+    session.value = { ...session.value, imageUrl: url } as any
+  }
+}
+
 function canEditNote(note: SessionNote): boolean {
   return note.userId === auth.firebaseUser?.uid || auth.isDm
 }
@@ -117,6 +131,21 @@ function canEditNote(note: SessionNote): boolean {
         <span class="text-zinc-600">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
       </div>
       <h1 class="text-3xl font-bold text-white mb-6" style="font-family: Manrope, sans-serif">{{ session.title }}</h1>
+
+      <!-- Session Art -->
+      <div v-if="(session as any).imageUrl" class="mb-6 -mx-1">
+        <img :src="(session as any).imageUrl" class="w-full max-h-80 object-cover rounded-xl border border-white/10" />
+      </div>
+
+      <button
+        v-if="auth.isAuthenticated && !(session as any).imageUrl"
+        @click="generateSessionArt"
+        :disabled="genLoading"
+        class="btn !text-[0.65rem] !py-1.5 !px-3 mb-6"
+      >
+        {{ genLoading ? '🎨 Generating scene...' : '🎨 Generate Scene Art' }}
+      </button>
+      <div v-if="genError" class="text-red-400 text-xs mb-4">{{ genError }}</div>
 
       <!-- Participants -->
       <div v-if="session.participants?.length" class="mb-6">

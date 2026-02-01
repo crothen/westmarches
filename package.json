@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@vueuse/core": "^14.2.0",
     "firebase": "^11.10.0",
     "pinia": "^3.0.4",
