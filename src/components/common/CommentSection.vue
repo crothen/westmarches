@@ -32,26 +32,26 @@ function submitComment() {
 
 <template>
   <div class="mt-6">
-    <h3 class="text-lg font-semibold text-slate-200 mb-3">💬 Comments</h3>
+    <h3 class="text-lg font-semibold text-zinc-200 mb-3" style="font-family: Manrope, sans-serif">💬 Comments</h3>
 
-    <div v-if="comments.length === 0" class="text-slate-500 text-sm">No comments yet.</div>
+    <div v-if="comments.length === 0" class="text-zinc-600 text-sm">No comments yet.</div>
 
-    <div v-for="comment in comments" :key="comment.id" class="glass-card p-3 mb-2">
+    <div v-for="comment in comments" :key="comment.id" class="card-flat p-3 mb-2">
       <div class="flex items-center gap-2 mb-1">
-        <span class="text-amber-500 text-sm font-medium">{{ comment.authorName }}</span>
+        <span class="text-[#ef233c] text-sm font-medium">{{ comment.authorName }}</span>
         <span v-if="comment.isPrivate" class="text-xs bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded-md border border-red-500/20">Private</span>
       </div>
-      <p class="text-slate-300 text-sm">{{ comment.content }}</p>
+      <p class="text-zinc-300 text-sm">{{ comment.content }}</p>
     </div>
 
     <div v-if="auth.isAuthenticated" class="mt-4">
-      <textarea v-model="newComment" rows="2" placeholder="Add a comment..." class="modern-input w-full text-sm" />
+      <textarea v-model="newComment" rows="2" placeholder="Add a comment..." class="input w-full text-sm" />
       <div class="flex items-center justify-between mt-2">
-        <label class="flex items-center gap-2 text-sm text-slate-400">
-          <input v-model="isPrivate" type="checkbox" class="accent-amber-500" />
+        <label class="flex items-center gap-2 text-sm text-zinc-500">
+          <input v-model="isPrivate" type="checkbox" class="accent-[#ef233c]" />
           Private (DM only)
         </label>
-        <button @click="submitComment" class="btn-primary text-sm">
+        <button @click="submitComment" class="btn text-sm">
           Post
         </button>
       </div>

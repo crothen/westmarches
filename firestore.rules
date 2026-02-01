@@ -53,7 +53,7 @@ service cloud.firestore {
 
     // NPCs
     match /npcs/{npcId} {
-      allow read: if isAuthenticated();
+      allow read, write: if true; // TEMP
       allow create: if isAuthenticated();
       allow update, delete: if isDm();
     }

@@ -1,3 +1,3 @@
 <template>
-  <button class="text-stone-400 hover:text-red-400">❤️</button>
+  <button class="text-zinc-500 hover:text-red-400">❤️</button>
 </template>

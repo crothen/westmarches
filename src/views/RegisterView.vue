@@ -15,52 +15,44 @@ async function handleRegister() {
     error.value = 'Passwords do not match'
     return
   }
-  loading.value = true
-  error.value = ''
-  try {
-    await registerWithEmail(email.value, password.value)
-    router.push('/')
-  } catch (e: any) {
-    error.value = e.message
-  } finally {
-    loading.value = false
-  }
+  loading.value = true; error.value = ''
+  try { await registerWithEmail(email.value, password.value); router.push('/') }
+  catch (e: any) { error.value = e.message }
+  finally { loading.value = false }
 }
 </script>
 
 <template>
-  <div class="max-w-sm mx-auto mt-20">
+  <div class="max-w-sm mx-auto mt-24">
     <div class="text-center mb-8">
-      <div class="text-4xl mb-3">📜</div>
-      <h1 class="text-2xl font-bold bg-gradient-to-r from-amber-400 to-amber-600 bg-clip-text text-transparent">Join the Expedition</h1>
+      <div class="w-6 h-6 bg-[#ef233c] rounded-sm rotate-45 mx-auto mb-5"></div>
+      <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">Join the Expedition</h1>
     </div>
 
-    <div class="glass-card p-6">
-      <div v-if="error" class="bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg p-3 mb-4 text-sm">
-        {{ error }}
+    <div class="card p-6 relative z-10">
+      <div class="relative z-10">
+        <div v-if="error" class="bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg p-3 mb-4 text-sm">{{ error }}</div>
+
+        <form @submit.prevent="handleRegister" class="space-y-3">
+          <div>
+            <label class="label block mb-1.5">Email</label>
+            <input v-model="email" type="email" required class="input w-full" />
+          </div>
+          <div>
+            <label class="label block mb-1.5">Password</label>
+            <input v-model="password" type="password" required minlength="6" class="input w-full" />
+          </div>
+          <div>
+            <label class="label block mb-1.5">Confirm Password</label>
+            <input v-model="confirmPassword" type="password" required class="input w-full" />
+          </div>
+          <button type="submit" :disabled="loading" class="btn w-full !py-2.5 mt-1">{{ loading ? 'Registering...' : 'Register' }}</button>
+        </form>
+
+        <p class="text-center text-zinc-600 text-sm mt-5">
+          Already registered? <RouterLink to="/login" class="text-[#ef233c] hover:text-red-400 transition-colors">Sign In</RouterLink>
+        </p>
       </div>
-
-      <form @submit.prevent="handleRegister" class="space-y-3">
-        <div>
-          <label class="block text-slate-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Email</label>
-          <input v-model="email" type="email" required class="modern-input w-full" />
-        </div>
-        <div>
-          <label class="block text-slate-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Password</label>
-          <input v-model="password" type="password" required minlength="6" class="modern-input w-full" />
-        </div>
-        <div>
-          <label class="block text-slate-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Confirm Password</label>
-          <input v-model="confirmPassword" type="password" required class="modern-input w-full" />
-        </div>
-        <button type="submit" :disabled="loading" class="btn-primary w-full !py-2.5 mt-1">
-          {{ loading ? 'Registering...' : 'Register' }}
-        </button>
-      </form>
-
-      <p class="text-center text-slate-600 text-sm mt-5">
-        Already registered? <RouterLink to="/login" class="text-amber-500 hover:text-amber-400 transition-colors">Sign In</RouterLink>
-      </p>
     </div>
   </div>
 </template>

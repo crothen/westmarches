@@ -3,7 +3,6 @@ import { useAuthStore } from '../../stores/auth'
 
 defineProps<{ open: boolean }>()
 defineEmits<{ close: [] }>()
-
 const auth = useAuthStore()
 
 const navItems = [
@@ -23,28 +22,27 @@ const navItems = [
 </script>
 
 <template>
-  <!-- Overlay for mobile -->
-  <div v-if="open" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-20 lg:hidden" @click="$emit('close')" />
+  <div v-if="open" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-20 lg:hidden" @click="$emit('close')" />
 
   <aside
     :class="[
-      'w-56 min-h-[calc(100vh-3.5rem)] border-r border-white/[0.06]',
-      'bg-[var(--bg-secondary)]/50 backdrop-blur-xl',
-      'fixed lg:static z-30 transition-transform duration-200 lg:translate-x-0',
+      'w-52 min-h-[calc(100vh-72px)] border-r border-white/[0.06]',
+      'bg-black/40 backdrop-blur-xl',
+      'fixed lg:sticky lg:top-[72px] lg:self-start z-30 transition-transform duration-200 lg:translate-x-0',
       open ? 'translate-x-0' : '-translate-x-full'
     ]"
   >
-    <nav class="p-3 space-y-0.5 mt-2">
+    <nav class="p-3 space-y-0.5 mt-1">
       <template v-for="item in navItems" :key="item.to">
         <RouterLink
           v-if="item.show === 'all' || (item.show === 'dm' && auth.isDm) || (item.show === 'admin' && auth.isAdmin)"
           :to="item.to"
-          class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-100 hover:bg-white/[0.05] transition-all duration-150"
-          active-class="!text-amber-500 bg-amber-500/[0.08] hover:!bg-amber-500/[0.12]"
+          class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-all duration-150"
+          active-class="!text-[#ef233c] bg-[#ef233c]/[0.06] hover:!bg-[#ef233c]/[0.1]"
           @click="$emit('close')"
         >
-          <span class="text-base w-5 text-center">{{ item.icon }}</span>
-          <span>{{ item.label }}</span>
+          <span class="text-sm w-5 text-center">{{ item.icon }}</span>
+          <span class="font-medium">{{ item.label }}</span>
         </RouterLink>
       </template>
     </nav>

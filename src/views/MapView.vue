@@ -62,9 +62,9 @@ async function toggleTag(hexKey: string, tagId: number) {
     <!-- Map area -->
     <div class="flex-1 flex flex-col min-w-0">
       <div class="flex items-center justify-between mb-3 px-1">
-        <h1 class="text-2xl font-bold text-slate-100">🗺️ World Map</h1>
-        <div v-if="selectedHex" class="text-slate-400 text-sm">
-          <span class="text-amber-500 font-mono">{{ selectedHex.x }}, {{ selectedHex.y }}</span>
+        <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">🗺️ World Map</h1>
+        <div v-if="selectedHex" class="text-zinc-500 text-sm">
+          <span class="text-[#ef233c] font-mono">{{ selectedHex.x }}, {{ selectedHex.y }}</span>
         </div>
       </div>
       <HexGrid @hex-click="onHexClick" class="flex-1 rounded-xl overflow-hidden" />

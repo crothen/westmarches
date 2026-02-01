@@ -1,6 +1,6 @@
 <template>
   <div>
-    <button class="text-stone-400 hover:text-amber-500">👍</button>
-    <button class="text-stone-400 hover:text-amber-500">👎</button>
+    <button class="text-zinc-500 hover:text-[#ef233c]">👍</button>
+    <button class="text-zinc-500 hover:text-[#ef233c]">👎</button>
   </div>
 </template>

@@ -1,110 +1,171 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Manrope:wght@200;400;600;700;800&display=swap');
 
 :root {
-  --bg-primary: #0f1117;
-  --bg-secondary: #161923;
-  --bg-card: rgba(22, 25, 35, 0.7);
-  --bg-glass: rgba(22, 25, 35, 0.5);
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
-  --accent: #f59e0b;
-  --accent-dim: rgba(245, 158, 11, 0.15);
+  --accent: #ef233c;
+  --accent-glow: rgba(239, 35, 60, 0.5);
+  --accent-dim: rgba(239, 35, 60, 0.15);
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-card: rgba(255, 255, 255, 0.03);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.2);
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   background: var(--bg-primary);
-  color: #e2e8f0;
+  color: #e4e4e7;
   -webkit-font-smoothing: antialiased;
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
-/* Glass card utility */
-.glass-card {
-  background: var(--bg-glass);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
+/* Headings font */
+h1, h2, h3, h4 {
+  font-family: 'Manrope', sans-serif;
+}
+
+/* Card with hover glow */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
-.glass-card:hover {
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  background: radial-gradient(circle at top right, var(--accent-dim), transparent 70%);
+}
+.card:hover {
   border-color: var(--border-hover);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+.card:hover::after {
+  opacity: 1;
 }
 
-/* Input styling */
-.modern-input {
+/* Card without glow (for nested cards) */
+.card-flat {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.2s ease;
+}
+.card-flat:hover {
+  border-color: var(--border-hover);
+}
+
+/* Input */
+.input {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.5rem 0.75rem;
-  color: #e2e8f0;
+  color: #e4e4e7;
+  font-size: 0.875rem;
   transition: all 0.2s ease;
   outline: none;
+  font-family: 'Inter', sans-serif;
 }
-.modern-input:focus {
+.input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
 }
-.modern-input::placeholder {
-  color: rgba(255, 255, 255, 0.25);
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
 }
 
-/* Button primary */
-.btn-primary {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #0f1117;
-  font-weight: 600;
-  padding: 0.5rem 1.25rem;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  border: none;
+/* Select styling */
+select.input {
   cursor: pointer;
 }
-.btn-primary:hover {
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+
+/* Primary button */
+.btn {
+  background: var(--accent);
+  color: white;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.6rem 1.5rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn:hover {
+  background: #d90429;
+  box-shadow: 0 4px 16px var(--accent-glow);
   transform: translateY(-1px);
 }
-.btn-primary:disabled {
-  opacity: 0.5;
+.btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
 }
 
-/* Button secondary */
-.btn-secondary {
+/* Ghost button */
+.btn-ghost {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle);
-  color: #e2e8f0;
-  font-weight: 500;
-  padding: 0.5rem 1.25rem;
+  border: 1px solid var(--border);
+  color: #a1a1aa;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.6rem 1.5rem;
   border-radius: 8px;
-  transition: all 0.2s ease;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
-.btn-secondary:hover {
+.btn-ghost:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: var(--border-hover);
+  color: white;
 }
 
 /* Tier badges */
-.tier-badge {
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.15rem 0.5rem;
-  border-radius: 6px;
-  letter-spacing: 0.05em;
-}
+.tier { font-size: 0.65rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 6px; letter-spacing: 0.05em; font-family: 'Manrope', sans-serif; text-transform: uppercase; }
 .tier-2 { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
 .tier-3 { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
 .tier-4 { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
 .tier-5 { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+/* Status badges */
+.badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  letter-spacing: 0.05em;
+  font-family: 'Manrope', sans-serif;
+  text-transform: uppercase;
+}
+
+/* Label style */
+.label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: 'Manrope', sans-serif;
+}
+
+/* Accent text */
+.text-accent { color: var(--accent); }

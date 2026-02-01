@@ -43,10 +43,10 @@ const groupedMissions = computed(() => {
 })
 
 const tierBadgeClass: Record<number, string> = {
-  2: 'tier-badge tier-2',
-  3: 'tier-badge tier-3',
-  4: 'tier-badge tier-4',
-  5: 'tier-badge tier-5',
+  2: 'tier tier-2',
+  3: 'tier tier-3',
+  4: 'tier tier-4',
+  5: 'tier tier-5',
 }
 
 function formatPay(pay: Mission['pay']): string {
@@ -67,42 +67,42 @@ function formatDuration(m: Mission): string {
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-slate-100 mb-6">⚔️ Missions Board</h1>
+    <h1 class="text-2xl font-bold tracking-tight text-white mb-6" style="font-family: Manrope, sans-serif">⚔️ Missions Board</h1>
 
     <!-- Filters -->
     <div class="flex flex-wrap gap-3 mb-6">
-      <select v-model="filterUnit" class="modern-input text-sm">
+      <select v-model="filterUnit" class="input text-sm">
         <option :value="null">All Units</option>
         <option v-for="unit in units" :key="unit" :value="unit">{{ unit }}</option>
       </select>
       <div class="flex gap-1">
-        <button @click="filterTier = null" :class="['px-3 py-1.5 rounded-lg text-sm transition-all duration-150', !filterTier ? 'btn-primary !py-1.5' : 'btn-secondary !py-1.5']">All Tiers</button>
-        <button v-for="t in [2,3,4,5]" :key="t" @click="filterTier = filterTier === t ? null : t" :class="['px-3 py-1.5 rounded-lg text-sm transition-all duration-150', filterTier === t ? 'btn-primary !py-1.5' : 'btn-secondary !py-1.5']">T{{ t }}</button>
+        <button @click="filterTier = null" :class="['px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-all duration-150', !filterTier ? 'bg-[#ef233c] text-white' : 'bg-white/[0.05] text-zinc-500 border border-white/10 hover:text-zinc-200']" style="font-family: Manrope, sans-serif">All</button>
+        <button v-for="t in [2,3,4,5]" :key="t" @click="filterTier = filterTier === t ? null : t" :class="['px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-all duration-150', filterTier === t ? 'bg-[#ef233c] text-white' : 'bg-white/[0.05] text-zinc-500 border border-white/10 hover:text-zinc-200']" style="font-family: Manrope, sans-serif">T{{ t }}</button>
       </div>
     </div>
 
-    <div v-if="loading" class="text-slate-400 animate-pulse">Loading missions...</div>
+    <div v-if="loading" class="text-zinc-500 animate-pulse">Loading missions...</div>
 
     <div v-else-if="filteredMissions.length === 0" class="text-center py-12">
-      <p class="text-slate-400">No missions found.</p>
+      <p class="text-zinc-500">No missions found.</p>
     </div>
 
     <div v-else class="space-y-8">
       <div v-for="(unitMissions, unitName) in groupedMissions" :key="unitName">
-        <h2 class="text-xl font-bold text-slate-200 mb-3 flex items-center gap-2">
+        <h2 class="text-xl font-bold text-zinc-200 mb-3 flex items-center gap-2" style="font-family: Manrope, sans-serif">
           🛡️ {{ unitName }}
-          <span class="text-slate-500 text-sm font-normal">({{ unitMissions.length }} missions)</span>
+          <span class="text-zinc-600 text-sm font-normal">({{ unitMissions.length }} missions)</span>
         </h2>
         <div class="space-y-2">
-          <div v-for="mission in unitMissions" :key="mission.id" class="glass-card p-4">
-            <div class="flex items-start justify-between gap-3">
+          <div v-for="mission in unitMissions" :key="mission.id" class="card p-4 relative z-10">
+            <div class="relative z-10 flex items-start justify-between gap-3">
               <div class="flex-1">
                 <div class="flex items-center gap-2 mb-2">
-                  <span :class="tierBadgeClass[mission.tier] || 'tier-badge'">T{{ mission.tier }}</span>
-                  <span v-if="mission.status !== 'available'" :class="['text-xs px-2 py-0.5 rounded-md', mission.status === 'completed' ? 'bg-green-500/15 text-green-400' : mission.status === 'in_progress' ? 'bg-amber-500/15 text-amber-400' : 'bg-red-500/15 text-red-400']">{{ mission.status.replace('_', ' ') }}</span>
+                  <span :class="tierBadgeClass[mission.tier] || 'tier'">T{{ mission.tier }}</span>
+                  <span v-if="mission.status !== 'available'" :class="['text-xs px-2 py-0.5 rounded-md', mission.status === 'completed' ? 'bg-green-500/15 text-green-400' : mission.status === 'in_progress' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-red-500/15 text-red-400']">{{ mission.status.replace('_', ' ') }}</span>
                 </div>
-                <p class="text-slate-200">{{ mission.description }}</p>
-                <div class="flex flex-wrap gap-4 mt-2 text-sm text-slate-500">
+                <p class="text-zinc-200">{{ mission.description }}</p>
+                <div class="flex flex-wrap gap-4 mt-2 text-sm text-zinc-500">
                   <span>⏱️ {{ formatDuration(mission) }}</span>
                   <span>💰 {{ formatPay(mission.pay) }}</span>
                 </div>

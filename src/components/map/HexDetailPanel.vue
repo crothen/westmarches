@@ -83,7 +83,6 @@ const visibleNotes = computed(() => {
   })
 })
 
-// Watch hex changes to subscribe to notes
 watch(hexKey, (newKey) => {
   unsubNotes?.()
   notes.value = []
@@ -184,14 +183,14 @@ function formatDate(date: any): string {
 </script>
 
 <template>
-  <div v-if="hex" class="w-80 lg:w-96 min-h-[calc(100vh-3.5rem)] border-l border-white/[0.06] bg-[var(--bg-secondary)]/80 backdrop-blur-xl overflow-y-auto">
+  <div v-if="hex" class="w-80 lg:w-96 min-h-[calc(100vh-5rem)] border-l border-white/[0.06] bg-black/80 backdrop-blur-xl overflow-y-auto">
     <!-- Header -->
-    <div class="sticky top-0 z-10 bg-[var(--bg-secondary)]/90 backdrop-blur-xl border-b border-white/[0.06] p-4 flex items-center justify-between">
+    <div class="sticky top-0 z-10 bg-black/90 backdrop-blur-xl border-b border-white/[0.06] p-4 flex items-center justify-between">
       <div>
-        <h3 class="text-sm font-semibold text-slate-100">Hex {{ hex.x }}, {{ hex.y }}</h3>
-        <p class="text-xs text-slate-500">{{ terrainName }}</p>
+        <h3 class="text-sm font-semibold text-zinc-100" style="font-family: Manrope, sans-serif">Hex {{ hex.x }}, {{ hex.y }}</h3>
+        <p class="text-xs text-zinc-600">{{ terrainName }}</p>
       </div>
-      <button @click="emit('close')" class="text-slate-500 hover:text-slate-300 transition-colors">
+      <button @click="emit('close')" class="text-zinc-600 hover:text-zinc-300 transition-colors">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
       </button>
     </div>
@@ -199,29 +198,29 @@ function formatDate(date: any): string {
     <div class="p-4 space-y-5">
       <!-- Tags info (visible to all) -->
       <div v-if="currentMainTag || currentSideTags.length > 0">
-        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Tags</h4>
+        <h4 class="label mb-2">Tags</h4>
         <div class="flex flex-wrap gap-1.5">
-          <span v-if="currentMainTag" class="text-xs bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full">{{ currentMainTag }}</span>
-          <span v-for="tag in currentSideTags" :key="tag" class="text-xs bg-white/5 text-slate-400 px-2 py-0.5 rounded-full">{{ tag }}</span>
+          <span v-if="currentMainTag" class="text-xs bg-[#ef233c]/15 text-[#ef233c] px-2 py-0.5 rounded-full">{{ currentMainTag }}</span>
+          <span v-for="tag in currentSideTags" :key="tag" class="text-xs bg-white/5 text-zinc-500 px-2 py-0.5 rounded-full">{{ tag }}</span>
         </div>
       </div>
 
       <!-- DM Edit Section -->
-      <div v-if="auth.isDm" class="glass-card !rounded-lg p-3 space-y-3">
-        <h4 class="text-xs font-semibold text-amber-500 uppercase tracking-wider">DM Tools</h4>
+      <div v-if="auth.isDm" class="card-flat !rounded-lg p-3 space-y-3">
+        <h4 class="label text-[#ef233c]">DM Tools</h4>
         
         <!-- Terrain picker -->
         <div>
-          <label class="block text-xs text-slate-500 mb-1">Terrain</label>
-          <select :value="currentHexData?.type || 1" @change="onTerrainChange" class="modern-input w-full text-sm">
+          <label class="block text-xs text-zinc-600 mb-1">Terrain</label>
+          <select :value="currentHexData?.type || 1" @change="onTerrainChange" class="input w-full text-sm">
             <option v-for="t in terrainOptions" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
         </div>
 
         <!-- Main tag picker -->
         <div>
-          <label class="block text-xs text-slate-500 mb-1">Main Tag</label>
-          <select :value="currentHexData?.mainTag || ''" @change="onMainTagChange" class="modern-input w-full text-sm">
+          <label class="block text-xs text-zinc-600 mb-1">Main Tag</label>
+          <select :value="currentHexData?.mainTag || ''" @change="onMainTagChange" class="input w-full text-sm">
             <option value="">None</option>
             <option v-for="t in tagOptions" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
@@ -229,14 +228,14 @@ function formatDate(date: any): string {
 
         <!-- Side tags -->
         <div>
-          <label class="block text-xs text-slate-500 mb-1">Side Tags (max 6)</label>
+          <label class="block text-xs text-zinc-600 mb-1">Side Tags (max 6)</label>
           <div class="flex flex-wrap gap-1">
             <button
               v-for="t in tagOptions" :key="t.id"
               @click="onToggleSideTag(t.id)"
               :class="[
                 'text-xs px-2 py-0.5 rounded-full transition-colors',
-                (currentHexData?.tags || []).includes(t.id) ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 text-slate-500 hover:text-slate-300'
+                (currentHexData?.tags || []).includes(t.id) ? 'bg-[#ef233c]/20 text-[#ef233c]' : 'bg-white/5 text-zinc-600 hover:text-zinc-300'
               ]"
             >{{ t.name }}</button>
           </div>
@@ -245,47 +244,47 @@ function formatDate(date: any): string {
 
       <!-- Notes Section -->
       <div>
-        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Notes</h4>
+        <h4 class="label mb-3">Notes</h4>
         
-        <div v-if="visibleNotes.length === 0" class="text-slate-600 text-sm">No notes on this hex yet.</div>
+        <div v-if="visibleNotes.length === 0" class="text-zinc-700 text-sm">No notes on this hex yet.</div>
 
-        <div v-for="note in visibleNotes" :key="note.id" class="glass-card !rounded-lg p-3 mb-2">
+        <div v-for="note in visibleNotes" :key="note.id" class="card-flat !rounded-lg p-3 mb-2">
           <!-- Note header -->
           <div class="flex items-center justify-between mb-1.5">
             <div class="flex items-center gap-1.5">
-              <span class="text-amber-500 text-xs font-medium">{{ note.authorName }}</span>
+              <span class="text-[#ef233c] text-xs font-medium">{{ note.authorName }}</span>
               <span v-if="note.isPrivate" class="text-[0.6rem] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded-full">🔒</span>
-              <span class="text-slate-600 text-[0.65rem]">{{ formatDate(note.createdAt) }}</span>
+              <span class="text-zinc-700 text-[0.65rem]">{{ formatDate(note.createdAt) }}</span>
             </div>
-            <button v-if="canDelete(note)" @click="deleteNote(note.id)" class="text-slate-600 hover:text-red-400 transition-colors">
+            <button v-if="canDelete(note)" @click="deleteNote(note.id)" class="text-zinc-700 hover:text-red-400 transition-colors">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
             </button>
           </div>
 
           <!-- Note content -->
-          <p class="text-slate-300 text-sm whitespace-pre-wrap">{{ note.content }}</p>
+          <p class="text-zinc-300 text-sm whitespace-pre-wrap">{{ note.content }}</p>
 
           <!-- Replies -->
           <div v-if="note.replies?.length" class="mt-2 pl-3 border-l border-white/[0.06] space-y-2">
             <div v-for="reply in note.replies" :key="reply.id" class="text-sm">
               <div class="flex items-center gap-1.5">
-                <span class="text-amber-500/80 text-xs font-medium">{{ reply.authorName }}</span>
-                <span class="text-slate-600 text-[0.65rem]">{{ formatDate(reply.createdAt) }}</span>
+                <span class="text-[#ef233c]/80 text-xs font-medium">{{ reply.authorName }}</span>
+                <span class="text-zinc-700 text-[0.65rem]">{{ formatDate(reply.createdAt) }}</span>
               </div>
-              <p class="text-slate-400 text-sm">{{ reply.content }}</p>
+              <p class="text-zinc-500 text-sm">{{ reply.content }}</p>
             </div>
           </div>
 
           <!-- Reply button / form -->
           <div class="mt-2">
-            <button v-if="replyingTo !== note.id" @click="replyingTo = note.id" class="text-slate-500 hover:text-amber-500 text-xs transition-colors">
+            <button v-if="replyingTo !== note.id" @click="replyingTo = note.id" class="text-zinc-600 hover:text-[#ef233c] text-xs transition-colors">
               Reply
             </button>
             <div v-else class="mt-1.5">
-              <textarea v-model="replyContent" rows="2" placeholder="Write a reply..." class="modern-input w-full text-sm !p-2" />
+              <textarea v-model="replyContent" rows="2" placeholder="Write a reply..." class="input w-full text-sm !p-2" />
               <div class="flex gap-2 mt-1.5 justify-end">
-                <button @click="replyingTo = null; replyContent = ''" class="text-slate-500 hover:text-slate-300 text-xs transition-colors">Cancel</button>
-                <button @click="addReply(note.id)" :disabled="!replyContent.trim()" class="btn-primary !text-xs !py-1 !px-3">Reply</button>
+                <button @click="replyingTo = null; replyContent = ''" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">Cancel</button>
+                <button @click="addReply(note.id)" :disabled="!replyContent.trim()" class="btn !text-xs !py-1 !px-3">Reply</button>
               </div>
             </div>
           </div>
@@ -293,13 +292,13 @@ function formatDate(date: any): string {
 
         <!-- Add Note Form -->
         <div v-if="auth.isAuthenticated" class="mt-3">
-          <textarea v-model="newNoteContent" rows="2" placeholder="Add a note to this hex..." class="modern-input w-full text-sm !p-2" />
+          <textarea v-model="newNoteContent" rows="2" placeholder="Add a note to this hex..." class="input w-full text-sm !p-2" />
           <div class="flex items-center justify-between mt-2">
-            <label class="flex items-center gap-1.5 text-xs text-slate-500">
-              <input v-model="newNotePrivate" type="checkbox" class="accent-amber-500" />
+            <label class="flex items-center gap-1.5 text-xs text-zinc-600">
+              <input v-model="newNotePrivate" type="checkbox" class="accent-[#ef233c]" />
               🔒 Private
             </label>
-            <button @click="addNote" :disabled="!newNoteContent.trim()" class="btn-primary !text-xs !py-1 !px-3">Add Note</button>
+            <button @click="addNote" :disabled="!newNoteContent.trim()" class="btn !text-xs !py-1 !px-3">Add Note</button>
           </div>
         </div>
       </div>

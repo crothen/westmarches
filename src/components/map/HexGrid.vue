@@ -60,9 +60,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="containerRef" class="w-full h-full min-h-[500px] relative bg-stone-900 rounded-lg overflow-hidden">
+  <div ref="containerRef" class="w-full h-full min-h-[500px] relative bg-zinc-950 rounded-lg overflow-hidden">
     <div v-if="loading" class="absolute inset-0 flex items-center justify-center">
-      <span class="text-amber-500 animate-pulse">Loading map...</span>
+      <span class="text-[#ef233c] animate-pulse">Loading map...</span>
     </div>
     <canvas ref="canvasRef" class="block w-full h-full" />
   </div>

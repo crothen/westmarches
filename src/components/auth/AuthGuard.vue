@@ -7,6 +7,6 @@ const auth = useAuthStore()
 <template>
   <slot v-if="auth.isAuthenticated" />
   <div v-else class="text-center mt-20">
-    <p class="text-stone-400">Please log in to access this page.</p>
+    <p class="text-zinc-500">Please log in to access this page.</p>
   </div>
 </template>
