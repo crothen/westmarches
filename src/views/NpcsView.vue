@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
-import type { Npc, NpcNote } from '../types'
+import type { Npc, NpcNote, Organization } from '../types'
 
 const auth = useAuthStore()
 const { error: genError, generateImage } = useImageGen()
 
 const npcs = ref<Npc[]>([])
+const orgs = ref<Organization[]>([])
 const npcNotes = ref<Record<string, NpcNote[]>>({})
 const loading = ref(true)
 const searchQuery = ref('')
@@ -29,8 +30,12 @@ const savingNote = ref(false)
 
 onMounted(async () => {
   try {
-    const snap = await getDocs(query(collection(db, 'npcs'), orderBy('name', 'asc')))
-    npcs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
+    const [npcSnap, orgSnap] = await Promise.all([
+      getDocs(query(collection(db, 'npcs'), orderBy('name', 'asc'))),
+      getDocs(query(collection(db, 'organizations'), orderBy('name', 'asc'))),
+    ])
+    npcs.value = npcSnap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
+    orgs.value = orgSnap.docs.map(d => ({ id: d.id, ...d.data() } as Organization))
 
     // Load notes
     if (auth.isAuthenticated) {
@@ -45,6 +50,15 @@ onMounted(async () => {
     }
   } catch (e) {
     console.error('Failed to load NPCs:', e)
+    // Auto-expand from hash link
+    if (window.location.hash) {
+      const targetId = window.location.hash.slice(1)
+      if (npcs.value.some(n => n.id === targetId)) {
+        expandedNpc.value = targetId
+        await nextTick()
+        document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -85,6 +99,11 @@ function getRoleBadge(npc: Npc): string | null {
   if ((npc.tags || []).includes('leader')) return 'Leader'
   if ((npc.tags || []).includes('subleader')) return 'Vice-Leader'
   return null
+}
+
+function getOrgsForNpc(npc: Npc): Organization[] {
+  if (!npc.organizationIds?.length) return []
+  return orgs.value.filter(o => npc.organizationIds.includes(o.id))
 }
 
 // --- Editing ---
@@ -222,6 +241,7 @@ async function generatePortrait(npc: Npc) {
     <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
       <div
         v-for="npc in filteredNpcs" :key="npc.id"
+        :id="npc.id"
         :class="['card relative z-10 cursor-pointer', isDeceased(npc) ? 'opacity-50' : '']"
         @click="toggleExpand(npc.id)"
       >
@@ -292,6 +312,15 @@ async function generatePortrait(npc: Npc) {
               </div>
               <div v-if="npc.tags?.length" class="flex flex-wrap gap-1.5 mt-2">
                 <span v-for="tag in npc.tags" :key="tag" class="text-[0.65rem] px-2 py-0.5 rounded-full bg-white/5 text-zinc-500">{{ tag }}</span>
+              </div>
+              <div v-if="getOrgsForNpc(npc).length" class="mt-2">
+                <span class="text-zinc-600 text-xs">🏛️ </span>
+                <RouterLink
+                  v-for="(org, i) in getOrgsForNpc(npc)" :key="org.id"
+                  :to="'/organizations#' + org.id"
+                  class="text-xs text-zinc-400 hover:text-[#ef233c] transition-colors"
+                  @click.stop
+                >{{ org.name }}<span v-if="i < getOrgsForNpc(npc).length - 1">, </span></RouterLink>
               </div>
 
               <!-- Action buttons -->
