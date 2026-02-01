@@ -26,5 +26,15 @@ service firebase.storage {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
     }
+    // Terrain textures (admin-generated)
+    match /textures/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    // Custom marker icons (admin-uploaded)
+    match /icons/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
   }
 }
