@@ -18,9 +18,11 @@ const filterTag = ref<string | null>(null)
 const expandedNpc = ref<string | null>(null)
 const generatingForNpc = ref<string | null>(null)
 
-// Edit state
-const editingNpc = ref<string | null>(null)
+// Modal edit state
+const showEditModal = ref(false)
+const editingNpcData = ref<Npc | null>(null)
 const editForm = ref({ name: '', race: '', description: '', locationEncountered: '', tags: '' })
+const savingEdit = ref(false)
 
 // Note state
 const newNoteNpc = ref<string | null>(null)
@@ -41,15 +43,13 @@ onMounted(async () => {
     if (auth.isAuthenticated) {
       const noteSnap = await getDocs(query(collection(db, 'npcNotes'), orderBy('createdAt', 'desc')))
       const allNotes = noteSnap.docs.map(d => ({ id: d.id, ...d.data() } as NpcNote))
-      // Group by npcId, filter private notes client-side
       for (const note of allNotes) {
         if (note.isPrivate && note.userId !== auth.firebaseUser?.uid && !auth.isDm && !auth.isAdmin) continue
         if (!npcNotes.value[note.npcId]) npcNotes.value[note.npcId] = []
         npcNotes.value[note.npcId]!.push(note)
       }
     }
-  } catch (e) {
-    console.error('Failed to load NPCs:', e)
+
     // Auto-expand from hash link
     if (window.location.hash) {
       const targetId = window.location.hash.slice(1)
@@ -59,6 +59,8 @@ onMounted(async () => {
         document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
     }
+  } catch (e) {
+    console.error('Failed to load NPCs:', e)
   } finally {
     loading.value = false
   }
@@ -84,7 +86,6 @@ const filteredNpcs = computed(() => {
 const isDeceased = (npc: Npc) => (npc.tags || []).includes('deceased')
 
 function toggleExpand(id: string) {
-  if (editingNpc.value === id) return // don't collapse while editing
   expandedNpc.value = expandedNpc.value === id ? null : id
 }
 
@@ -106,9 +107,13 @@ function getOrgsForNpc(npc: Npc): Organization[] {
   return orgs.value.filter(o => npc.organizationIds.includes(o.id))
 }
 
-// --- Editing ---
-function startEdit(npc: Npc) {
-  editingNpc.value = npc.id
+function noteCount(npcId: string): number {
+  return npcNotes.value[npcId]?.length || 0
+}
+
+// --- Edit Modal ---
+function openEditModal(npc: Npc) {
+  editingNpcData.value = npc
   editForm.value = {
     name: npc.name,
     race: npc.race || '',
@@ -116,13 +121,19 @@ function startEdit(npc: Npc) {
     locationEncountered: npc.locationEncountered || '',
     tags: (npc.tags || []).join(', '),
   }
+  showEditModal.value = true
 }
 
-function cancelEdit() {
-  editingNpc.value = null
+function closeEditModal() {
+  showEditModal.value = false
+  editingNpcData.value = null
 }
 
-async function saveEdit(npc: Npc) {
+async function saveEdit() {
+  if (!editingNpcData.value) return
+  const npc = editingNpcData.value
+  savingEdit.value = true
+
   const updates: Partial<Npc> = {
     name: editForm.value.name.trim(),
     race: editForm.value.race.trim(),
@@ -135,10 +146,12 @@ async function saveEdit(npc: Npc) {
   try {
     await updateDoc(doc(db, 'npcs', npc.id), updates as any)
     Object.assign(npc, updates)
-    editingNpc.value = null
+    closeEditModal()
   } catch (e) {
     console.error('Failed to save NPC:', e)
     alert('Failed to save. Check your permissions.')
+  } finally {
+    savingEdit.value = false
   }
 }
 
@@ -251,39 +264,6 @@ async function generatePortrait(npc: Npc) {
             <img :src="npc.imageUrl" class="w-full h-40 object-cover rounded-t-xl" />
           </div>
           <div class="p-5">
-
-          <!-- EDIT MODE -->
-          <template v-if="editingNpc === npc.id">
-            <div class="space-y-3" @click.stop>
-              <div>
-                <label class="label text-xs">Name</label>
-                <input v-model="editForm.name" class="input w-full" />
-              </div>
-              <div>
-                <label class="label text-xs">Race</label>
-                <input v-model="editForm.race" class="input w-full" />
-              </div>
-              <div>
-                <label class="label text-xs">Description</label>
-                <textarea v-model="editForm.description" class="input w-full" rows="3" />
-              </div>
-              <div>
-                <label class="label text-xs">Location Encountered</label>
-                <input v-model="editForm.locationEncountered" class="input w-full" />
-              </div>
-              <div>
-                <label class="label text-xs">Tags (comma-separated)</label>
-                <input v-model="editForm.tags" class="input w-full" placeholder="e.g. ZFC, leader, quest-giver" />
-              </div>
-              <div class="flex gap-2 pt-1">
-                <button @click.stop="saveEdit(npc)" class="btn !text-xs !py-1.5">💾 Save</button>
-                <button @click.stop="cancelEdit" class="btn !text-xs !py-1.5 !bg-white/5 !text-zinc-400">Cancel</button>
-              </div>
-            </div>
-          </template>
-
-          <!-- VIEW MODE -->
-          <template v-else>
             <!-- Header -->
             <div class="flex items-start justify-between mb-2">
               <div>
@@ -293,9 +273,20 @@ async function generatePortrait(npc: Npc) {
                 <span class="text-zinc-500 text-sm">{{ npc.race }}</span>
               </div>
               <div class="flex items-center gap-1.5">
+                <!-- Notes indicator -->
+                <span v-if="noteCount(npc.id)" class="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500/80" :title="noteCount(npc.id) + ' note(s)'">
+                  📝 {{ noteCount(npc.id) }}
+                </span>
                 <span v-if="getRoleBadge(npc)" class="badge bg-[#ef233c]/15 text-[#ef233c]">{{ getRoleBadge(npc) }}</span>
                 <span v-if="getUnitAbbrev(npc)" class="badge bg-white/5 text-zinc-400">{{ getUnitAbbrev(npc) }}</span>
                 <span v-if="isDeceased(npc)" class="badge bg-zinc-800 text-zinc-500">☠️ Dead</span>
+                <!-- Always-visible edit button for DMs/admins -->
+                <button
+                  v-if="auth.isDm || auth.isAdmin"
+                  @click.stop="openEditModal(npc)"
+                  class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors ml-1"
+                  title="Edit NPC"
+                >✏️</button>
               </div>
             </div>
 
@@ -325,7 +316,7 @@ async function generatePortrait(npc: Npc) {
 
               <!-- Action buttons -->
               <div class="flex flex-wrap gap-2 mt-3" @click.stop>
-                <button v-if="auth.isAuthenticated" @click.stop="startEdit(npc)" class="btn !text-[0.65rem] !py-1.5 !px-3">✏️ Edit</button>
+                <button v-if="auth.isAuthenticated && !auth.isDm && !auth.isAdmin" @click.stop="openEditModal(npc)" class="btn !text-[0.65rem] !py-1.5 !px-3">✏️ Edit</button>
                 <button v-if="auth.isAuthenticated" @click.stop="startNote(npc.id)" class="btn !text-[0.65rem] !py-1.5 !px-3 !bg-white/5 !text-zinc-400">📝 Add Note</button>
                 <button
                   v-if="auth.isAuthenticated"
@@ -376,15 +367,67 @@ async function generatePortrait(npc: Npc) {
               </div>
             </div>
 
-            <!-- Tags row (collapsed) -->
-            <div v-if="expandedNpc !== npc.id && npc.locationEncountered" class="mt-2">
-              <span class="text-xs text-zinc-600">📍 {{ npc.locationEncountered }}</span>
+            <!-- Collapsed footer: location + note indicator -->
+            <div v-if="expandedNpc !== npc.id" class="mt-2 flex items-center gap-2">
+              <span v-if="npc.locationEncountered" class="text-xs text-zinc-600">📍 {{ npc.locationEncountered }}</span>
             </div>
-          </template>
-
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Edit Modal -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-150"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeEditModal">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="closeEditModal" />
+          <div class="relative w-full max-w-lg bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-6 space-y-4 z-10">
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-semibold text-white" style="font-family: Manrope, sans-serif">
+                ✏️ Edit {{ editingNpcData?.name }}
+              </h3>
+              <button @click="closeEditModal" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+            </div>
+
+            <div class="space-y-3">
+              <div>
+                <label class="label text-xs mb-1 block">Name</label>
+                <input v-model="editForm.name" class="input w-full" />
+              </div>
+              <div>
+                <label class="label text-xs mb-1 block">Race</label>
+                <input v-model="editForm.race" class="input w-full" />
+              </div>
+              <div>
+                <label class="label text-xs mb-1 block">Description</label>
+                <textarea v-model="editForm.description" class="input w-full" rows="4" />
+              </div>
+              <div>
+                <label class="label text-xs mb-1 block">Location Encountered</label>
+                <input v-model="editForm.locationEncountered" class="input w-full" />
+              </div>
+              <div>
+                <label class="label text-xs mb-1 block">Tags (comma-separated)</label>
+                <input v-model="editForm.tags" class="input w-full" placeholder="e.g. ZFC, leader, quest-giver" />
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+              <button @click="closeEditModal" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+              <button @click="saveEdit" :disabled="savingEdit || !editForm.name.trim()" class="btn text-sm">
+                {{ savingEdit ? 'Saving...' : '💾 Save' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
