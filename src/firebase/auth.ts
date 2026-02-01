@@ -30,13 +30,22 @@ export async function getOrCreateUserProfile(user: User): Promise<AppUser> {
   const userRef = doc(db, 'users', user.uid)
   const snap = await getDoc(userRef)
   if (snap.exists()) {
-    return snap.data() as AppUser
+    const data = snap.data() as any
+    // Migrate legacy single-role to roles array
+    if (!data.roles && data.role) {
+      data.roles = [data.role]
+      await setDoc(userRef, { roles: data.roles }, { merge: true })
+    } else if (!data.roles) {
+      data.roles = ['player']
+      await setDoc(userRef, { roles: data.roles }, { merge: true })
+    }
+    return data as AppUser
   }
   const newUser: AppUser = {
     uid: user.uid,
     email: user.email || '',
     displayName: user.displayName || user.email || 'Adventurer',
-    role: 'player',
+    roles: ['player'],
     createdAt: new Date(),
   }
   await setDoc(userRef, newUser)

@@ -4,9 +4,22 @@ export interface AppUser {
   uid: string
   email: string
   displayName: string
-  role: UserRole
+  roles: UserRole[]
+  /** @deprecated Use `roles` array instead. Kept for backward compat during migration. */
+  role?: UserRole
   characterId?: string
   createdAt: Date
+}
+
+export interface NpcNote {
+  id: string
+  npcId: string
+  userId: string
+  authorName: string
+  content: string
+  isPrivate: boolean  // private = only visible to author and DMs
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface Character {
@@ -224,4 +237,37 @@ export interface HexNoteReply {
   authorName: string
   content: string
   createdAt: Date
+}
+
+export type LocationType = 'city' | 'town' | 'village' | 'castle' | 'fortress' | 'monastery' | 'camp' | 'ruins' | 'other'
+
+export interface CampaignLocation {
+  id: string
+  name: string
+  type: LocationType
+  description: string
+  hexKey?: string  // "x_y" format — which hex on the overworld
+  mapImageUrl?: string  // city/town map image
+  imageUrl?: string  // AI generated or uploaded image
+  discoveredBy?: string
+  tags: string[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export type FeatureType = 'inn' | 'shop' | 'temple' | 'shrine' | 'blacksmith' | 'tavern' | 'guild' | 'market' | 'gate' | 'tower' | 'ruins' | 'cave' | 'bridge' | 'well' | 'monument' | 'graveyard' | 'dock' | 'warehouse' | 'barracks' | 'library' | 'other'
+
+export interface LocationFeature {
+  id: string
+  name: string
+  type: FeatureType
+  description: string
+  locationId?: string  // parent location (city/town) — null if standalone on hex
+  hexKey?: string  // overworld hex — for standalone features OR inherited from parent
+  // Position on the location's map image (percentage-based for responsiveness)
+  mapPosition?: { x: number; y: number }
+  discoveredBy?: string
+  tags: string[]
+  createdAt: Date
+  updatedAt: Date
 }

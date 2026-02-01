@@ -31,8 +31,15 @@ service cloud.firestore {
       allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isDm());
     }
 
-    // Locations
+    // Campaign Locations (cities, towns, etc.)
     match /locations/{locId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isDm();
+    }
+
+    // Location Features (POIs)
+    match /features/{featId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update, delete: if isDm();

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore'
+import { collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, getDocs } from 'firebase/firestore'
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '../../firebase/config'
 import { useAuthStore } from '../../stores/auth'
@@ -32,6 +32,8 @@ let unsubNotes: (() => void) | null = null
 const uploadProgress = ref(0)
 const isUploading = ref(false)
 const showDetailMapViewer = ref(false)
+const hexLocations = ref<any[]>([])
+const hexFeatures = ref<any[]>([])
 
 const hexKey = computed(() => props.hex ? `${props.hex.x}_${props.hex.y}` : null)
 
@@ -105,6 +107,23 @@ watch(hexKey, (newKey) => {
   }, (err) => {
     console.warn('Hex notes query error:', err.message)
   })
+}, { immediate: true })
+
+watch(hexKey, async (newKey) => {
+  hexLocations.value = []
+  hexFeatures.value = []
+  if (!newKey) return
+  
+  try {
+    const [locSnap, featSnap] = await Promise.all([
+      getDocs(query(collection(db, 'locations'), where('hexKey', '==', newKey))),
+      getDocs(query(collection(db, 'features'), where('hexKey', '==', newKey)))
+    ])
+    hexLocations.value = locSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    hexFeatures.value = featSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+  } catch (e) {
+    console.warn('Failed to load hex locations:', e)
+  }
 }, { immediate: true })
 
 onUnmounted(() => {
@@ -252,6 +271,31 @@ async function removeDetailMap() {
         <div class="flex flex-wrap gap-1.5">
           <span v-if="currentMainTag" class="text-xs bg-[#ef233c]/15 text-[#ef233c] px-2 py-0.5 rounded-full">{{ currentMainTag }}</span>
           <span v-for="tag in currentSideTags" :key="tag" class="text-xs bg-white/5 text-zinc-500 px-2 py-0.5 rounded-full">{{ tag }}</span>
+        </div>
+      </div>
+
+      <!-- Locations in this hex -->
+      <div v-if="hexLocations.length > 0 || hexFeatures.length > 0">
+        <h4 class="label mb-2">Locations</h4>
+        <div class="space-y-1.5">
+          <RouterLink
+            v-for="loc in hexLocations" :key="loc.id"
+            :to="`/locations/${loc.id}`"
+            class="block card-flat p-2.5 hover:border-white/20 transition-colors"
+          >
+            <div class="flex items-center gap-2">
+              <span class="text-sm">🏰</span>
+              <span class="text-sm text-zinc-200 font-medium">{{ loc.name }}</span>
+              <span class="text-[0.6rem] text-zinc-600">{{ loc.type }}</span>
+            </div>
+          </RouterLink>
+          <div v-for="feat in hexFeatures" :key="feat.id" class="card-flat p-2.5">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">📌</span>
+              <span class="text-sm text-zinc-300">{{ feat.name }}</span>
+              <span class="text-[0.6rem] text-zinc-600">{{ feat.type }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
