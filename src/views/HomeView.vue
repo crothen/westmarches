@@ -23,6 +23,7 @@ const auth = useAuthStore()
           { to: '/npcs', icon: '👤', title: 'NPCs', desc: 'People you\'ve encountered' },
           { to: '/organizations', icon: '🏛️', title: 'Organizations', desc: 'Factions and guilds' },
           { to: '/inventory', icon: '🎒', title: 'Party Inventory', desc: 'Shared loot and supplies' },
+          { to: '/sessions', icon: '📖', title: 'Session Log', desc: 'Campaign session history' },
         ]" :key="card.to" :to="card.to"
           class="bg-stone-800 border border-stone-700 rounded-lg p-6 hover:border-amber-500/50 transition-colors group"
         >

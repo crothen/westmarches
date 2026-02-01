@@ -12,6 +12,8 @@ const routes = [
   { path: '/inventory', name: 'inventory', component: () => import('../views/InventoryView.vue'), meta: { auth: true } },
   { path: '/npcs', name: 'npcs', component: () => import('../views/NpcsView.vue'), meta: { auth: true } },
   { path: '/organizations', name: 'organizations', component: () => import('../views/OrganizationsView.vue'), meta: { auth: true } },
+  { path: '/sessions', name: 'sessions', component: () => import('../views/SessionsView.vue'), meta: { auth: true } },
+  { path: '/sessions/:id', name: 'session-detail', component: () => import('../views/SessionDetailView.vue'), meta: { auth: true } },
   { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/dm', name: 'dm', component: () => import('../views/DmView.vue'), meta: { auth: true, role: 'dm' } },
 ]

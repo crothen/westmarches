@@ -14,6 +14,7 @@ const navItems = [
   { to: '/inventory', label: '🎒 Inventory', show: 'all' },
   { to: '/npcs', label: '👤 NPCs', show: 'all' },
   { to: '/organizations', label: '🏛️ Organizations', show: 'all' },
+  { to: '/sessions', label: '📖 Session Log', show: 'all' },
   { to: '/dm', label: '📋 DM Panel', show: 'dm' },
   { to: '/admin', label: '⚙️ Admin', show: 'admin' },
 ]

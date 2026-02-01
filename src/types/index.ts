@@ -113,3 +113,33 @@ export interface Like {
   userId: string
   createdAt: Date
 }
+
+export interface SessionLog {
+  id: string
+  sessionNumber: number
+  title: string
+  date: Date
+  summary: string
+  dmId?: string
+  dmName?: string
+  participants: SessionParticipant[]
+  locationsVisited: string[]  // location IDs
+  npcsEncountered: string[]   // npc IDs
+  loot: LootEntry[]
+  tags: string[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface SessionParticipant {
+  userId: string
+  characterId: string
+  characterName: string
+}
+
+export interface LootEntry {
+  name: string
+  description?: string
+  quantity: number
+  recipient?: string  // character name or "party"
+}
