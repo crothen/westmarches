@@ -280,7 +280,7 @@ function toggleExpand(id: string) {
     </div>
 
     <!-- Org cards -->
-    <div v-else class="space-y-3">
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       <div
         v-for="org in filteredOrgs" :key="org.id"
         class="card relative z-10 cursor-pointer"

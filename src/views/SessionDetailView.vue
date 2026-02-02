@@ -6,6 +6,7 @@ import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
 import SessionForm from '../components/sessions/SessionForm.vue'
+import SessionTimeline from '../components/sessions/SessionTimeline.vue'
 import type { SessionLog, SessionNote } from '../types'
 
 const route = useRoute()
@@ -17,7 +18,6 @@ const loading = ref(true)
 const editing = ref(false)
 const saving = ref(false)
 const newNoteContent = ref('')
-const newNotePrivate = ref(false)
 
 // Image generation state
 const showPromptEditor = ref(false)
@@ -103,12 +103,11 @@ async function addNote() {
     userId: auth.firebaseUser.uid,
     authorName: auth.appUser?.displayName || 'Unknown',
     content: newNoteContent.value.trim(),
-    isPrivate: newNotePrivate.value,
+    isPrivate: false,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now()
   })
   newNoteContent.value = ''
-  newNotePrivate.value = false
 }
 
 function startNoteEdit(note: SessionNote) {
@@ -359,23 +358,28 @@ function canDeleteNote(note: SessionNote): boolean {
         </div>
       </template>
 
-      <!-- Player Notes Section -->
-      <div class="mt-8 border-t border-white/[0.06] pt-6">
-        <h2 class="text-lg font-semibold text-[#ef233c] mb-4" style="font-family: Manrope, sans-serif">📝 Player Notes</h2>
+      <!-- Session Timeline -->
+      <SessionTimeline
+        :session-id="sessionId"
+        :session-participants="session?.participants"
+      />
 
-        <div v-if="visibleNotes.length === 0" class="text-zinc-600 text-sm mb-4">No notes yet. Be the first to add one!</div>
+      <!-- Session Comments Section -->
+      <div class="mt-8 border-t border-white/[0.06] pt-6">
+        <h2 class="text-lg font-semibold text-[#ef233c] mb-4" style="font-family: Manrope, sans-serif">💬 Session Comments</h2>
+
+        <div v-if="visibleNotes.length === 0" class="text-zinc-600 text-sm mb-4">No comments yet. Be the first to add one!</div>
 
         <div v-for="note in visibleNotes" :key="note.id" class="card p-4 mb-3 relative z-10">
           <div class="relative z-10">
             <!-- Deleted placeholder -->
             <div v-if="(note as any).deleted" class="text-zinc-600 text-sm italic">
-              🗑️ This note was deleted
+              🗑️ This comment was deleted
             </div>
             <template v-else>
               <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center gap-2">
                   <span class="text-[#ef233c] font-medium text-sm">{{ note.authorName }}</span>
-                  <span v-if="note.isPrivate" class="text-xs bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded-md border border-red-500/20">🔒 Private</span>
                   <span class="text-zinc-600 text-xs">{{ (note.createdAt as any)?.toDate ? new Date((note.createdAt as any).toDate()).toLocaleDateString() : '' }}</span>
                 </div>
                 <div class="flex gap-2">
@@ -428,17 +432,13 @@ function canDeleteNote(note: SessionNote): boolean {
           </div>
         </div>
 
-        <!-- Add Note Form -->
+        <!-- Add Comment Form -->
         <div v-if="auth.isAuthenticated" class="card p-4 mt-4 relative z-10">
           <div class="relative z-10">
-            <textarea v-model="newNoteContent" rows="3" placeholder="Write your notes about this session..." class="input w-full text-sm mb-3" />
-            <div class="flex items-center justify-between">
-              <label class="flex items-center gap-2 text-sm text-zinc-500">
-                <input v-model="newNotePrivate" type="checkbox" class="accent-[#ef233c]" />
-                🔒 Private (only you and DMs can see)
-              </label>
+            <textarea v-model="newNoteContent" rows="3" placeholder="Share your thoughts about this session..." class="input w-full text-sm mb-3" />
+            <div class="flex items-center justify-end">
               <button @click="addNote" :disabled="!newNoteContent.trim()" class="btn text-sm">
-                Add Note
+                Add Comment
               </button>
             </div>
           </div>
