@@ -31,14 +31,17 @@ onMounted(() => {
 
 onUnmounted(() => _unsubs.forEach(fn => fn()))
 
+const activeCharacters = computed(() => characters.value.filter(c => c.isActive !== false))
+const retiredCharacters = computed(() => characters.value.filter(c => c.isActive === false))
+
 const myCharacters = computed(() => {
   if (!auth.firebaseUser) return []
-  return characters.value.filter(c => c.userId === auth.firebaseUser!.uid)
+  return activeCharacters.value.filter(c => c.userId === auth.firebaseUser!.uid)
 })
 
 const otherCharacters = computed(() => {
-  if (!auth.firebaseUser) return characters.value
-  return characters.value.filter(c => c.userId !== auth.firebaseUser!.uid)
+  if (!auth.firebaseUser) return activeCharacters.value
+  return activeCharacters.value.filter(c => c.userId !== auth.firebaseUser!.uid)
 })
 
 function getOwnerName(userId?: string): string {
@@ -133,7 +136,6 @@ async function createCharacter() {
                   <span v-if="c.race" class="text-sm text-zinc-500">{{ c.race }}</span>
                   <span v-if="c.class" class="text-sm text-zinc-400">{{ c.class }}</span>
                   <span class="badge bg-[#ef233c]/15 text-[#ef233c]">Lv {{ c.level }}</span>
-                  <span v-if="!c.isActive" class="badge bg-zinc-800 text-zinc-500">Inactive</span>
                 </div>
                 <p v-if="c.description" class="text-zinc-500 text-sm mt-1 line-clamp-1">{{ c.description }}</p>
               </div>
@@ -143,7 +145,7 @@ async function createCharacter() {
       </div>
 
       <!-- Other characters -->
-      <div>
+      <div v-if="otherCharacters.length > 0">
         <h2 class="label mb-3">{{ myCharacters.length > 0 ? 'Other Characters' : 'All Characters' }}</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           <RouterLink v-for="c in otherCharacters" :key="c.id" :to="`/characters/${c.id}`" class="card relative z-10 group cursor-pointer">
@@ -160,10 +162,38 @@ async function createCharacter() {
                   <span v-if="c.race" class="text-sm text-zinc-500">{{ c.race }}</span>
                   <span v-if="c.class" class="text-sm text-zinc-400">{{ c.class }}</span>
                   <span class="badge bg-[#ef233c]/15 text-[#ef233c]">Lv {{ c.level }}</span>
-                  <span v-if="!c.isActive" class="badge bg-zinc-800 text-zinc-500">Inactive</span>
                 </div>
                 <div class="text-xs text-zinc-600 mt-1">🎮 {{ getOwnerName(c.userId) }}</div>
                 <p v-if="c.description" class="text-zinc-500 text-sm mt-1 line-clamp-1">{{ c.description }}</p>
+              </div>
+            </div>
+          </RouterLink>
+        </div>
+      </div>
+
+      <!-- Retired characters -->
+      <div v-if="retiredCharacters.length > 0" class="mt-10">
+        <h2 class="text-lg font-semibold text-zinc-500 mb-4 flex items-center gap-2" style="font-family: Manrope, sans-serif">
+          🪑 Retired
+          <span class="text-sm font-normal text-zinc-600">({{ retiredCharacters.length }})</span>
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <RouterLink v-for="c in retiredCharacters" :key="c.id" :to="`/characters/${c.id}`" class="card relative z-10 group cursor-pointer opacity-50">
+            <div class="relative z-10 flex gap-4 p-4">
+              <div class="shrink-0 w-16 h-20 rounded-lg overflow-hidden bg-white/[0.03] border border-white/5 flex items-center justify-center">
+                <img v-if="c.imageUrl" :src="c.imageUrl" :alt="c.name" class="w-full h-full object-cover grayscale" />
+                <span v-else class="text-2xl opacity-30">🧙</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h3 class="text-lg font-semibold text-zinc-500 truncate" style="font-family: Manrope, sans-serif">{{ c.name }}</h3>
+                <div class="flex items-center gap-2 mt-1 flex-wrap">
+                  <span v-if="c.race" class="text-sm text-zinc-600">{{ c.race }}</span>
+                  <span v-if="c.class" class="text-sm text-zinc-600">{{ c.class }}</span>
+                  <span class="badge bg-zinc-800 text-zinc-500">Lv {{ c.level }}</span>
+                  <span class="badge bg-zinc-800 text-zinc-500">Retired</span>
+                </div>
+                <div class="text-xs text-zinc-700 mt-1">🎮 {{ getOwnerName(c.userId) }}</div>
+                <p v-if="c.description" class="text-zinc-600 text-sm mt-1 line-clamp-1">{{ c.description }}</p>
               </div>
             </div>
           </RouterLink>
