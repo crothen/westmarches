@@ -152,6 +152,9 @@ async function handleEdit(data: Partial<SessionLog>) {
   try {
     await updateDoc(doc(db, 'sessions', session.value.id), {
       ...data,
+      startingPointType: data.startingPointType || null,
+      startingPointId: data.startingPointId || null,
+      startingPointName: data.startingPointName || null,
       date: Timestamp.fromDate(new Date(data.date as any)),
       updatedAt: Timestamp.now(),
     })
@@ -372,6 +375,12 @@ function canDeleteNote(note: SessionNote): boolean {
           <span class="text-[#ef233c] font-bold text-2xl" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
           <span class="text-zinc-600">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
           <span v-if="session.sessionLocationName" class="text-zinc-600 text-sm">📍 {{ session.sessionLocationName }}</span>
+          <span v-if="session.startingPointName" class="text-zinc-600 text-sm">
+            🚩 Starting:
+            <RouterLink v-if="session.startingPointType === 'location' && session.startingPointId" :to="`/locations/${session.startingPointId}`" class="text-zinc-400 hover:text-[#ef233c] transition-colors">{{ session.startingPointName }}</RouterLink>
+            <RouterLink v-else-if="session.startingPointType === 'feature' && session.startingPointId" :to="`/features/${session.startingPointId}`" class="text-zinc-400 hover:text-[#ef233c] transition-colors">{{ session.startingPointName }}</RouterLink>
+            <span v-else class="text-zinc-400">{{ session.startingPointName }}</span>
+          </span>
           <div class="flex items-center gap-2 ml-auto">
             <router-link :to="`/sessions/${session.id}/read`" class="btn-action !py-1.5">
               📖 Read

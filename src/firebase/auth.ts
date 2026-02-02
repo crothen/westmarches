@@ -2,6 +2,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInAnonymously as firebaseSignInAnonymously,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -21,12 +22,25 @@ export const registerWithEmail = (email: string, password: string) =>
 
 export const signInWithGoogle = () => signInWithPopup(auth, googleProvider)
 
+export const signInAnonymously = () => firebaseSignInAnonymously(auth)
+
 export const signOut = () => firebaseSignOut(auth)
 
 export const onAuth = (callback: (user: User | null) => void) =>
   onAuthStateChanged(auth, callback)
 
 export async function getOrCreateUserProfile(user: User): Promise<AppUser> {
+  // Anonymous users get a minimal guest profile — no Firestore write
+  if (user.isAnonymous) {
+    return {
+      uid: user.uid,
+      email: '',
+      displayName: 'Guest',
+      roles: ['guest'],
+      createdAt: new Date(),
+    }
+  }
+
   const userRef = doc(db, 'users', user.uid)
   const snap = await getDoc(userRef)
   if (snap.exists()) {

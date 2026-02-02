@@ -8,10 +8,10 @@ import { useAuthStore } from '../stores/auth'
 import LocationMapViewer from '../components/map/LocationMapViewer.vue'
 import HexMiniMap from '../components/map/HexMiniMap.vue'
 import MentionTextarea from '../components/common/MentionTextarea.vue'
-import MentionText from '../components/common/MentionText.vue'
 import { useTypeConfig } from '../composables/useTypeConfig'
 import TypeSelect from '../components/common/TypeSelect.vue'
-import type { CampaignLocation, LocationFeature, HexMarker, MarkerType } from '../types'
+import MentionText from '../components/common/MentionText.vue'
+import type { CampaignLocation, LocationFeature, HexMarker, MarkerType, SessionEntry, SessionLog, SessionEntryType } from '../types'
 
 const route = useRoute()
 const router = useRouter()
@@ -82,10 +82,70 @@ const newSubLoc = ref({ name: '', type: 'other' as any, description: '' })
 const subLocations = ref<CampaignLocation[]>([])
 const locationMarkers = ref<HexMarker[]>([])
 
+// Timeline entries state
+const timelineEntries = ref<SessionEntry[]>([])
+const timelineSessions = ref<Map<string, SessionLog>>(new Map())
+const loadingTimeline = ref(true)
+
+const entryTypeConfig: Record<SessionEntryType, { icon: string; label: string; color: string }> = {
+  interaction: { icon: '🤝', label: 'Interaction', color: 'bg-purple-500/15 text-purple-400' },
+  task: { icon: '✅', label: 'Task', color: 'bg-green-500/15 text-green-400' },
+  encounter: { icon: '⚔️', label: 'Encounter', color: 'bg-red-500/15 text-red-400' },
+  discovery: { icon: '🔍', label: 'Discovery', color: 'bg-blue-500/15 text-blue-400' },
+  travel: { icon: '🚶', label: 'Travel', color: 'bg-amber-500/15 text-amber-400' },
+  rest: { icon: '🏕️', label: 'Rest', color: 'bg-teal-500/15 text-teal-400' },
+  custom: { icon: '📝', label: 'Custom', color: 'bg-zinc-500/15 text-zinc-400' },
+}
+
+const entriesBySession = computed(() => {
+  const groups = new Map<string, SessionEntry[]>()
+  for (const entry of timelineEntries.value) {
+    if (!groups.has(entry.sessionId)) groups.set(entry.sessionId, [])
+    groups.get(entry.sessionId)!.push(entry)
+  }
+  const sorted = [...groups.entries()].sort((a, b) => {
+    const sa = timelineSessions.value.get(a[0])
+    const sb = timelineSessions.value.get(b[0])
+    const da = sa?.date ? ((sa.date as any).toDate ? (sa.date as any).toDate() : new Date(sa.date)) : new Date(0)
+    const db_ = sb?.date ? ((sb.date as any).toDate ? (sb.date as any).toDate() : new Date(sb.date)) : new Date(0)
+    return db_.getTime() - da.getTime()
+  })
+  return sorted
+})
+
+function formatSessionDate(date: any): string {
+  if (!date) return ''
+  const d = date.toDate ? date.toDate() : new Date(date)
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 const _unsubs: (() => void)[] = []
 
 onMounted(() => {
   const locationId = route.params.id as string
+
+  // Listen to timeline entries linked to this location
+  _unsubs.push(onSnapshot(
+    query(collection(db, 'sessionEntries'), where('linkedLocationIds', 'array-contains', locationId)),
+    (snap) => {
+      timelineEntries.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as SessionEntry))
+      const sessionIds = [...new Set(timelineEntries.value.map(e => e.sessionId))]
+      for (const sid of sessionIds) {
+        if (!timelineSessions.value.has(sid)) {
+          _unsubs.push(onSnapshot(doc(db, 'sessions', sid), (ssnap) => {
+            if (ssnap.exists()) {
+              timelineSessions.value.set(sid, { id: ssnap.id, ...ssnap.data() } as SessionLog)
+            }
+          }))
+        }
+      }
+      loadingTimeline.value = false
+    },
+    (err) => {
+      console.warn('Location timeline entries query error:', err.message)
+      loadingTimeline.value = false
+    }
+  ))
 
   // Listen to location document
   _unsubs.push(onSnapshot(doc(db, 'locations', locationId), (snap) => {
@@ -642,6 +702,44 @@ async function toggleFeatureHidden(feat: LocationFeature) {
                   <button v-if="auth.isDm || auth.isAdmin" @click.stop="toggleFeatureHidden(feat)" :class="['text-sm transition-colors', feat.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-amber-400']" :title="feat.hidden ? 'Show to players' : 'Hide from players'">{{ feat.hidden ? '🚫' : '👁️' }}</button>
                   <button v-if="auth.isAuthenticated" @click.stop="startEditFeature(feat)" class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors">✏️</button>
                   <button v-if="auth.isDm || auth.isAdmin" @click.stop="deleteFeature(feat)" class="text-zinc-600 hover:text-red-400 text-sm transition-colors">🗑️</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timeline Entries Section -->
+      <div class="mt-8 border-t border-white/[0.06] pt-6">
+        <h2 class="text-lg font-semibold text-[#ef233c] mb-4" style="font-family: Manrope, sans-serif">⏳ Timeline</h2>
+
+        <div v-if="loadingTimeline" class="text-zinc-500 text-sm animate-pulse">Loading timeline...</div>
+        <div v-else-if="entriesBySession.length === 0" class="text-zinc-600 text-sm">No session entries linked to this location yet.</div>
+
+        <div v-else class="space-y-6">
+          <div v-for="[sessionId, sessionEntries] in entriesBySession" :key="sessionId">
+            <div class="flex items-center gap-2 mb-2">
+              <RouterLink :to="`/sessions/${sessionId}`" class="text-sm font-semibold text-zinc-200 hover:text-[#ef233c] transition-colors" style="font-family: Manrope, sans-serif">
+                {{ timelineSessions.get(sessionId)?.title || 'Unknown Session' }}
+              </RouterLink>
+              <span v-if="timelineSessions.get(sessionId)?.sessionNumber" class="text-xs text-zinc-600">#{{ timelineSessions.get(sessionId)!.sessionNumber }}</span>
+              <span class="text-xs text-zinc-600">{{ formatSessionDate(timelineSessions.get(sessionId)?.date) }}</span>
+            </div>
+            <div class="space-y-2 pl-3 border-l-2 border-white/[0.06]">
+              <div v-for="entry in sessionEntries" :key="entry.id" class="card-flat p-3">
+                <div class="flex items-start gap-3">
+                  <div v-if="entry.imageUrl" class="shrink-0 w-16 h-16 rounded-lg overflow-hidden">
+                    <img :src="entry.imageUrl" class="w-full h-full object-cover" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span :class="['text-[0.65rem] px-1.5 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
+                        {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
+                      </span>
+                      <h3 class="text-sm font-semibold text-zinc-200 truncate" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
+                    </div>
+                    <p v-if="entry.description" class="text-xs text-zinc-500 line-clamp-2"><MentionText :text="entry.description" /></p>
+                  </div>
                 </div>
               </div>
             </div>

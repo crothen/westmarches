@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import TagInput from '../common/TagInput.vue'
-import type { SessionLog, SessionParticipant, Character, Npc } from '../../types'
+import type { SessionLog, SessionParticipant, Character, Npc, CampaignLocation, LocationFeature } from '../../types'
 
 interface LocationEntry {
   label: string
@@ -31,9 +31,16 @@ const selectedParticipants = ref<SessionParticipant[]>([])
 const selectedNpcIds = ref<string[]>([])
 const tags = ref<string[]>([])
 
+// Starting point state
+const startingPointType = ref<'location' | 'feature' | ''>('')
+const startingPointId = ref('')
+const startingPointSearch = ref('')
+
 // Lookup data
 const characters = ref<Character[]>([])
 const npcs = ref<Npc[]>([])
+const campaignLocations = ref<CampaignLocation[]>([])
+const campaignFeatures = ref<LocationFeature[]>([])
 const sessionLocations = ref<Record<string, LocationEntry>>({})
 const loading = ref(true)
 
@@ -51,6 +58,8 @@ watch(() => props.session, (s) => {
     selectedParticipants.value = [...(s.participants || [])]
     selectedNpcIds.value = [...(s.npcsEncountered || [])]
     tags.value = [...(s.tags || [])]
+    startingPointType.value = s.startingPointType || ''
+    startingPointId.value = s.startingPointId || ''
   }
 }, { immediate: true })
 
@@ -65,6 +74,18 @@ onMounted(() => {
   const npcsQ = query(collection(db, 'npcs'), orderBy('name'))
   _unsubs.push(onSnapshot(npcsQ, (snap) => {
     npcs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
+  }))
+
+  // Load campaign locations for starting point picker
+  const locsQ = query(collection(db, 'locations'), orderBy('name'))
+  _unsubs.push(onSnapshot(locsQ, (snap) => {
+    campaignLocations.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
+  }))
+
+  // Load features for starting point picker
+  const featsQ = query(collection(db, 'features'), orderBy('name'))
+  _unsubs.push(onSnapshot(featsQ, (snap) => {
+    campaignFeatures.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
   }))
 
   // Load session locations config
@@ -85,6 +106,33 @@ const sortedLocations = computed(() => {
     .map(([key, entry]) => ({ key, label: entry.label }))
     .sort((a, b) => a.label.localeCompare(b.label))
 })
+
+// Starting point filtered options
+const filteredStartingPoints = computed(() => {
+  const q = startingPointSearch.value.toLowerCase().trim()
+  if (startingPointType.value === 'location') {
+    const locs = campaignLocations.value.filter(l => !l.hidden)
+    if (!q) return locs.map(l => ({ id: l.id, name: l.name }))
+    return locs.filter(l => l.name.toLowerCase().includes(q)).map(l => ({ id: l.id, name: l.name }))
+  }
+  if (startingPointType.value === 'feature') {
+    const feats = campaignFeatures.value.filter(f => !f.hidden)
+    if (!q) return feats.map(f => ({ id: f.id, name: f.name }))
+    return feats.filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, name: f.name }))
+  }
+  return []
+})
+
+function getStartingPointName(): string {
+  if (!startingPointId.value || !startingPointType.value) return ''
+  if (startingPointType.value === 'location') {
+    return campaignLocations.value.find(l => l.id === startingPointId.value)?.name || ''
+  }
+  if (startingPointType.value === 'feature') {
+    return campaignFeatures.value.find(f => f.id === startingPointId.value)?.name || ''
+  }
+  return ''
+}
 
 const activeCharacters = computed(() => characters.value.filter(c => c.isActive))
 
@@ -129,12 +177,17 @@ function handleSubmit() {
     ? sessionLocations.value[sessionLocationId.value]?.label || ''
     : ''
 
+  const spName = getStartingPointName()
+
   emit('submit', {
     sessionNumber: sessionNumber.value,
     title: title.value.trim(),
     date: new Date(date.value + 'T12:00:00') as any,
     sessionLocationId: sessionLocationId.value || undefined,
     sessionLocationName: locationName || undefined,
+    startingPointType: (startingPointType.value as 'location' | 'feature') || undefined,
+    startingPointId: startingPointId.value || undefined,
+    startingPointName: spName || undefined,
     summary: summary.value.trim(),
     participants: selectedParticipants.value,
     npcsEncountered: selectedNpcIds.value,
@@ -182,6 +235,40 @@ const showNpcs = ref(true)
           <option value="">— Select —</option>
           <option v-for="loc in sortedLocations" :key="loc.key" :value="loc.key">{{ loc.label }}</option>
         </select>
+      </div>
+    </div>
+
+    <!-- Starting Point -->
+    <div>
+      <label class="text-sm font-semibold text-zinc-400">Starting Point</label>
+      <div class="flex gap-2 mt-1">
+        <select v-model="startingPointType" class="input !w-auto" @change="startingPointId = ''; startingPointSearch = ''">
+          <option value="">— None —</option>
+          <option value="location">🏰 Location</option>
+          <option value="feature">📌 POI</option>
+        </select>
+        <div v-if="startingPointType" class="flex-1 relative">
+          <input
+            v-model="startingPointSearch"
+            type="text"
+            :placeholder="startingPointType === 'location' ? 'Search locations...' : 'Search POIs...'"
+            class="input w-full"
+          />
+          <!-- Selected indicator -->
+          <div v-if="startingPointId && getStartingPointName()" class="mt-1 flex items-center gap-2">
+            <span class="text-xs text-zinc-400">✓ {{ getStartingPointName() }}</span>
+            <button @click="startingPointId = ''" class="text-zinc-600 hover:text-red-400 text-xs transition-colors" type="button">✕</button>
+          </div>
+          <!-- Dropdown -->
+          <div v-if="startingPointSearch && filteredStartingPoints.length > 0" class="absolute z-30 top-full left-0 right-0 mt-1 bg-zinc-900 border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+            <button
+              v-for="opt in filteredStartingPoints.slice(0, 20)" :key="opt.id"
+              @click="startingPointId = opt.id; startingPointSearch = ''"
+              :class="['w-full text-left px-3 py-2 text-sm hover:bg-white/5 transition-colors', startingPointId === opt.id ? 'text-[#ef233c]' : 'text-zinc-300']"
+              type="button"
+            >{{ opt.name }}</button>
+          </div>
+        </div>
       </div>
     </div>
 

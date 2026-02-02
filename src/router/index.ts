@@ -12,7 +12,7 @@ const routes = [
   { path: '/features', name: 'features', component: () => import('../views/FeaturesView.vue'), meta: { auth: true } },
   { path: '/features/:id', name: 'feature-detail', component: () => import('../views/FeatureDetailView.vue'), meta: { auth: true } },
   { path: '/map', name: 'map', component: () => import('../views/MapView.vue'), meta: { auth: true } },
-  { path: '/inventory', name: 'inventory', component: () => import('../views/InventoryView.vue'), meta: { auth: true } },
+  { path: '/inventory', name: 'inventory', component: () => import('../views/InventoryView.vue'), meta: { auth: true, noGuest: true } },
   { path: '/npcs', name: 'npcs', component: () => import('../views/NpcsView.vue'), meta: { auth: true } },
   { path: '/npcs/:id', name: 'npc-detail', component: () => import('../views/NpcDetailView.vue'), meta: { auth: true } },
   { path: '/organizations', name: 'organizations', component: () => import('../views/OrganizationsView.vue'), meta: { auth: true } },
@@ -21,7 +21,7 @@ const routes = [
   { path: '/sessions/:id/read', name: 'session-reader', component: () => import('../views/SessionReaderView.vue'), meta: { auth: true } },
   { path: '/missions', name: 'missions', component: () => import('../views/MissionsView.vue'), meta: { auth: true } },
   { path: '/schedule', name: 'schedule', component: () => import('../views/ScheduleView.vue'), meta: { auth: true } },
-  { path: '/my-notes', name: 'my-notes', component: () => import('../views/MyNotesView.vue'), meta: { auth: true } },
+  { path: '/my-notes', name: 'my-notes', component: () => import('../views/MyNotesView.vue'), meta: { auth: true, noGuest: true } },
   { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/admin/users', name: 'admin-users', component: () => import('../views/AdminUsersView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/admin/markers', name: 'admin-markers', component: () => import('../views/AdminMarkersView.vue'), meta: { auth: true, role: 'admin' } },
@@ -46,7 +46,10 @@ router.beforeEach(async (to, _from, next) => {
   if (to.meta.auth && !authStore.isAuthenticated) {
     return next({ name: 'login' })
   }
-  if (to.meta.guest && authStore.isAuthenticated) {
+  if (to.meta.noGuest && authStore.isGuest) {
+    return next({ name: 'home' })
+  }
+  if (to.meta.guest && authStore.isAuthenticated && !authStore.isGuest) {
     return next({ name: 'home' })
   }
   if (to.meta.role === 'admin' && !authStore.isAdmin) {

@@ -258,30 +258,31 @@ async function deleteFeature(feat: LocationFeature) {
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
       <div v-for="feat in filteredFeatures" :key="feat.id" :class="['card relative z-10', feat.hidden ? '!border-amber-500/40 !border-dashed !border-2' : '']">
-        <div class="relative z-10 p-5">
+        <div class="relative z-10">
           <!-- Hidden banner -->
           <div v-if="feat.hidden" class="absolute top-0 left-0 right-0 bg-amber-500/20 border-b-2 border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-widest text-center py-1.5 z-10 rounded-t-xl" style="font-family: Manrope, sans-serif">🚫 Hidden from players</div>
-          <div :class="feat.hidden ? 'mt-5' : ''">
-            <div class="flex items-start justify-between gap-2 mb-1">
-              <div class="flex items-center gap-2 min-w-0">
+          <!-- Admin action buttons (outside the link so they remain clickable) -->
+          <div v-if="auth.isDm || auth.isAdmin" class="absolute top-2 right-2 flex gap-1 z-20" :class="feat.hidden ? 'top-9' : ''">
+            <button @click.prevent="toggleHidden(feat)" :class="['text-zinc-600 hover:text-amber-400 rounded-md w-8 h-8 flex items-center justify-center text-sm transition-colors', feat.hidden ? '!text-amber-400' : '']" :title="feat.hidden ? 'Show to players' : 'Hide from players'">{{ feat.hidden ? '🚫' : '👁️' }}</button>
+            <button @click.prevent="startEdit(feat)" class="text-zinc-600 hover:text-zinc-300 rounded-md w-8 h-8 flex items-center justify-center text-sm transition-colors" title="Edit">✏️</button>
+            <button @click.prevent="deleteFeature(feat)" class="text-zinc-600 hover:text-red-400 rounded-md w-8 h-8 flex items-center justify-center text-sm transition-colors" title="Delete">🗑️</button>
+          </div>
+          <RouterLink :to="`/features/${feat.id}`" class="block p-5 hover:bg-white/[0.02] transition-colors rounded-xl">
+            <div :class="feat.hidden ? 'mt-5' : ''">
+              <div class="flex items-center gap-2 min-w-0 mb-1 pr-24">
                 <img :src="getIconUrl(feat.type)" class="w-6 h-6 object-contain" :alt="feat.type" />
                 <h3 class="text-base font-semibold text-white truncate" style="font-family: Manrope, sans-serif">{{ feat.name }}</h3>
               </div>
-              <div v-if="auth.isDm || auth.isAdmin" class="flex gap-1 shrink-0">
-                <button @click="toggleHidden(feat)" :class="['text-zinc-600 hover:text-amber-400 rounded-md w-8 h-8 flex items-center justify-center text-sm transition-colors', feat.hidden ? '!text-amber-400' : '']" :title="feat.hidden ? 'Show to players' : 'Hide from players'">{{ feat.hidden ? '🚫' : '👁️' }}</button>
-                <button @click="startEdit(feat)" class="text-zinc-600 hover:text-zinc-300 rounded-md w-8 h-8 flex items-center justify-center text-sm transition-colors" title="Edit">✏️</button>
-                <button @click="deleteFeature(feat)" class="text-zinc-600 hover:text-red-400 rounded-md w-8 h-8 flex items-center justify-center text-sm transition-colors" title="Delete">🗑️</button>
+              <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <span class="badge bg-white/5 text-zinc-500">{{ feat.type }}</span>
+                <span v-if="feat.locationId" class="text-xs text-zinc-500" @click.prevent>
+                  <RouterLink :to="`/locations/${feat.locationId}`" class="hover:text-[#ef233c] transition-colors">in {{ getLocationName(feat.locationId) }}</RouterLink>
+                </span>
+                <span v-if="getFeatureHexKey(feat)" class="text-xs text-zinc-600 cursor-default" @click.prevent @mouseenter="showMiniMap(getFeatureHexKey(feat)!, $event)" @mouseleave="hideMiniMap" @click.prevent.stop="toggleMiniMap(getFeatureHexKey(feat)!, $event)">📍 Hex {{ getFeatureHexKey(feat) }}</span>
               </div>
+              <p class="text-sm text-zinc-500">{{ feat.description }}</p>
             </div>
-            <div class="flex items-center gap-2 mb-2 flex-wrap">
-              <span class="badge bg-white/5 text-zinc-500">{{ feat.type }}</span>
-              <RouterLink v-if="feat.locationId" :to="`/locations/${feat.locationId}`" class="text-xs text-zinc-500 hover:text-[#ef233c] transition-colors">
-                in {{ getLocationName(feat.locationId) }}
-              </RouterLink>
-              <span v-if="getFeatureHexKey(feat)" class="text-xs text-zinc-600 cursor-default" @mouseenter="showMiniMap(getFeatureHexKey(feat)!, $event)" @mouseleave="hideMiniMap" @click.prevent.stop="toggleMiniMap(getFeatureHexKey(feat)!, $event)">📍 Hex {{ getFeatureHexKey(feat) }}</span>
-            </div>
-            <p class="text-sm text-zinc-500">{{ feat.description }}</p>
-          </div>
+          </RouterLink>
         </div>
       </div>
     </div>

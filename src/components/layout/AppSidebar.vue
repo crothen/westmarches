@@ -16,7 +16,7 @@ interface NavItem {
   to: string
   label: string
   icon: string
-  show: 'all' | 'dm' | 'admin'
+  show: 'all' | 'player' | 'dm' | 'admin'
   sub?: boolean
 }
 
@@ -59,8 +59,8 @@ const sections: NavSection[] = [
     items: [
       { to: '/sessions', label: 'Sessions', icon: '📖', show: 'all' },
       { to: '/schedule', label: 'Schedule', icon: '📅', show: 'all' },
-      { to: '/inventory', label: 'Inventory', icon: '🎒', show: 'all' },
-      { to: '/my-notes', label: 'My Notes', icon: '📝', show: 'all' },
+      { to: '/inventory', label: 'Inventory', icon: '🎒', show: 'player' },
+      { to: '/my-notes', label: 'My Notes', icon: '📝', show: 'player' },
     ]
   },
   {
@@ -78,6 +78,7 @@ const sections: NavSection[] = [
 
 function isVisible(item: NavItem): boolean {
   if (item.show === 'all') return true
+  if (item.show === 'player') return !auth.isGuest
   if (item.show === 'dm') return auth.isDm || auth.isAdmin
   if (item.show === 'admin') return auth.isAdmin
   return false
@@ -127,7 +128,11 @@ function hasVisibleItems(section: NavSection): boolean {
 
     <!-- User controls at bottom -->
     <div class="shrink-0 border-t border-white/[0.06] p-3">
-      <div class="px-2 space-y-2">
+      <div v-if="auth.isGuest" class="px-2 space-y-2">
+        <div class="text-sm text-zinc-500 font-medium">👁️ Guest Mode</div>
+        <RouterLink to="/login" class="text-[#ef233c] hover:text-red-400 text-xs transition-colors" @click="handleLogout">Sign In</RouterLink>
+      </div>
+      <div v-else class="px-2 space-y-2">
         <div class="text-sm text-zinc-400 font-medium truncate">{{ auth.appUser?.displayName }}</div>
         <div class="flex flex-wrap gap-1">
           <span v-for="r in auth.roles" :key="r" class="text-[0.55rem] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest" :class="r === 'admin' ? 'bg-[#ef233c]/10 text-[#ef233c]' : r === 'dm' ? 'bg-purple-500/10 text-purple-400' : 'bg-white/5 text-zinc-400'" style="font-family: Manrope, sans-serif">{{ r }}</span>

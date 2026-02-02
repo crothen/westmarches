@@ -12,10 +12,11 @@ export const useAuthStore = defineStore('auth', () => {
   const ready = new Promise<void>(r => { resolveReady = r })
 
   const isAuthenticated = computed(() => !!firebaseUser.value)
+  const isGuest = computed(() => !!firebaseUser.value?.isAnonymous)
   const roles = computed(() => appUser.value?.roles || ['player'])
   const isAdmin = computed(() => roles.value.includes('admin'))
   const isDm = computed(() => roles.value.includes('dm'))
-  const isPlayer = computed(() => roles.value.includes('player'))
+  const isPlayer = computed(() => roles.value.includes('player') && !isGuest.value)
   /** Highest privilege role for display purposes */
   const primaryRole = computed(() => {
     if (roles.value.includes('admin')) return 'admin'
@@ -53,5 +54,5 @@ export const useAuthStore = defineStore('auth', () => {
     appUser.value = null
   }
 
-  return { firebaseUser, appUser, loading, isAuthenticated, isAdmin, isDm, isPlayer, roles, primaryRole, role, hasRole, init, waitForAuth, logout }
+  return { firebaseUser, appUser, loading, isAuthenticated, isGuest, isAdmin, isDm, isPlayer, roles, primaryRole, role, hasRole, init, waitForAuth, logout }
 })
