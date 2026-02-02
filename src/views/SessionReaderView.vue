@@ -30,10 +30,10 @@ const fonts = [
   { key: 'fraktur', label: 'UnifrakturMaguntia', family: "'UnifrakturMaguntia', serif", importUrl: 'https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&display=swap' },
   { key: 'inter', label: 'Inter', family: "'Inter', sans-serif", importUrl: '' },
 ]
-const selectedFont = ref('crimson')
+const selectedFont = ref('meow')
 
 const currentFontFamily = computed(() => {
-  return fonts.find(f => f.key === selectedFont.value)?.family || "'Crimson Text', serif"
+  return fonts.find(f => f.key === selectedFont.value)?.family || "'Meow Script', cursive"
 })
 
 const _unsubs: (() => void)[] = []
