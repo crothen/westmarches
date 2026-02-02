@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import { useAuthStore } from '../../stores/auth'
+import { useRouter } from 'vue-router'
 
 defineProps<{ open: boolean }>()
 defineEmits<{ close: [] }>()
 const auth = useAuthStore()
+const router = useRouter()
+
+async function handleLogout() {
+  await auth.logout()
+  router.push('/login')
+}
 
 interface NavItem {
   to: string
@@ -86,13 +93,13 @@ function hasVisibleItems(section: NavSection): boolean {
 
   <aside
     :class="[
-      'w-52 min-h-[calc(100vh-72px)] border-r border-white/[0.06]',
+      'w-52 h-[calc(100vh-49px)] border-r border-white/[0.06]',
       'bg-black/40 backdrop-blur-xl',
-      'fixed lg:sticky lg:top-[72px] lg:self-start z-30 transition-transform duration-200 lg:translate-x-0',
+      'fixed lg:sticky lg:top-[49px] lg:self-start z-30 transition-transform duration-200 lg:translate-x-0 flex flex-col',
       open ? 'translate-x-0' : '-translate-x-full'
     ]"
   >
-    <nav class="p-3 mt-1">
+    <nav class="p-3 mt-1 flex-1 overflow-y-auto">
       <template v-for="(section, si) in sections" :key="si">
         <div v-if="hasVisibleItems(section)">
           <!-- Section title -->
@@ -117,5 +124,16 @@ function hasVisibleItems(section: NavSection): boolean {
         </div>
       </template>
     </nav>
+
+    <!-- User controls at bottom -->
+    <div class="shrink-0 border-t border-white/[0.06] p-3 mt-[50px]">
+      <div class="px-2 space-y-2">
+        <div class="text-sm text-zinc-400 font-medium truncate">{{ auth.appUser?.displayName }}</div>
+        <div class="flex flex-wrap gap-1">
+          <span v-for="r in auth.roles" :key="r" class="text-[0.55rem] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest" :class="r === 'admin' ? 'bg-[#ef233c]/10 text-[#ef233c]' : r === 'dm' ? 'bg-purple-500/10 text-purple-400' : 'bg-white/5 text-zinc-400'" style="font-family: Manrope, sans-serif">{{ r }}</span>
+        </div>
+        <button @click="handleLogout" class="text-zinc-600 hover:text-white text-xs transition-colors">Logout</button>
+      </div>
+    </div>
   </aside>
 </template>

@@ -21,7 +21,7 @@ const sidebarOpen = ref(false)
 
     <div class="relative z-10">
       <AppHeader @toggle-sidebar="sidebarOpen = !sidebarOpen" />
-      <div class="flex pt-[72px]">
+      <div class="flex pt-[49px]">
         <AppSidebar v-if="auth.isAuthenticated" :open="sidebarOpen" @close="sidebarOpen = false" />
         <main class="flex-1 p-6 lg:p-8 min-w-0">
           <slot />
