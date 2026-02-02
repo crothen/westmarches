@@ -334,7 +334,7 @@ onUnmounted(() => {
             <div class="flex-1 flex flex-col justify-center px-10 sm:px-14 py-6" :style="{ fontFamily: currentFontFamily }">
               <div class="space-y-4">
                 <!-- Session number as handwritten label -->
-                <div class="text-amber-950 text-base tracking-[0.15em] uppercase" style="font-family: Manrope, sans-serif">
+                <div class="journal-text tracking-[0.15em] uppercase" :style="{ fontFamily: currentFontFamily }">
                   Session {{ session.sessionNumber }}
                 </div>
 
@@ -355,7 +355,7 @@ onUnmounted(() => {
 
                 <!-- Adventurers as tilde-separated list -->
                 <div v-if="session.participants?.length" :style="{ fontFamily: currentFontFamily }">
-                  <div class="text-amber-950 text-base italic mb-1">Adventurers</div>
+                  <div class="journal-text underline mb-1" :style="{ fontFamily: currentFontFamily }">Adventurers</div>
                   <div class="journal-text">
                     <template v-for="(p, i) in session.participants" :key="p.characterId">
                       {{ p.characterName }}<template v-if="i < session.participants.length - 1"> ~ </template>
@@ -384,7 +384,7 @@ onUnmounted(() => {
 
             <div class="flex-1 px-10 sm:px-14 py-6" :style="{ fontFamily: currentFontFamily }">
               <!-- Type label -->
-              <div class="text-amber-950 text-base italic mb-1">
+              <div class="journal-text underline mb-1" :style="{ fontFamily: currentFontFamily }">
                 {{ entryTypeLabels[currentEntry.type] || 'Note' }}
               </div>
 
@@ -408,7 +408,7 @@ onUnmounted(() => {
 
               <!-- People of Interest -->
               <div v-if="currentEntry.npcIds?.length" class="mt-auto pt-4 border-t border-amber-900/10">
-                <div class="text-amber-950 text-base italic mb-1">People of Interest</div>
+                <div class="journal-text underline mb-1" :style="{ fontFamily: currentFontFamily }">People of Interest</div>
                 <div class="journal-text">
                   <template v-for="(id, i) in currentEntry.npcIds" :key="id">
                     {{ getNpcName(id) }}<template v-if="i < currentEntry.npcIds.length - 1"> ~ </template>
