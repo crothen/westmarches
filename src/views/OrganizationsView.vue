@@ -4,14 +4,14 @@ import { collection, query, orderBy, doc, addDoc, updateDoc, deleteDoc, onSnapsh
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import NpcLink from '../components/common/NpcLink.vue'
-import type { Organization, OrgMember, OrgRank, Npc } from '../types'
+import type { Organization, OrgMember, OrgRank, Npc, Character } from '../types'
 
 const auth = useAuthStore()
 
 const orgs = ref<Organization[]>([])
 const npcs = ref<Npc[]>([])
+const characters = ref<Character[]>([])
 const loading = ref(true)
-const expandedOrg = ref<string | null>(null)
 const searchQuery = ref('')
 
 // Create/Edit form state
@@ -23,7 +23,7 @@ const saving = ref(false)
 // Add member state
 const addingMemberOrg = ref<string | null>(null)
 const memberSearch = ref('')
-const selectedMemberType = ref<'npc' | 'player'>('npc')
+const memberEntityTab = ref<'npc' | 'character'>('npc')
 const selectedRank = ref<OrgRank>('member')
 
 const RANK_ORDER: Record<OrgRank, number> = { leader: 0, subleader: 1, officer: 2, underofficer: 3, member: 4 }
@@ -44,6 +44,10 @@ onMounted(() => {
   _unsubs.push(onSnapshot(query(collection(db, 'npcs'), orderBy('name', 'asc')), (snap) => {
     npcs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
   }, (e) => console.error('Failed to load NPCs:', e)))
+
+  _unsubs.push(onSnapshot(query(collection(db, 'characters'), orderBy('name', 'asc')), (snap) => {
+    characters.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Character))
+  }, (e) => console.error('Failed to load characters:', e)))
 })
 
 onUnmounted(() => _unsubs.forEach(fn => fn()))
@@ -58,6 +62,10 @@ const filteredOrgs = computed(() => {
 
 function getNpcById(id: string): Npc | undefined {
   return npcs.value.find(n => n.id === id)
+}
+
+function getCharacterById(id: string): Character | undefined {
+  return characters.value.find(c => c.id === id)
 }
 
 function sortedMembers(members: OrgMember[]): OrgMember[] {
@@ -154,7 +162,7 @@ function startAddMember(orgId: string) {
   addingMemberOrg.value = orgId
   memberSearch.value = ''
   selectedRank.value = 'member'
-  selectedMemberType.value = 'npc'
+  memberEntityTab.value = 'npc'
 }
 
 const filteredNpcsForAdd = computed(() => {
@@ -170,7 +178,20 @@ const filteredNpcsForAdd = computed(() => {
   return candidates.slice(0, 10)
 })
 
-async function addMember(orgId: string, npc: Npc) {
+const filteredCharsForAdd = computed(() => {
+  if (!addingMemberOrg.value) return []
+  const org = orgs.value.find(o => o.id === addingMemberOrg.value)
+  if (!org) return []
+  const existingIds = new Set((org.members || []).filter(m => m.entityType === 'player').map(m => m.entityId))
+  let candidates = characters.value.filter(c => !existingIds.has(c.id))
+  if (memberSearch.value) {
+    const q = memberSearch.value.toLowerCase()
+    candidates = candidates.filter(c => c.name.toLowerCase().includes(q))
+  }
+  return candidates.slice(0, 10)
+})
+
+async function addNpcMember(orgId: string, npc: Npc) {
   const org = orgs.value.find(o => o.id === orgId)
   if (!org) return
 
@@ -191,6 +212,26 @@ async function addMember(orgId: string, npc: Npc) {
     npc.organizationIds = npcOrgIds
   } catch (e) {
     console.error('Failed to add member:', e)
+  }
+}
+
+async function addCharacterMember(orgId: string, character: Character) {
+  const org = orgs.value.find(o => o.id === orgId)
+  if (!org) return
+
+  const newMember: OrgMember = {
+    entityType: 'player',
+    entityId: character.id,
+    name: character.name,
+    rank: selectedRank.value,
+  }
+
+  const members = [...(org.members || []), newMember]
+  try {
+    await updateDoc(doc(db, 'organizations', orgId), { members, updatedAt: new Date() })
+    org.members = members
+  } catch (e) {
+    console.error('Failed to add character member:', e)
   }
 }
 
@@ -234,10 +275,6 @@ async function changeMemberRank(orgId: string, member: OrgMember, newRank: OrgRa
     console.error('Failed to change rank:', e)
   }
 }
-
-function toggleExpand(id: string) {
-  expandedOrg.value = expandedOrg.value === id ? null : id
-}
 </script>
 
 <template>
@@ -262,7 +299,8 @@ function toggleExpand(id: string) {
         <input v-model="form.name" class="input w-full" placeholder="Organization name" />
         <textarea v-model="form.description" class="input w-full" rows="3" placeholder="Description..." />
         <div class="flex gap-2">
-          <button @click="saveOrg" :disabled="saving || !form.name.trim()" class="btn text-sm">
+          <button @click="saveOrg" :disabled="saving || !form.name.trim()" class="btn text-sm flex items-center gap-2">
+            <span v-if="saving" class="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
             {{ saving ? 'Saving...' : (editingOrg ? 'Save' : 'Create') }}
           </button>
           <button @click="cancelForm" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
@@ -279,12 +317,11 @@ function toggleExpand(id: string) {
       </div>
     </div>
 
-    <!-- Org cards -->
+    <!-- Org cards — always expanded -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       <div
         v-for="org in filteredOrgs" :key="org.id"
-        class="card relative z-10 cursor-pointer"
-        @click="toggleExpand(org.id)"
+        class="card relative z-10"
       >
         <div class="relative z-10 p-5">
           <!-- Header -->
@@ -293,31 +330,17 @@ function toggleExpand(id: string) {
               <h3 class="text-base font-semibold text-white" style="font-family: Manrope, sans-serif">{{ org.name }}</h3>
               <span class="text-zinc-600 text-xs">{{ (org.members || []).length }} members</span>
             </div>
-            <div class="flex items-center gap-2" v-if="canManage" @click.stop>
+            <div class="flex items-center gap-2" v-if="canManage">
               <button @click="startEdit(org)" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">✏️</button>
               <button @click="deleteOrg(org)" class="text-zinc-600 hover:text-red-400 text-xs transition-colors">🗑️</button>
             </div>
           </div>
 
           <!-- Description -->
-          <p :class="['text-sm', expandedOrg === org.id ? 'text-zinc-300' : 'text-zinc-500 line-clamp-2']">
-            {{ org.description }}
-          </p>
+          <p class="text-sm text-zinc-300">{{ org.description }}</p>
 
-          <!-- Member preview (collapsed) -->
-          <div v-if="expandedOrg !== org.id && (org.members || []).length > 0" class="flex flex-wrap gap-1.5 mt-3">
-            <template v-for="member in sortedMembers(org.members || []).slice(0, 5)" :key="member.entityId">
-              <span class="text-[0.65rem] px-2 py-0.5 rounded-full" :class="getRankBadgeClass(member.rank)">
-                {{ member.name }}
-              </span>
-            </template>
-            <span v-if="(org.members || []).length > 5" class="text-[0.65rem] text-zinc-600">
-              +{{ (org.members || []).length - 5 }} more
-            </span>
-          </div>
-
-          <!-- Expanded: full member list -->
-          <div v-if="expandedOrg === org.id" class="mt-4 pt-3 border-t border-white/[0.06]">
+          <!-- Full member list (always shown) -->
+          <div class="mt-4 pt-3 border-t border-white/[0.06]">
             <h4 class="label text-xs mb-3">Members</h4>
 
             <div v-if="(org.members || []).length === 0" class="text-zinc-600 text-sm">No members yet.</div>
@@ -326,10 +349,9 @@ function toggleExpand(id: string) {
               <div
                 v-for="member in sortedMembers(org.members || [])" :key="member.entityId"
                 class="flex items-center justify-between py-1.5 px-3 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
-                @click.stop
               >
                 <div class="flex items-center gap-2.5">
-                  <!-- NPC portrait thumbnail -->
+                  <!-- Portrait / icon -->
                   <template v-if="member.entityType === 'npc'">
                     <img
                       v-if="getNpcById(member.entityId)?.imageUrl"
@@ -338,14 +360,25 @@ function toggleExpand(id: string) {
                     />
                     <div v-else class="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 text-xs">👤</div>
                   </template>
-                  <div v-else class="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 text-xs">🧙</div>
+                  <template v-else>
+                    <img
+                      v-if="getCharacterById(member.entityId)?.imageUrl"
+                      :src="getCharacterById(member.entityId)!.imageUrl"
+                      class="w-7 h-7 rounded-full object-cover"
+                    />
+                    <div v-else class="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 text-xs">🧙</div>
+                  </template>
 
                   <NpcLink
                     v-if="member.entityType === 'npc'"
                     :npcId="member.entityId"
                     :name="member.name"
                   />
-                  <span v-else class="text-sm text-zinc-200">{{ member.name }}</span>
+                  <RouterLink
+                    v-else
+                    :to="'/characters/' + member.entityId"
+                    class="text-sm text-zinc-300 hover:text-[#ef233c] transition-colors"
+                  >{{ member.name }}</RouterLink>
 
                   <span class="text-[0.6rem] px-2 py-0.5 rounded-full" :class="getRankBadgeClass(member.rank)">
                     {{ RANK_LABELS[member.rank] }}
@@ -357,12 +390,11 @@ function toggleExpand(id: string) {
                     :value="member.rank"
                     @change="(e: any) => changeMemberRank(org.id, member, e.target.value)"
                     class="input !py-0.5 !px-2 !text-[0.65rem] !w-auto"
-                    @click.stop
                   >
                     <option v-for="r in ALL_RANKS" :key="r" :value="r">{{ RANK_LABELS[r] }}</option>
                   </select>
                   <button
-                    @click.stop="removeMember(org.id, member)"
+                    @click="removeMember(org.id, member)"
                     class="text-zinc-700 hover:text-red-400 text-xs transition-colors"
                   >✕</button>
                 </div>
@@ -370,31 +402,65 @@ function toggleExpand(id: string) {
             </div>
 
             <!-- Add member -->
-            <div v-if="canManage" class="mt-3 pt-3 border-t border-white/[0.06]" @click.stop>
+            <div v-if="canManage" class="mt-3 pt-3 border-t border-white/[0.06]">
               <div v-if="addingMemberOrg === org.id" class="space-y-2">
+                <!-- NPC / Character toggle tabs -->
+                <div class="flex gap-1 mb-2">
+                  <button
+                    @click="memberEntityTab = 'npc'; memberSearch = ''"
+                    :class="['px-3 py-1 rounded-lg text-xs font-medium transition-all', memberEntityTab === 'npc' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']"
+                  >👤 NPC</button>
+                  <button
+                    @click="memberEntityTab = 'character'; memberSearch = ''"
+                    :class="['px-3 py-1 rounded-lg text-xs font-medium transition-all', memberEntityTab === 'character' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']"
+                  >🧙 Character</button>
+                </div>
+
                 <div class="flex gap-2">
                   <input
                     v-model="memberSearch"
                     class="input flex-1 !text-sm"
-                    placeholder="Search NPCs to add..."
+                    :placeholder="memberEntityTab === 'npc' ? 'Search NPCs to add...' : 'Search characters to add...'"
                   />
                   <select v-model="selectedRank" class="input !text-xs !w-auto">
                     <option v-for="r in ALL_RANKS" :key="r" :value="r">{{ RANK_LABELS[r] }}</option>
                   </select>
                 </div>
-                <div v-if="filteredNpcsForAdd.length > 0" class="space-y-1 max-h-40 overflow-y-auto">
-                  <button
-                    v-for="npc in filteredNpcsForAdd" :key="npc.id"
-                    @click="addMember(org.id, npc)"
-                    class="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors text-left"
-                  >
-                    <img v-if="npc.imageUrl" :src="npc.imageUrl" class="w-6 h-6 rounded-full object-cover" />
-                    <div v-else class="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 text-[0.6rem]">👤</div>
-                    <span class="text-sm text-zinc-300">{{ npc.name }}</span>
-                    <span class="text-[0.6rem] text-zinc-600">{{ npc.race }}</span>
-                  </button>
-                </div>
-                <div v-else-if="memberSearch" class="text-zinc-600 text-xs px-1">No matching NPCs found.</div>
+
+                <!-- NPC list -->
+                <template v-if="memberEntityTab === 'npc'">
+                  <div v-if="filteredNpcsForAdd.length > 0" class="space-y-1 max-h-40 overflow-y-auto">
+                    <button
+                      v-for="npc in filteredNpcsForAdd" :key="npc.id"
+                      @click="addNpcMember(org.id, npc)"
+                      class="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors text-left"
+                    >
+                      <img v-if="npc.imageUrl" :src="npc.imageUrl" class="w-6 h-6 rounded-full object-cover" />
+                      <div v-else class="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 text-[0.6rem]">👤</div>
+                      <span class="text-sm text-zinc-300">{{ npc.name }}</span>
+                      <span class="text-[0.6rem] text-zinc-600">{{ npc.race }}</span>
+                    </button>
+                  </div>
+                  <div v-else-if="memberSearch" class="text-zinc-600 text-xs px-1">No matching NPCs found.</div>
+                </template>
+
+                <!-- Character list -->
+                <template v-if="memberEntityTab === 'character'">
+                  <div v-if="filteredCharsForAdd.length > 0" class="space-y-1 max-h-40 overflow-y-auto">
+                    <button
+                      v-for="char in filteredCharsForAdd" :key="char.id"
+                      @click="addCharacterMember(org.id, char)"
+                      class="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors text-left"
+                    >
+                      <img v-if="char.imageUrl" :src="char.imageUrl" class="w-6 h-6 rounded-full object-cover" />
+                      <div v-else class="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-zinc-600 text-[0.6rem]">🧙</div>
+                      <span class="text-sm text-zinc-300">{{ char.name }}</span>
+                      <span class="text-[0.6rem] text-zinc-600">{{ char.race }} {{ char.class }}</span>
+                    </button>
+                  </div>
+                  <div v-else-if="memberSearch" class="text-zinc-600 text-xs px-1">No matching characters found.</div>
+                </template>
+
                 <button @click="addingMemberOrg = null" class="text-xs text-zinc-600 hover:text-zinc-400">Close</button>
               </div>
               <button v-else @click="startAddMember(org.id)" class="btn !text-[0.65rem] !py-1.5 !px-3 !bg-white/5 !text-zinc-400">
