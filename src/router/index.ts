@@ -22,6 +22,7 @@ const routes = [
   { path: '/missions', name: 'missions', component: () => import('../views/MissionsView.vue'), meta: { auth: true } },
   { path: '/schedule', name: 'schedule', component: () => import('../views/ScheduleView.vue'), meta: { auth: true, noGuest: true } },
   { path: '/my-notes', name: 'my-notes', component: () => import('../views/MyNotesView.vue'), meta: { auth: true, noGuest: true } },
+  { path: '/profile', name: 'profile', component: () => import('../views/ProfileView.vue'), meta: { auth: true, noGuest: true } },
   { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/admin/users', name: 'admin-users', component: () => import('../views/AdminUsersView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/admin/markers', name: 'admin-markers', component: () => import('../views/AdminMarkersView.vue'), meta: { auth: true, role: 'admin' } },

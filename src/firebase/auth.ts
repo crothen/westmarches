@@ -4,6 +4,9 @@ import {
   signInWithPopup,
   signInAnonymously as firebaseSignInAnonymously,
   GoogleAuthProvider,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword as firebaseUpdatePassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type User,
@@ -23,6 +26,20 @@ export const registerWithEmail = (email: string, password: string) =>
 export const signInWithGoogle = () => signInWithPopup(auth, googleProvider)
 
 export const signInAnonymously = () => firebaseSignInAnonymously(auth)
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const user = auth.currentUser
+  if (!user || !user.email) throw new Error('No email user logged in')
+  const credential = EmailAuthProvider.credential(user.email, currentPassword)
+  await reauthenticateWithCredential(user, credential)
+  await firebaseUpdatePassword(user, newPassword)
+}
+
+export function isEmailUser(): boolean {
+  const user = auth.currentUser
+  if (!user) return false
+  return user.providerData.some(p => p.providerId === 'password')
+}
 
 export const signOut = () => firebaseSignOut(auth)
 

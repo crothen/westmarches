@@ -133,7 +133,7 @@ function hasVisibleItems(section: NavSection): boolean {
         <RouterLink to="/login" class="text-[#ef233c] hover:text-red-400 text-xs transition-colors" @click="handleLogout">Sign In</RouterLink>
       </div>
       <div v-else class="px-2 space-y-2">
-        <div class="text-sm text-zinc-400 font-medium truncate">{{ auth.appUser?.displayName }}</div>
+        <RouterLink to="/profile" class="text-sm text-zinc-400 font-medium truncate hover:text-white transition-colors block" @click="$emit('close')">{{ auth.appUser?.displayName }}</RouterLink>
         <div class="flex flex-wrap gap-1">
           <span v-for="r in auth.roles" :key="r" class="text-[0.55rem] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest" :class="r === 'admin' ? 'bg-[#ef233c]/10 text-[#ef233c]' : r === 'dm' ? 'bg-purple-500/10 text-purple-400' : 'bg-white/5 text-zinc-400'" style="font-family: Manrope, sans-serif">{{ r }}</span>
         </div>
