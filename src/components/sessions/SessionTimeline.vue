@@ -255,16 +255,20 @@ function formatCommentDate(date: any): string {
       <span v-if="canEdit"> Click "Add Entry" to begin documenting this session.</span>
     </div>
 
-    <!-- Serpentine 3-column grid (desktop), single column (mobile) -->
-    <div v-if="entries.length > 0" class="space-y-2">
+    <!-- Serpentine 3-column layout with connecting lines -->
+    <div v-if="entries.length > 0">
       <template v-for="(row, rowIdx) in serpentineRows" :key="rowIdx">
-        <!-- Row of up to 3 entries -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <template v-for="entry in (row.reversed ? [...row.entries].reverse() : row.entries)" :key="entry.id">
+        <!-- Row of up to 3 entries with horizontal connectors -->
+        <div class="hidden sm:flex items-stretch" :class="row.reversed ? 'flex-row-reverse' : 'flex-row'">
+          <template v-for="(entry, colIdx) in row.entries" :key="entry.id">
+            <!-- Horizontal connector (between cards, not before first) -->
+            <div v-if="colIdx > 0" class="flex items-center shrink-0 w-6">
+              <div class="w-full h-px bg-zinc-700" />
+            </div>
             <!-- Entry card -->
             <div
               :class="[
-                'card-flat border-l-4 overflow-visible transition-all duration-150',
+                'card-flat border-l-4 overflow-visible transition-all duration-150 flex-1 min-w-0',
                 entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700',
                 canEdit ? 'cursor-grab active:cursor-grabbing' : '',
                 dragEntryId === entry.id ? 'opacity-40 scale-95' : '',
@@ -277,14 +281,10 @@ function formatCommentDate(date: any): string {
               @drop="canEdit && onDrop($event, entry.id)"
               @dragend="canEdit && onDragEnd()"
             >
-              <!-- Hero image top -->
               <div v-if="entry.imageUrl" class="w-full overflow-hidden rounded-t-[inherit] cursor-pointer" style="aspect-ratio: 3 / 1" @click="lightboxUrl = entry.imageUrl!">
                 <img :src="entry.imageUrl" class="w-full h-full object-cover" draggable="false" />
               </div>
-
-              <!-- Content -->
               <div class="px-3 pt-2.5 pb-2">
-                <!-- Header: type badge + admin actions -->
                 <div class="flex items-start justify-between gap-1 mb-1">
                   <span :class="['text-[0.65rem] px-1.5 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
                     {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
@@ -294,37 +294,25 @@ function formatCommentDate(date: any): string {
                     <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-[0.65rem] p-0.5 transition-colors" title="Delete">🗑️</button>
                   </div>
                 </div>
-
-                <!-- Title -->
                 <h3 class="text-sm font-semibold text-zinc-100 leading-tight mb-1" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
-
-                <!-- Participants (if subset) -->
                 <div v-if="entry.allParticipantsPresent === false && entry.presentParticipants?.length" class="mb-1">
                   <div class="flex items-center gap-1 flex-wrap">
                     <span class="text-[0.6rem] text-zinc-600 uppercase tracking-wider">Present:</span>
                     <span v-for="p in entry.presentParticipants" :key="p.characterId" class="text-[0.65rem] bg-white/5 text-zinc-500 px-1 py-0.5 rounded">{{ p.characterName }}</span>
                   </div>
                 </div>
-
-                <!-- Description (truncated in grid, full on hover/click) -->
                 <div v-if="entry.description" class="text-xs text-zinc-400 leading-relaxed line-clamp-4 mb-2">
                   <MentionText :text="entry.description" />
                 </div>
-
-                <!-- Tags -->
                 <div v-if="(entry.npcIds?.length || entry.linkedLocationIds?.length || entry.linkedFeatureIds?.length)" class="flex flex-wrap gap-1 mb-2">
                   <span v-for="id in entry.npcIds" :key="'npc-'+id" class="text-[0.6rem] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">👤 {{ getNpcName(id) }}</span>
                   <span v-for="id in entry.linkedLocationIds" :key="'loc-'+id" class="text-[0.6rem] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">🏰 {{ getLocationName(id) }}</span>
                   <span v-for="id in entry.linkedFeatureIds" :key="'feat-'+id" class="text-[0.6rem] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded border border-green-500/20">📌 {{ getFeatureName(id) }}</span>
                 </div>
-
-                <!-- Attachments -->
                 <div v-if="entry.attachments?.length" class="flex flex-wrap gap-1 mb-2">
                   <a v-for="att in entry.attachments" :key="att.url" :href="att.url" target="_blank" class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/[0.06] transition-colors">📎 {{ att.name }}</a>
                 </div>
               </div>
-
-              <!-- Comments -->
               <div class="border-t border-white/[0.04] px-3 py-1.5">
                 <button @click="toggleComments(entry.id)" class="text-[0.65rem] text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1">
                   <span>{{ expandedComments.has(entry.id) ? '▾' : '▸' }}</span>
@@ -349,25 +337,71 @@ function formatCommentDate(date: any): string {
               </div>
             </div>
           </template>
+          <!-- Fill empty slots in last row -->
+          <template v-if="row.entries.length < 3">
+            <template v-for="n in (3 - row.entries.length)" :key="'empty-'+n">
+              <div class="w-6 shrink-0" /><!-- spacer for missing connector -->
+              <div v-if="canEdit && rowIdx === serpentineRows.length - 1 && n === 1"
+                class="flex-1 border border-dashed border-white/[0.08] rounded-xl flex items-center justify-center min-h-[100px] hover:border-[#ef233c]/30 hover:bg-[#ef233c]/[0.02] transition-all cursor-pointer group"
+                @click="openAddModal"
+              >
+                <span class="text-zinc-700 group-hover:text-[#ef233c]/50 text-sm transition-colors">+ Add Entry</span>
+              </div>
+              <div v-else class="flex-1" /><!-- empty spacer -->
+            </template>
+          </template>
+        </div>
 
-          <!-- Fill empty slots in last row with insert button -->
-          <template v-if="canEdit && row.entries.length < 3 && rowIdx === serpentineRows.length - 1">
+        <!-- Mobile: single column with vertical line -->
+        <div class="sm:hidden space-y-2">
+          <template v-for="(entry, colIdx) in row.entries" :key="entry.id">
+            <div v-if="colIdx > 0 || rowIdx > 0" class="flex justify-center py-1">
+              <div class="h-4 w-px bg-zinc-700" />
+            </div>
             <div
-              class="border border-dashed border-white/[0.08] rounded-xl flex items-center justify-center min-h-[100px] hover:border-[#ef233c]/30 hover:bg-[#ef233c]/[0.02] transition-all cursor-pointer group"
-              @click="openAddModal"
+              :class="[
+                'card-flat border-l-4 overflow-visible transition-all duration-150',
+                entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700',
+              ]"
             >
-              <span class="text-zinc-700 group-hover:text-[#ef233c]/50 text-sm transition-colors">+ Add Entry</span>
+              <div v-if="entry.imageUrl" class="w-full overflow-hidden rounded-t-[inherit] cursor-pointer" style="aspect-ratio: 3 / 1" @click="lightboxUrl = entry.imageUrl!">
+                <img :src="entry.imageUrl" class="w-full h-full object-cover" />
+              </div>
+              <div class="px-3 pt-2.5 pb-2">
+                <div class="flex items-start justify-between gap-1 mb-1">
+                  <span :class="['text-[0.65rem] px-1.5 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
+                    {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
+                  </span>
+                  <div v-if="canEdit" class="flex items-center gap-0.5 shrink-0 -mt-0.5">
+                    <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-[0.65rem] p-0.5 transition-colors">✏️</button>
+                    <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-[0.65rem] p-0.5 transition-colors">🗑️</button>
+                  </div>
+                </div>
+                <h3 class="text-sm font-semibold text-zinc-100 leading-tight mb-1" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
+                <div v-if="entry.description" class="text-xs text-zinc-400 leading-relaxed line-clamp-4 mb-2">
+                  <MentionText :text="entry.description" />
+                </div>
+              </div>
             </div>
           </template>
         </div>
 
-        <!-- Insert between rows button -->
-        <div v-if="canEdit && rowIdx < serpentineRows.length - 1" class="flex justify-center py-0.5">
-          <button
-            @click="openInsertModal(row.entries[row.entries.length - 1]!.id)"
-            class="text-zinc-800 hover:text-[#ef233c]/50 text-lg transition-colors leading-none"
-            title="Insert entry here"
-          >+</button>
+        <!-- Vertical connector between rows (desktop) -->
+        <div v-if="rowIdx < serpentineRows.length - 1" class="hidden sm:flex relative h-8"
+          :class="row.reversed ? 'justify-start pl-[calc(16.67%-12px)]' : 'justify-end pr-[calc(16.67%-12px)]'"
+        >
+          <div class="flex flex-col items-center">
+            <div class="flex-1 w-px bg-zinc-700" />
+            <!-- Insert button on the line -->
+            <button
+              v-if="canEdit"
+              @click="openInsertModal(row.entries[row.entries.length - 1]!.id)"
+              class="w-5 h-5 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-600 hover:text-[#ef233c] hover:border-[#ef233c]/50 flex items-center justify-center text-xs transition-colors shrink-0"
+              title="Insert entry here"
+            >+</button>
+            <div v-else class="w-1.5 h-1.5 rounded-full bg-zinc-700 shrink-0" />
+            <div class="flex-1 w-px bg-zinc-700" />
+          </div>
         </div>
       </template>
     </div>
