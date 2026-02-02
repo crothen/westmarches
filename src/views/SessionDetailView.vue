@@ -18,6 +18,10 @@ const editing = ref(false)
 const saving = ref(false)
 const newNoteContent = ref('')
 const newNotePrivate = ref(false)
+
+// Image generation state
+const showPromptEditor = ref(false)
+const editablePrompt = ref('')
 const editingNoteId = ref<string | null>(null)
 const editContent = ref('')
 const replyingTo = ref<string | null>(null)
@@ -128,16 +132,31 @@ async function deleteNote(noteId: string) {
   })
 }
 
+function buildSessionPrompt(): string {
+  if (!session.value) return ''
+  const participants = session.value.participants?.map(p => p.characterName).join(', ') || 'adventurers'
+  return `Create a dramatic D&D fantasy scene illustration in ultra-wide cinematic aspect ratio (3:1 or wider). Session title: "${session.value.title}". Summary: ${session.value.summary?.substring(0, 500)}. Characters involved: ${participants}. Style: epic fantasy art, dramatic lighting, painterly, ultra-wide panoramic landscape composition, medieval setting. The image MUST be very wide and short — panoramic banner format.`
+}
+
+function openPromptEditor() {
+  editablePrompt.value = buildSessionPrompt()
+  showPromptEditor.value = true
+}
+
 async function generateSessionArt() {
   if (!session.value) return
-  const participants = session.value.participants?.map(p => p.characterName).join(', ') || 'adventurers'
-  const prompt = `Create a dramatic D&D fantasy scene illustration. Session title: "${session.value.title}". Summary: ${session.value.summary?.substring(0, 500)}. Characters involved: ${participants}. Style: epic fantasy art, dramatic lighting, painterly, wide landscape composition, medieval setting.`
+  const prompt = showPromptEditor.value ? editablePrompt.value : buildSessionPrompt()
+  showPromptEditor.value = false
 
   const url = await generateImage(prompt, `session-art/${session.value.id}`)
   if (url) {
     await updateDoc(doc(db, 'sessions', session.value.id), { imageUrl: url })
-    session.value = { ...session.value, imageUrl: url } as any
   }
+}
+
+async function removeSessionArt() {
+  if (!session.value || !confirm('Remove the session image?')) return
+  await updateDoc(doc(db, 'sessions', session.value.id), { imageUrl: null })
 }
 
 async function addReply(noteId: string) {
@@ -233,18 +252,44 @@ function canDeleteNote(note: SessionNote): boolean {
         <h1 class="text-3xl font-bold text-white mb-6" style="font-family: Manrope, sans-serif">{{ session.title }}</h1>
 
         <!-- Session Art -->
-        <div v-if="(session as any).imageUrl" class="mb-6 -mx-1">
+        <div v-if="(session as any).imageUrl" class="mb-6 -mx-1 relative group">
           <img :src="(session as any).imageUrl" class="w-full max-h-80 object-cover rounded-xl border border-white/10" />
+          <div v-if="canEdit" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
+            <button @click="openPromptEditor" class="bg-black/70 backdrop-blur text-zinc-300 hover:text-white text-xs px-2.5 py-1.5 rounded-lg border border-white/10 transition-colors">🎨 Regenerate</button>
+            <button @click="removeSessionArt" class="bg-black/70 backdrop-blur text-red-400 hover:text-red-300 text-xs px-2.5 py-1.5 rounded-lg border border-white/10 transition-colors">✕ Remove</button>
+          </div>
         </div>
 
-        <button
-          v-if="auth.isAuthenticated && !(session as any).imageUrl"
-          @click="generateSessionArt"
-          :disabled="genLoading"
-          class="btn !text-[0.65rem] !py-1.5 !px-3 mb-6"
-        >
-          {{ genLoading ? '🎨 Generating scene...' : '🎨 Generate Scene Art' }}
-        </button>
+        <!-- Generate / Prompt editor -->
+        <div v-if="!(session as any).imageUrl || showPromptEditor" class="mb-6">
+          <div v-if="showPromptEditor" class="card-flat p-4 space-y-3">
+            <label class="text-sm font-semibold text-zinc-400">Image Prompt</label>
+            <textarea v-model="editablePrompt" rows="5" class="input w-full text-sm" />
+            <div class="flex gap-2">
+              <button @click="generateSessionArt" :disabled="genLoading" class="btn !text-xs !py-1.5">
+                {{ genLoading ? '🎨 Generating...' : '🎨 Generate' }}
+              </button>
+              <button @click="showPromptEditor = false" class="btn !bg-white/5 !text-zinc-400 !text-xs !py-1.5">Cancel</button>
+            </div>
+          </div>
+          <div v-else-if="!(session as any).imageUrl" class="flex gap-2">
+            <button
+              v-if="auth.isAuthenticated"
+              @click="generateSessionArt"
+              :disabled="genLoading"
+              class="btn !text-xs !py-1.5 !px-3"
+            >
+              {{ genLoading ? '🎨 Generating...' : '🎨 Generate Scene Art' }}
+            </button>
+            <button
+              v-if="canEdit"
+              @click="openPromptEditor"
+              class="btn !bg-white/5 !text-zinc-400 !text-xs !py-1.5 !px-3"
+            >
+              ✏️ Edit Prompt
+            </button>
+          </div>
+        </div>
         <div v-if="genError" class="text-red-400 text-xs mb-4">{{ genError }}</div>
 
         <!-- Participants -->

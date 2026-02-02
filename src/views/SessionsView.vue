@@ -88,29 +88,35 @@ async function handleCreate(data: Partial<SessionLog>) {
       <p class="text-zinc-600 text-sm mt-1">The adventure awaits...</p>
     </div>
 
-    <div v-else class="space-y-3">
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       <RouterLink
         v-for="session in sessions"
         :key="session.id"
         :to="`/sessions/${session.id}`"
-        class="block card p-4 group relative z-10"
+        class="block card group relative z-10 overflow-hidden"
       >
-        <div class="relative z-10 flex items-start justify-between">
-          <div>
-            <div class="flex items-center gap-3 mb-1">
-              <span class="text-[#ef233c] font-bold text-lg" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
-              <span class="text-zinc-600 text-sm">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
-              <span v-if="session.sessionLocationName" class="text-zinc-600 text-xs">📍 {{ session.sessionLocationName }}</span>
-            </div>
-            <h2 class="text-zinc-100 font-semibold group-hover:text-[#ef233c] transition-colors">{{ session.title }}</h2>
-            <p class="text-zinc-500 text-sm mt-1 line-clamp-2">{{ session.summary }}</p>
-          </div>
-          <div class="text-zinc-600 text-sm shrink-0 ml-4">
-            {{ session.participants?.length || 0 }} adventurers
-          </div>
+        <!-- Hero image -->
+        <div v-if="(session as any).imageUrl" class="w-full h-36 overflow-hidden">
+          <img :src="(session as any).imageUrl" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         </div>
-        <div v-if="session.tags?.length" class="relative z-10 flex gap-2 mt-3 flex-wrap">
-          <span v-for="tag in session.tags" :key="tag" class="text-xs bg-white/[0.05] text-zinc-500 px-2 py-0.5 rounded-md border border-white/[0.06]">{{ tag }}</span>
+        <div v-else class="w-full h-20 bg-gradient-to-br from-[#ef233c]/10 to-transparent" />
+
+        <div class="relative z-10 p-4">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <span class="text-[#ef233c] font-bold text-sm" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
+            <span class="text-zinc-600 text-xs">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
+            <span v-if="session.sessionLocationName" class="text-zinc-600 text-xs">📍 {{ session.sessionLocationName }}</span>
+          </div>
+          <h2 class="text-zinc-100 font-semibold group-hover:text-[#ef233c] transition-colors text-sm">{{ session.title }}</h2>
+          <p class="text-zinc-500 text-xs mt-1.5 line-clamp-2">{{ session.summary }}</p>
+          <div class="flex items-center justify-between mt-3">
+            <div class="text-zinc-600 text-xs">
+              {{ session.participants?.length || 0 }} adventurers
+            </div>
+            <div v-if="session.tags?.length" class="flex gap-1 flex-wrap justify-end">
+              <span v-for="tag in session.tags.slice(0, 3)" :key="tag" class="text-[0.6rem] bg-white/[0.05] text-zinc-500 px-1.5 py-0.5 rounded border border-white/[0.06]">{{ tag }}</span>
+            </div>
+          </div>
         </div>
       </RouterLink>
     </div>

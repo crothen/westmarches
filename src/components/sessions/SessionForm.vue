@@ -161,7 +161,7 @@ const filteredNpcs = computed(() => {
 
 // Collapsible sections
 const showParticipants = ref(true)
-const showNpcs = ref(false)
+const showNpcs = ref(true)
 </script>
 
 <template>
@@ -169,15 +169,15 @@ const showNpcs = ref(false)
     <!-- Row: Session number + Date + Location -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div>
-        <label class="label">Session #</label>
+        <label class="text-sm font-semibold text-zinc-400">Session #</label>
         <input v-model.number="sessionNumber" type="number" min="1" class="input w-full" />
       </div>
       <div>
-        <label class="label">Date</label>
+        <label class="text-sm font-semibold text-zinc-400">Date</label>
         <input v-model="date" type="date" class="input w-full" />
       </div>
       <div>
-        <label class="label">Location</label>
+        <label class="text-sm font-semibold text-zinc-400">Location</label>
         <select v-model="sessionLocationId" class="input w-full">
           <option value="">— Select —</option>
           <option v-for="loc in sortedLocations" :key="loc.key" :value="loc.key">{{ loc.label }}</option>
@@ -187,13 +187,13 @@ const showNpcs = ref(false)
 
     <!-- Title -->
     <div>
-      <label class="label">Title</label>
+      <label class="text-sm font-semibold text-zinc-400">Title</label>
       <input v-model="title" type="text" placeholder="The Siege of Blackthorn..." class="input w-full" />
     </div>
 
     <!-- Summary -->
     <div>
-      <label class="label">Summary</label>
+      <label class="text-sm font-semibold text-zinc-400">Summary</label>
       <textarea v-model="summary" rows="5" placeholder="What happened this session..." class="input w-full" />
     </div>
 
@@ -203,7 +203,7 @@ const showNpcs = ref(false)
         @click="showParticipants = !showParticipants"
         class="flex items-center gap-2 w-full text-left"
       >
-        <span class="label !mb-0">🧙 Participants</span>
+        <span class="text-base font-semibold text-zinc-200" style="font-family: Manrope, sans-serif">🧙 Participants</span>
         <span class="text-xs text-zinc-500">({{ selectedParticipants.length }} selected)</span>
         <span class="text-zinc-600 text-xs ml-auto">{{ showParticipants ? '▾' : '▸' }}</span>
       </button>
@@ -236,7 +236,7 @@ const showNpcs = ref(false)
         @click="showNpcs = !showNpcs"
         class="flex items-center gap-2 w-full text-left"
       >
-        <span class="label !mb-0">👤 NPCs Encountered</span>
+        <span class="text-base font-semibold text-zinc-200" style="font-family: Manrope, sans-serif">👤 NPCs Encountered</span>
         <span class="text-xs text-zinc-500">({{ selectedNpcIds.length }} selected)</span>
         <span class="text-zinc-600 text-xs ml-auto">{{ showNpcs ? '▾' : '▸' }}</span>
       </button>
@@ -264,7 +264,7 @@ const showNpcs = ref(false)
 
     <!-- Tags -->
     <div>
-      <label class="label">Tags</label>
+      <label class="text-sm font-semibold text-zinc-400">Tags</label>
       <TagInput v-model="tags" />
     </div>
 
