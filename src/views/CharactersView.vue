@@ -138,6 +138,7 @@ async function createCharacter() {
                   <span class="badge bg-[#ef233c]/15 text-[#ef233c]">Lv {{ c.level }}</span>
                 </div>
                 <p v-if="c.description" class="text-zinc-500 text-sm mt-1 line-clamp-1">{{ c.description }}</p>
+                <a v-if="c.characterUrl" :href="c.characterUrl" target="_blank" rel="noopener" @click.stop class="inline-flex items-center gap-1 text-xs text-[#ef233c]/70 hover:text-[#ef233c] transition-colors mt-1">📋 D&D Beyond</a>
               </div>
             </div>
           </RouterLink>
@@ -165,6 +166,7 @@ async function createCharacter() {
                 </div>
                 <div class="text-xs text-zinc-600 mt-1">🎮 {{ getOwnerName(c.userId) }}</div>
                 <p v-if="c.description" class="text-zinc-500 text-sm mt-1 line-clamp-1">{{ c.description }}</p>
+                <a v-if="c.characterUrl" :href="c.characterUrl" target="_blank" rel="noopener" @click.stop class="inline-flex items-center gap-1 text-xs text-[#ef233c]/70 hover:text-[#ef233c] transition-colors mt-1">📋 D&D Beyond</a>
               </div>
             </div>
           </RouterLink>
@@ -194,6 +196,7 @@ async function createCharacter() {
                 </div>
                 <div class="text-xs text-zinc-700 mt-1">🎮 {{ getOwnerName(c.userId) }}</div>
                 <p v-if="c.description" class="text-zinc-600 text-sm mt-1 line-clamp-1">{{ c.description }}</p>
+                <a v-if="c.characterUrl" :href="c.characterUrl" target="_blank" rel="noopener" @click.stop class="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-400 transition-colors mt-1">📋 D&D Beyond</a>
               </div>
             </div>
           </RouterLink>
