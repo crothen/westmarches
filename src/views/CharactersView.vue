@@ -80,35 +80,51 @@ async function createCharacter() {
   <div>
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">🧙 Characters</h1>
-      <button v-if="auth.isAuthenticated && !auth.isGuest" @click="showCreate = !showCreate" class="btn text-sm">
-        {{ showCreate ? 'Cancel' : '+ New Character' }}
-      </button>
+      <button v-if="auth.isAuthenticated && !auth.isGuest" @click="showCreate = true" class="btn text-sm">+ New Character</button>
     </div>
 
-    <!-- Create form -->
-    <div v-if="showCreate" class="card p-5 mb-6 relative z-10">
-      <div class="relative z-10 space-y-3">
-        <h3 class="text-zinc-200 font-semibold" style="font-family: Manrope, sans-serif">Create Character</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div><label class="label text-xs block mb-1">Name *</label><input v-model="newChar.name" class="input w-full" /></div>
-          <div><label class="label text-xs block mb-1">Race</label><input v-model="newChar.race" class="input w-full" placeholder="e.g. Human, Elf" /></div>
-          <div><label class="label text-xs block mb-1">Class</label><input v-model="newChar.class" class="input w-full" placeholder="e.g. Fighter, Wizard" /></div>
+    <!-- Create modal -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0" enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-150"
+        leave-from-class="opacity-100" leave-to-class="opacity-0"
+      >
+        <div v-if="showCreate" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showCreate = false" />
+          <div class="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-6 z-10">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold text-white" style="font-family: Manrope, sans-serif">🧙 New Character</h3>
+              <button @click="showCreate = false" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+            </div>
+            <div class="space-y-3">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div><label class="label text-xs block mb-1">Name *</label><input v-model="newChar.name" class="input w-full" /></div>
+                <div><label class="label text-xs block mb-1">Race</label><input v-model="newChar.race" class="input w-full" placeholder="e.g. Human, Elf" /></div>
+                <div><label class="label text-xs block mb-1">Class</label><input v-model="newChar.class" class="input w-full" placeholder="e.g. Fighter, Wizard" /></div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div><label class="label text-xs block mb-1">Level</label><input v-model.number="newChar.level" type="number" min="1" max="20" class="input w-full" /></div>
+                <div class="md:col-span-3"><label class="label text-xs block mb-1">Description</label><input v-model="newChar.description" class="input w-full" placeholder="Brief description..." /></div>
+              </div>
+              <div>
+                <label class="label text-xs block mb-1">Appearance <span class="text-zinc-600 font-normal">(used for AI art — {{ newChar.appearance.length }}/200)</span></label>
+                <input v-model="newChar.appearance" class="input w-full" maxlength="200" placeholder="e.g. Tall half-elf with silver hair, blue eyes, wears leather armor and a tattered red cloak" />
+              </div>
+              <div>
+                <label class="label text-xs block mb-1">Character URL <span class="text-zinc-600 font-normal">(e.g. D&D Beyond link)</span></label>
+                <input v-model="newChar.characterUrl" class="input w-full" type="url" placeholder="https://www.dndbeyond.com/characters/..." />
+              </div>
+              <div class="flex justify-end gap-2 pt-2">
+                <button @click="showCreate = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+                <button @click="createCharacter" :disabled="!newChar.name.trim()" class="btn text-sm">🧙 Create</button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div><label class="label text-xs block mb-1">Level</label><input v-model.number="newChar.level" type="number" min="1" max="20" class="input w-full" /></div>
-          <div class="md:col-span-3"><label class="label text-xs block mb-1">Description</label><input v-model="newChar.description" class="input w-full" placeholder="Brief description..." /></div>
-        </div>
-        <div>
-          <label class="label text-xs block mb-1">Appearance <span class="text-zinc-600 font-normal">(used for AI art — {{ newChar.appearance.length }}/200)</span></label>
-          <input v-model="newChar.appearance" class="input w-full" maxlength="200" placeholder="e.g. Tall half-elf with silver hair, blue eyes, wears leather armor and a tattered red cloak" />
-        </div>
-        <div>
-          <label class="label text-xs block mb-1">Character URL <span class="text-zinc-600 font-normal">(e.g. D&D Beyond link)</span></label>
-          <input v-model="newChar.characterUrl" class="input w-full" type="url" placeholder="https://www.dndbeyond.com/characters/..." />
-        </div>
-        <button @click="createCharacter" :disabled="!newChar.name.trim()" class="btn text-sm">Create</button>
-      </div>
-    </div>
+      </transition>
+    </Teleport>
 
     <div v-if="loading" class="text-zinc-500 animate-pulse">Loading characters...</div>
 
