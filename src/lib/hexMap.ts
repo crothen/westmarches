@@ -39,7 +39,7 @@ export interface HexCoord {
   y: number
 }
 
-export type MapPathType = 'road-solid' | 'road-dotted' | 'river'
+export type MapPathType = 'road-solid' | 'road-dotted' | 'river-sm' | 'river' | 'river-lg'
 
 export interface MapPath {
   id: string
@@ -443,7 +443,7 @@ export class HexMap {
     this.requestDraw()
   }
 
-  draw(hexData: Record<string, HexData>, selectedHex: HexCoord | null, isPaintMode: boolean, userRole: string = 'Player', markers?: Record<string, HexMarkerData>, paths?: MapPath[], drawingPreview?: { type: MapPathType; points: { x: number; y: number }[]; cursor?: { x: number; y: number } }): void {
+  draw(hexData: Record<string, HexData>, selectedHex: HexCoord | null, isPaintMode: boolean, userRole: string = 'Player', markers?: Record<string, HexMarkerData>, paths?: MapPath[], drawingPreview?: { type: MapPathType; points: { x: number; y: number }[]; cursor?: { x: number; y: number } }, selectedPathId?: string | null): void {
     if (!Number.isFinite(this.camera.x)) this.camera = { x: 50, y: 50, zoom: 1 }
 
     this.ctx.setTransform(1, 0, 0, 1, 0, 0)
@@ -481,7 +481,7 @@ export class HexMap {
     this.ctx.globalAlpha = 1.0
 
     // === PASS 2.5: Draw map paths (roads/rivers) ===
-    if (paths && paths.length > 0) this.drawPaths(paths)
+    if (paths && paths.length > 0) this.drawPaths(paths, selectedPathId)
     if (drawingPreview) this.drawPathPreview(drawingPreview)
 
     // === PASS 3: Draw all hex borders ===
@@ -626,7 +626,7 @@ export class HexMap {
   /**
    * Collect all drawable icons for a hex, sorted by order.
    */
-  private collectHexIcons(data: HexMarkerData): { img: HTMLImageElement | null; emoji?: string }[] {
+  private collectHexIcons(data: HexMarkerData): { img: HTMLImageElement | null; emoji?: string; hidden?: boolean }[] {
     // Sort by order (lower first), then by kind priority
     const kindPriority: Record<string, number> = { location: 0, feature: 1, marker: 2, note: 3 }
     const sorted = [...data.icons].sort((a, b) => {
@@ -638,16 +638,16 @@ export class HexMap {
 
     return sorted.map(entry => {
       if (entry.kind === 'note') {
-        return { img: null, emoji: '💬' }
+        return { img: null, emoji: '💬', hidden: false }
       }
       if (entry.kind === 'location') {
-        return { img: this.iconImages[entry.type] || this.iconImages['other'] || null }
+        return { img: this.iconImages[entry.type] || this.iconImages['other'] || null, hidden: !!entry.hidden }
       }
       if (entry.kind === 'feature') {
-        return { img: this.iconImages[`f:${entry.type}`] || this.iconImages['feature'] || this.iconImages['other'] || null }
+        return { img: this.iconImages[`f:${entry.type}`] || this.iconImages['feature'] || this.iconImages['other'] || null, hidden: !!entry.hidden }
       }
       // marker
-      return { img: this.iconImages[entry.type] || null }
+      return { img: this.iconImages[entry.type] || null, hidden: !!entry.hidden }
     })
   }
 
@@ -715,7 +715,6 @@ export class HexMap {
       if (visibleIcons.length === 0) continue
 
       const center = this.getHexCenter(col, row)
-      const isHidden = data.hasHiddenItems
 
       // Collect drawable icons for this hex
       const filteredData: HexMarkerData = { ...data, icons: visibleIcons }
@@ -743,7 +742,7 @@ export class HexMap {
         const drawSize = iconDrawSize
 
         this.ctx.save()
-        if (isHidden && isDmOrAdmin) this.ctx.globalAlpha = 0.3
+        if (icon.hidden && isDmOrAdmin) this.ctx.globalAlpha = 0.3
         this.ctx.shadowColor = 'rgba(0,0,0,0.6)'
         this.ctx.shadowBlur = 3
 
@@ -1016,8 +1015,12 @@ export class HexMap {
         return { color: '#8B7355', width: 3, dash: [] }
       case 'road-dotted':
         return { color: '#8B7355', width: 3, dash: [8, 6] }
+      case 'river-sm':
+        return { color: '#4A90D9', width: 2.5, dash: [] }
       case 'river':
-        return { color: '#4A90D9', width: 3.5, dash: [] }
+        return { color: '#4A90D9', width: 4, dash: [] }
+      case 'river-lg':
+        return { color: '#4A90D9', width: 6, dash: [] }
       default:
         return { color: '#888', width: 2, dash: [] }
     }
@@ -1059,12 +1062,44 @@ export class HexMap {
     ctx.restore()
   }
 
-  drawPaths(paths: MapPath[]): void {
+  drawPaths(paths: MapPath[], selectedPathId?: string | null): void {
     for (const path of paths) {
       if (path.points.length < 2) continue
       const style = this.getPathStyle(path.type)
+      const isSelected = path.id === selectedPathId
+      if (isSelected) {
+        // Draw a highlight behind the selected path
+        const highlightStyle = { color: '#ef233c44', width: style.width + 4, dash: [] }
+        this.drawSinglePath(path.points, highlightStyle)
+      }
       this.drawSinglePath(path.points, style)
+      if (isSelected) {
+        this.drawPathWaypoints(path.points)
+      }
     }
+  }
+
+  /** Draw draggable waypoint dots on a selected path */
+  drawPathWaypoints(points: { x: number; y: number }[]): void {
+    const ctx = this.ctx
+    const r = 5 / this.camera.zoom
+    ctx.save()
+    for (const pt of points) {
+      // Outer ring
+      ctx.beginPath()
+      ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2)
+      ctx.fillStyle = '#ffffff'
+      ctx.fill()
+      ctx.strokeStyle = '#ef233c'
+      ctx.lineWidth = 2 / this.camera.zoom
+      ctx.stroke()
+      // Inner dot
+      ctx.beginPath()
+      ctx.arc(pt.x, pt.y, r * 0.45, 0, Math.PI * 2)
+      ctx.fillStyle = '#ef233c'
+      ctx.fill()
+    }
+    ctx.restore()
   }
 
   drawPathPreview(preview: { type: MapPathType; points: { x: number; y: number }[]; cursor?: { x: number; y: number } }): void {

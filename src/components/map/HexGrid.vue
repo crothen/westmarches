@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import { collection, query, addDoc, deleteDoc, doc, Timestamp, onSnapshot } from 'firebase/firestore'
+import { collection, query, addDoc, deleteDoc, updateDoc, doc, Timestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { HexMap } from '../../lib/hexMap'
 import type { HexMarkerData, MapPath, MapPathType } from '../../lib/hexMap'
@@ -36,12 +36,17 @@ const cursorWorldPos = ref<{ x: number; y: number } | null>(null)
 const mapPaths = ref<MapPath[]>([])
 const selectedPathId = ref<string | null>(null)
 
+// === Waypoint dragging state ===
+const draggingWaypoint = ref<{ pathId: string; pointIndex: number; points: { x: number; y: number }[] } | null>(null)
+
 const canDraw = computed(() => auth.isDm || auth.isAdmin)
 
 const pathTypeOptions: { value: MapPathType; label: string; icon: string }[] = [
   { value: 'road-solid', label: 'Road', icon: '━' },
   { value: 'road-dotted', label: 'Trail', icon: '┅' },
+  { value: 'river-sm', label: 'Creek', icon: '〜' },
   { value: 'river', label: 'River', icon: '〰' },
+  { value: 'river-lg', label: 'Wide River', icon: '≋' },
 ]
 
 // === Path loading (real-time) ===
@@ -111,6 +116,8 @@ function exitDrawMode() {
 
 function onDrawClick(e: MouseEvent) {
   if (!hexMap || !drawMode.value) return
+  // If we were dragging a waypoint, the click at end of drag should be ignored
+  if (draggingWaypoint.value) return
 
   // Right-click or ctrl+click to finish
   if (e.button === 2) {
@@ -129,10 +136,77 @@ function onDrawClick(e: MouseEvent) {
       redraw()
       return
     }
+    // Click on empty space deselects
+    if (selectedPathId.value) {
+      selectedPathId.value = null
+      redraw()
+      return
+    }
   }
 
   drawingPoints.value.push(world)
   redraw()
+}
+
+function findWaypointAtWorld(world: { x: number; y: number }, pathId: string): number {
+  const path = mapPaths.value.find(p => p.id === pathId)
+  if (!path) return -1
+  const threshold = 8 / (hexMap?.camera.zoom || 1)
+  for (let i = 0; i < path.points.length; i++) {
+    const pt = path.points[i]!
+    const dist = Math.hypot(world.x - pt.x, world.y - pt.y)
+    if (dist < threshold) return i
+  }
+  return -1
+}
+
+function onDrawMouseDown(e: MouseEvent) {
+  if (!hexMap || !drawMode.value || e.button !== 0) return
+
+  // Only handle waypoint dragging when a path is selected and we're not drawing
+  if (!selectedPathId.value || drawingPoints.value.length > 0) return
+
+  const world = hexMap.toWorld(e.clientX, e.clientY)
+  const wpIndex = findWaypointAtWorld(world, selectedPathId.value)
+  if (wpIndex >= 0) {
+    const path = mapPaths.value.find(p => p.id === selectedPathId.value)
+    if (!path) return
+    e.preventDefault()
+    e.stopPropagation()
+    draggingWaypoint.value = {
+      pathId: selectedPathId.value,
+      pointIndex: wpIndex,
+      points: path.points.map(p => ({ ...p }))
+    }
+  }
+}
+
+function onDrawMouseMoveGlobal(e: MouseEvent) {
+  if (!hexMap || !drawMode.value) return
+
+  // Handle waypoint dragging
+  if (draggingWaypoint.value) {
+    const world = hexMap.toWorld(e.clientX, e.clientY)
+    draggingWaypoint.value.points[draggingWaypoint.value.pointIndex] = world
+    redraw()
+    return
+  }
+
+  // Handle drawing preview cursor
+  onDrawMouseMove(e)
+}
+
+async function onDrawMouseUp(_e: MouseEvent) {
+  if (!draggingWaypoint.value) return
+
+  // Save updated points to Firestore
+  const { pathId, points } = draggingWaypoint.value
+  try {
+    await updateDoc(doc(db, 'mapPaths', pathId), { points })
+  } catch (e) {
+    console.error('Failed to update path:', e)
+  }
+  draggingWaypoint.value = null
 }
 
 function onDrawDblClick(e: MouseEvent) {
@@ -325,12 +399,17 @@ function redraw() {
     ? { type: drawPathType.value, points: drawingPoints.value, cursor: cursorWorldPos.value || undefined }
     : undefined
 
-  // Highlight selected path
-  const pathsToRender = selectedPathId.value
-    ? mapPaths.value.map(p => p.id === selectedPathId.value ? { ...p, _selected: true } : p)
-    : mapPaths.value
+  // If dragging a waypoint, use the modified points for that path
+  let pathsToRender = mapPaths.value
+  if (draggingWaypoint.value) {
+    pathsToRender = mapPaths.value.map(p =>
+      p.id === draggingWaypoint.value!.pathId
+        ? { ...p, points: draggingWaypoint.value!.points }
+        : p
+    )
+  }
 
-  hexMap.draw(hexData.value, selectedHex.value, false, auth.role, hexMarkers.value, pathsToRender, preview)
+  hexMap.draw(hexData.value, selectedHex.value, false, auth.role, hexMarkers.value, pathsToRender, preview, drawMode.value ? selectedPathId.value : null)
 }
 
 // === Init ===
@@ -429,10 +508,12 @@ onUnmounted(() => {
     <canvas
       ref="canvasRef"
       class="block w-full h-full"
-      :class="drawMode ? 'cursor-crosshair' : ''"
+      :class="drawMode ? (draggingWaypoint ? 'cursor-grabbing' : (selectedPathId && !drawingPoints.length ? 'cursor-pointer' : 'cursor-crosshair')) : ''"
       @click="drawMode ? onDrawClick($event) : undefined"
       @dblclick="drawMode ? onDrawDblClick($event) : undefined"
-      @mousemove="drawMode ? onDrawMouseMove($event) : undefined"
+      @mousedown="drawMode ? onDrawMouseDown($event) : undefined"
+      @mousemove="drawMode ? onDrawMouseMoveGlobal($event) : undefined"
+      @mouseup="drawMode ? onDrawMouseUp($event) : undefined"
       @contextmenu="onDrawContextMenu"
     />
 
@@ -448,41 +529,42 @@ onUnmounted(() => {
     </div>
 
     <!-- Draw mode panel -->
-    <div v-if="drawMode" class="absolute top-3 right-3 z-20 bg-black/80 backdrop-blur-sm rounded-xl border border-white/10 p-3 space-y-3 min-w-[180px]">
+    <div v-if="drawMode" class="absolute top-3 right-3 z-20 bg-black/85 backdrop-blur-sm rounded-xl border border-white/10 p-4 space-y-3 min-w-[240px]">
       <div class="flex items-center justify-between">
-        <span class="text-xs font-semibold text-zinc-200" style="font-family: Manrope, sans-serif">Draw Mode</span>
-        <button @click="exitDrawMode" class="text-zinc-500 hover:text-white text-xs transition-colors">✕</button>
+        <span class="text-sm font-semibold text-zinc-200" style="font-family: Manrope, sans-serif">✏️ Draw Mode</span>
+        <button @click="exitDrawMode" class="text-zinc-400 hover:text-white text-sm px-1.5 py-0.5 rounded transition-colors hover:bg-white/10">✕</button>
       </div>
 
       <!-- Path type selector -->
-      <div class="flex gap-1">
+      <div class="grid grid-cols-5 gap-1.5">
         <button
           v-for="opt in pathTypeOptions" :key="opt.value"
           @click="drawPathType = opt.value"
-          :class="['flex-1 text-xs py-1.5 px-2 rounded-lg border transition-all', drawPathType === opt.value ? 'border-[#ef233c]/40 bg-[#ef233c]/10 text-white' : 'border-white/10 text-zinc-500 hover:text-zinc-300']"
+          :class="['py-2.5 px-1 rounded-lg border transition-all', drawPathType === opt.value ? 'border-[#ef233c]/50 bg-[#ef233c]/15 text-white' : 'border-white/10 text-zinc-500 hover:text-zinc-300 hover:bg-white/5']"
         >
-          <span class="block text-center">{{ opt.icon }}</span>
-          <span class="block text-center text-[0.6rem]">{{ opt.label }}</span>
+          <span class="block text-center text-base leading-none">{{ opt.icon }}</span>
+          <span class="block text-center text-[0.6rem] mt-1 leading-none">{{ opt.label }}</span>
         </button>
       </div>
 
       <!-- Instructions -->
-      <div class="text-[0.6rem] text-zinc-500 space-y-0.5">
+      <div class="text-xs text-zinc-500 space-y-0.5 leading-relaxed">
         <p>Click to place waypoints</p>
-        <p>Double-click / Enter to finish</p>
-        <p>Right-click to finish</p>
+        <p>Double-click / Enter / Right-click to finish</p>
         <p>Esc to cancel · Ctrl+Z to undo</p>
-        <p v-if="drawingPoints.length > 0" class="text-[#ef233c]">{{ drawingPoints.length }} point{{ drawingPoints.length === 1 ? '' : 's' }} placed</p>
+        <p>Click a path to select · Drag waypoints to edit</p>
+        <p v-if="drawingPoints.length > 0" class="text-[#ef233c] font-medium">{{ drawingPoints.length }} point{{ drawingPoints.length === 1 ? '' : 's' }} placed</p>
       </div>
 
       <!-- Selected path actions -->
-      <div v-if="selectedPathId" class="border-t border-white/10 pt-2">
-        <p class="text-[0.6rem] text-zinc-400 mb-1">Path selected</p>
-        <button @click="deletePath(selectedPathId!)" class="text-xs text-red-400 hover:text-red-300 transition-colors">🗑 Delete path</button>
+      <div v-if="selectedPathId" class="border-t border-white/10 pt-2 space-y-1">
+        <p class="text-xs text-zinc-300 font-medium">Path selected</p>
+        <p class="text-[0.65rem] text-zinc-500">Drag waypoints to reposition</p>
+        <button @click="deletePath(selectedPathId!)" class="text-sm text-red-400 hover:text-red-300 transition-colors">🗑 Delete path</button>
       </div>
 
       <!-- Path count -->
-      <div class="text-[0.6rem] text-zinc-600">
+      <div class="text-xs text-zinc-600">
         {{ mapPaths.length }} path{{ mapPaths.length === 1 ? '' : 's' }} on map
       </div>
     </div>
