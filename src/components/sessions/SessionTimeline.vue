@@ -262,8 +262,8 @@ function formatCommentDate(date: any): string {
         <div class="hidden sm:flex items-stretch" :class="row.reversed ? 'flex-row-reverse' : 'flex-row'">
           <template v-for="(entry, colIdx) in row.entries" :key="entry.id">
             <!-- Horizontal connector (between cards, not before first) -->
-            <div v-if="colIdx > 0" class="flex items-center shrink-0 w-6">
-              <div class="w-full h-px bg-zinc-700" />
+            <div v-if="colIdx > 0" class="flex items-center shrink-0 w-10">
+              <div class="w-full h-0.5 bg-zinc-600" />
             </div>
             <!-- Entry card -->
             <div
@@ -340,7 +340,7 @@ function formatCommentDate(date: any): string {
           <!-- Fill empty slots in last row -->
           <template v-if="row.entries.length < 3">
             <template v-for="n in (3 - row.entries.length)" :key="'empty-'+n">
-              <div class="w-6 shrink-0" /><!-- spacer for missing connector -->
+              <div class="w-10 shrink-0" /><!-- spacer for missing connector -->
               <div v-if="canEdit && rowIdx === serpentineRows.length - 1 && n === 1"
                 class="flex-1 border border-dashed border-white/[0.08] rounded-xl flex items-center justify-center min-h-[100px] hover:border-[#ef233c]/30 hover:bg-[#ef233c]/[0.02] transition-all cursor-pointer group"
                 @click="openAddModal"
@@ -387,20 +387,20 @@ function formatCommentDate(date: any): string {
         </div>
 
         <!-- Vertical connector between rows (desktop) -->
-        <div v-if="rowIdx < serpentineRows.length - 1" class="hidden sm:flex relative h-8"
+        <div v-if="rowIdx < serpentineRows.length - 1" class="hidden sm:flex relative h-14"
           :class="row.reversed ? 'justify-start pl-[calc(16.67%-12px)]' : 'justify-end pr-[calc(16.67%-12px)]'"
         >
           <div class="flex flex-col items-center">
-            <div class="flex-1 w-px bg-zinc-700" />
+            <div class="flex-1 w-0.5 bg-zinc-600" />
             <!-- Insert button on the line -->
             <button
               v-if="canEdit"
               @click="openInsertModal(row.entries[row.entries.length - 1]!.id)"
-              class="w-5 h-5 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-600 hover:text-[#ef233c] hover:border-[#ef233c]/50 flex items-center justify-center text-xs transition-colors shrink-0"
+              class="w-6 h-6 rounded-full border-2 border-zinc-600 bg-zinc-900 text-zinc-500 hover:text-[#ef233c] hover:border-[#ef233c]/50 flex items-center justify-center text-sm transition-colors shrink-0"
               title="Insert entry here"
             >+</button>
-            <div v-else class="w-1.5 h-1.5 rounded-full bg-zinc-700 shrink-0" />
-            <div class="flex-1 w-px bg-zinc-700" />
+            <div v-else class="w-2 h-2 rounded-full bg-zinc-600 shrink-0" />
+            <div class="flex-1 w-0.5 bg-zinc-600" />
           </div>
         </div>
       </template>

@@ -91,15 +91,21 @@ function toSketch(imageUrl: string, cacheKey: string) {
     // 5. Double threshold + hysteresis
     const edges = hysteresis(suppressed, w, h, 8, 25)
 
-    // 6. Render: dark lines on transparent (will show parchment through)
+    // 6. Render: variable-weight lines based on gradient magnitude
+    //    Stronger edges (bigger color difference) = darker/bolder lines
+    const maxMag = Math.max(1, ...Array.from(magnitude).filter((_, i) => edges[i]))
     const output = ctx.createImageData(w, h)
     for (let i = 0; i < w * h; i++) {
-      const edge = edges[i]!
-      // Invert: edges become dark lines, rest is transparent
-      const alpha = edge ? 255 : 0
-      output.data[i * 4] = 20       // near-black ink
-      output.data[i * 4 + 1] = 15
-      output.data[i * 4 + 2] = 10
+      if (!edges[i]) {
+        output.data[i * 4 + 3] = 0
+        continue
+      }
+      // Map magnitude to alpha: weak edges ~80, strong edges 255
+      const strength = Math.min(1, magnitude[i]! / (maxMag * 0.4))
+      const alpha = Math.round(80 + strength * 175)
+      output.data[i * 4] = 15
+      output.data[i * 4 + 1] = 10
+      output.data[i * 4 + 2] = 5
       output.data[i * 4 + 3] = alpha
     }
     ctx.putImageData(output, 0, 0)
