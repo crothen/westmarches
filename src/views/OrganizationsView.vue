@@ -290,23 +290,44 @@ async function changeMemberRank(orgId: string, member: OrgMember, newRank: OrgRa
     <!-- Search -->
     <input v-model="searchQuery" type="text" placeholder="Search organizations..." class="input w-full max-w-md mb-6" />
 
-    <!-- Create/Edit Form -->
-    <div v-if="showForm" class="card relative z-10 p-5 mb-6">
-      <div class="relative z-10 space-y-3">
-        <h3 class="text-sm font-semibold text-zinc-300" style="font-family: Manrope, sans-serif">
-          {{ editingOrg ? 'Edit Organization' : 'New Organization' }}
-        </h3>
-        <input v-model="form.name" class="input w-full" placeholder="Organization name" />
-        <textarea v-model="form.description" class="input w-full" rows="3" placeholder="Description..." />
-        <div class="flex gap-2">
-          <button @click="saveOrg" :disabled="saving || !form.name.trim()" class="btn text-sm flex items-center gap-2">
-            <span v-if="saving" class="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-            {{ saving ? 'Saving...' : (editingOrg ? 'Save' : 'Create') }}
-          </button>
-          <button @click="cancelForm" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+    <!-- Create/Edit Modal -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0" enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-100"
+        leave-from-class="opacity-100" leave-to-class="opacity-0"
+      >
+        <div v-if="showForm" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="cancelForm" />
+          <div class="relative bg-zinc-900 border border-white/10 rounded-xl p-6 w-full max-w-lg shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">
+                {{ editingOrg ? '✏️ Edit Organization' : '🏛️ New Organization' }}
+              </h2>
+              <button @click="cancelForm" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+            </div>
+            <div class="space-y-3">
+              <div>
+                <label class="text-sm font-semibold text-zinc-400">Name</label>
+                <input v-model="form.name" class="input w-full" placeholder="Organization name" />
+              </div>
+              <div>
+                <label class="text-sm font-semibold text-zinc-400">Description</label>
+                <textarea v-model="form.description" class="input w-full" rows="3" placeholder="Description..." />
+              </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+              <button @click="cancelForm" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+              <button @click="saveOrg" :disabled="saving || !form.name.trim()" class="btn text-sm flex items-center gap-2">
+                <span v-if="saving" class="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                {{ saving ? 'Saving...' : (editingOrg ? '💾 Save' : 'Create') }}
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </transition>
+    </Teleport>
 
     <div v-if="loading" class="text-zinc-500 animate-pulse">Loading organizations...</div>
 
