@@ -7,7 +7,7 @@ const cards = [
   { to: '/characters', icon: '🧙', title: 'Characters', desc: 'View and manage adventurers' },
   { to: '/missions', icon: '⚔️', title: 'Missions', desc: 'Available missions by unit' },
   { to: '/schedule', icon: '📅', title: 'Schedule', desc: 'Upcoming sessions & voting' },
-  { to: '/sessions', icon: '📖', title: 'Session Log', desc: 'Campaign session history' },
+  { to: '/sessions', icon: '📖', title: 'Sessions', desc: 'Campaign session history' },
   { to: '/locations', icon: '📍', title: 'Locations', desc: 'Known places and landmarks' },
   { to: '/npcs', icon: '👤', title: 'NPCs', desc: "People you've encountered" },
   { to: '/organizations', icon: '🏛️', title: 'Organizations', desc: 'Factions and guilds' },

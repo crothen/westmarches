@@ -60,7 +60,7 @@ async function handleCreate(data: Partial<SessionLog>) {
 <template>
   <div>
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">📖 Session Log</h1>
+      <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">📖 Sessions</h1>
       <button
         v-if="canCreate"
         @click="showCreateForm = !showCreateForm"

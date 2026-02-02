@@ -158,19 +158,19 @@ async function deleteLocation(key: string) {
         <p class="text-zinc-600 text-xs mt-1">Add locations where your group plays.</p>
       </div>
 
-      <!-- Locations list -->
-      <div class="space-y-2">
+      <!-- Locations grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
         <div
           v-for="loc in sortedLocations" :key="loc.key"
-          :class="['card-flat p-4 flex items-center justify-between transition-all', savedKey === loc.key ? '!border-green-500/40' : '']"
+          :class="['card-flat p-4 transition-all', savedKey === loc.key ? '!border-green-500/40' : '']"
         >
-          <div class="min-w-0">
+          <div class="mb-2">
             <div class="text-sm font-semibold text-zinc-200" style="font-family: Manrope, sans-serif">📍 {{ loc.label }}</div>
             <div class="text-xs text-zinc-600 font-mono">{{ loc.key }}</div>
           </div>
-          <div class="flex gap-1.5 shrink-0 ml-4">
-            <button @click="startEdit(loc.key)" class="btn-action">✏️ Edit</button>
-            <button @click="deleteLocation(loc.key)" class="btn-action !text-red-400/70 hover:!text-red-400 hover:!bg-red-500/15">✕ Delete</button>
+          <div class="flex gap-1.5">
+            <button @click="startEdit(loc.key)" class="btn-action">✏️</button>
+            <button @click="deleteLocation(loc.key)" class="btn-action !text-red-400/70 hover:!text-red-400 hover:!bg-red-500/15">✕</button>
           </div>
         </div>
       </div>
