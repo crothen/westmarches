@@ -5,6 +5,7 @@ import { doc, collection, query, where, addDoc, updateDoc, deleteDoc, Timestamp,
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
+import { cleanupLocationReferences, cleanupFeatureReferences } from '../lib/entityCleanup'
 import LocationMapViewer from '../components/map/LocationMapViewer.vue'
 import HexMiniMap from '../components/map/HexMiniMap.vue'
 import MentionTextarea from '../components/common/MentionTextarea.vue'
@@ -413,6 +414,7 @@ async function saveEditFeature() {
 async function deleteFeature(feat: LocationFeature) {
   if (!confirm(`Delete "${feat.name}"?`)) return
   try {
+    await cleanupFeatureReferences(feat.id)
     await deleteDoc(doc(db, 'features', feat.id))
     features.value = features.value.filter(f => f.id !== feat.id)
   } catch (e) {
@@ -437,11 +439,13 @@ async function deleteLocation() {
   if (!location.value) return
   if (!confirm(`Delete "${location.value.name}" and all its features?`)) return
   try {
-    // Delete all features belonging to this location
+    // Clean up feature references and delete features
     for (const feat of features.value) {
+      await cleanupFeatureReferences(feat.id)
       await deleteDoc(doc(db, 'features', feat.id))
     }
-    // Delete the location itself
+    // Clean up location references and delete
+    await cleanupLocationReferences(location.value.id)
     await deleteDoc(doc(db, 'locations', location.value.id))
     router.push('/locations')
   } catch (e) {

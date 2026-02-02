@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { collection, addDoc, updateDoc, deleteDoc, doc, query, orderBy, Timestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
+import { cleanupFeatureReferences } from '../lib/entityCleanup'
 import HexMiniMap from '../components/map/HexMiniMap.vue'
 import type { CampaignLocation, LocationFeature } from '../types'
 import { useTypeConfig } from '../composables/useTypeConfig'
@@ -173,6 +174,7 @@ async function saveEdit() {
 async function deleteFeature(feat: LocationFeature) {
   if (!confirm(`Delete "${feat.name}"? This cannot be undone.`)) return
   try {
+    await cleanupFeatureReferences(feat.id)
     await deleteDoc(doc(db, 'features', feat.id))
   } catch (e) {
     console.error('Failed to delete:', e)

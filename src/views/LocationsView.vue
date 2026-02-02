@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, query, orderBy, where, Timestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
+import { cleanupLocationReferences, cleanupFeatureReferences } from '../lib/entityCleanup'
 import HexMiniMap from '../components/map/HexMiniMap.vue'
 import TypeSelect from '../components/common/TypeSelect.vue'
 import { useTypeConfig } from '../composables/useTypeConfig'
@@ -131,10 +132,14 @@ async function addLocation() {
 async function deleteLocation(loc: CampaignLocation) {
   if (!confirm(`Delete "${loc.name}" and all its features?`)) return
   try {
-    // Delete associated features
+    // Clean up feature references and delete features
     const featSnap = await getDocs(query(collection(db, 'features'), where('locationId', '==', loc.id)))
-    await Promise.all(featSnap.docs.map(d => deleteDoc(d.ref)))
-    // Delete the location
+    for (const fDoc of featSnap.docs) {
+      await cleanupFeatureReferences(fDoc.id)
+      await deleteDoc(fDoc.ref)
+    }
+    // Clean up location references and delete
+    await cleanupLocationReferences(loc.id)
     await deleteDoc(doc(db, 'locations', loc.id))
     // onSnapshot will update lists automatically
   } catch (e) {

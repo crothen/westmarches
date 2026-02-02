@@ -32,9 +32,15 @@ export function parseMentions(text: string): MentionToken[] {
 /**
  * Convert a text string with mention tokens into HTML with router-links.
  * Returns an HTML string. Use with v-html.
+ *
+ * If `deletedIds` is provided, mentions whose ID is in the set will render
+ * as a [DELETED] placeholder instead of a clickable link.
  */
-export function renderMentionsHtml(text: string): string {
+export function renderMentionsHtml(text: string, deletedIds?: Set<string>): string {
   return text.replace(MENTION_REGEX, (_match, name: string, kind: string, id: string) => {
+    if (deletedIds && deletedIds.has(id)) {
+      return '<span class="mention-deleted" style="color: #666; text-decoration: line-through; font-style: italic;">[DELETED]</span>'
+    }
     const route = kind === 'char' ? `/characters/${id}` : `/npcs/${id}`
     const color = kind === 'char' ? 'color: #60a5fa' : 'color: #fbbf24'
     const escapedName = escapeHtml(name)

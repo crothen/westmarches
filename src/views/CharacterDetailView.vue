@@ -5,6 +5,7 @@ import { doc, updateDoc, deleteDoc, collection, query, orderBy, Timestamp, onSna
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
+import { cleanupCharacterReferences } from '../lib/entityCleanup'
 import type { Character } from '../types'
 
 const route = useRoute()
@@ -221,6 +222,8 @@ async function deleteCharacter() {
   if (!character.value) return
   if (!confirm(`Delete "${character.value.name}"? This cannot be undone.`)) return
   try {
+    // Clean up all references before deleting
+    await cleanupCharacterReferences(character.value.id)
     await deleteDoc(doc(db, 'characters', character.value.id))
     router.push('/characters')
   } catch (e) {

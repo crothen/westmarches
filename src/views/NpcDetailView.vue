@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { doc, collection, query, orderBy, updateDoc, onSnapshot } from 'firebase/firestore'
+import { useRoute, useRouter } from 'vue-router'
+import { doc, collection, query, orderBy, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
+import { cleanupNpcReferences } from '../lib/entityCleanup'
 import type { Npc, Organization } from '../types'
 import TagInput from '../components/common/TagInput.vue'
 import NotesSection from '../components/common/NotesSection.vue'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const { error: genError, generateImage } = useImageGen()
 
@@ -135,6 +137,19 @@ async function deletePortrait() {
   }
 }
 
+async function deleteNpc() {
+  if (!npc.value) return
+  if (!confirm(`Delete "${npc.value.name}"? This cannot be undone.`)) return
+  try {
+    await cleanupNpcReferences(npc.value.id)
+    await deleteDoc(doc(db, 'npcs', npc.value.id))
+    router.push('/npcs')
+  } catch (e) {
+    console.error('Failed to delete NPC:', e)
+    alert('Failed to delete NPC.')
+  }
+}
+
 
 </script>
 
@@ -174,11 +189,18 @@ async function deletePortrait() {
               <h1 :class="['text-3xl font-bold', isDeceased ? 'line-through text-zinc-500' : 'text-white']" style="font-family: Manrope, sans-serif">{{ npc.name }}</h1>
               <span class="text-zinc-500 text-lg">{{ npc.race }}</span>
             </div>
-            <button
-              v-if="auth.isAuthenticated && !auth.isGuest"
-              @click="openEditModal"
-              class="btn !text-xs !py-1.5"
-            >✏️ Edit</button>
+            <div class="flex items-center gap-2">
+              <button
+                v-if="auth.isAuthenticated && !auth.isGuest"
+                @click="openEditModal"
+                class="btn !text-xs !py-1.5"
+              >✏️ Edit</button>
+              <button
+                v-if="auth.isDm || auth.isAdmin"
+                @click="deleteNpc"
+                class="btn !text-xs !py-1.5 !bg-red-500/15 !text-red-400"
+              >🗑️</button>
+            </div>
           </div>
 
           <div class="flex flex-wrap gap-2 mt-3">
