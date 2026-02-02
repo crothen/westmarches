@@ -316,27 +316,24 @@ onUnmounted(() => {
 
           <!-- ==================== COVER PAGE ==================== -->
           <div v-if="currentPage === 0" class="relative h-full flex flex-col overflow-y-auto">
-            <!-- Sketch cover image (centered, smaller) -->
-            <div v-if="sketchCache['cover'] || (session as any).imageUrl" class="w-full">
+            <!-- Title at top -->
+            <div class="px-10 sm:px-14 pt-8 pb-2" :style="{ fontFamily: currentFontFamily }">
+              <h1 class="text-5xl sm:text-6xl text-amber-950 leading-tight" :style="{ fontFamily: currentFontFamily }">
+                {{ session.title }}
+              </h1>
+            </div>
+
+            <!-- Sketch cover image with faded edges -->
+            <div v-if="sketchCache['cover'] || (session as any).imageUrl" class="w-full relative">
               <img
                 :src="sketchCache['cover'] || (session as any).imageUrl"
-                class="w-full object-contain"
+                class="w-full object-contain cover-fade"
                 :style="sketchCache['cover'] ? '' : 'filter: grayscale(1) contrast(1.5)'"
               />
             </div>
 
             <div class="flex-1 flex flex-col justify-center px-10 sm:px-14 py-6" :style="{ fontFamily: currentFontFamily }">
               <div class="space-y-4">
-                <!-- Session number as handwritten label -->
-                <div class="journal-text tracking-[0.15em] uppercase" :style="{ fontFamily: currentFontFamily }">
-                  Session {{ session.sessionNumber }}
-                </div>
-
-                <!-- Title -->
-                <h1 class="text-5xl sm:text-6xl text-amber-950 leading-tight" :style="{ fontFamily: currentFontFamily }">
-                  {{ session.title }}
-                </h1>
-
                 <!-- Separator -->
                 <div class="w-24 border-t border-amber-900/20" />
 
@@ -441,6 +438,11 @@ onUnmounted(() => {
 .sketch-fade {
   mask-image: radial-gradient(ellipse 90% 85% at center, black 40%, transparent 100%);
   -webkit-mask-image: radial-gradient(ellipse 90% 85% at center, black 40%, transparent 100%);
+}
+
+.cover-fade {
+  mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
 }
 
 .journal-text {
