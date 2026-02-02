@@ -462,6 +462,6 @@ onUnmounted(() => {
   color: #1c0d03;
   opacity: 0.9;
   font-size: 1.5rem;
-  line-height: 1;
+  line-height: 1 !important;
 }
 </style>
