@@ -5,6 +5,7 @@ import { doc, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, 
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
+import SessionForm from '../components/sessions/SessionForm.vue'
 import type { SessionLog, SessionNote } from '../types'
 
 const route = useRoute()
@@ -13,6 +14,8 @@ const { generating: genLoading, error: genError, generateImage } = useImageGen()
 const session = ref<SessionLog | null>(null)
 const notes = ref<SessionNote[]>([])
 const loading = ref(true)
+const editing = ref(false)
+const saving = ref(false)
 const newNoteContent = ref('')
 const newNotePrivate = ref(false)
 const editingNoteId = ref<string | null>(null)
@@ -22,6 +25,7 @@ const replyContent = ref('')
 const _unsubs: (() => void)[] = []
 
 const sessionId = computed(() => route.params.id as string)
+const canEdit = computed(() => auth.isDm || auth.isAdmin)
 
 const visibleNotes = computed(() => {
   return notes.value.filter(note => {
@@ -60,6 +64,24 @@ onUnmounted(() => {
   _unsubs.forEach(fn => fn())
 })
 
+async function handleEdit(data: Partial<SessionLog>) {
+  if (!session.value) return
+  saving.value = true
+  try {
+    await updateDoc(doc(db, 'sessions', session.value.id), {
+      ...data,
+      date: Timestamp.fromDate(new Date(data.date as any)),
+      updatedAt: Timestamp.now(),
+    })
+    editing.value = false
+  } catch (e) {
+    console.error('Failed to update session:', e)
+    alert('Failed to save changes.')
+  } finally {
+    saving.value = false
+  }
+}
+
 async function addNote() {
   if (!newNoteContent.value.trim() || !auth.firebaseUser) return
   await addDoc(collection(db, 'sessionNotes'), {
@@ -75,17 +97,17 @@ async function addNote() {
   newNotePrivate.value = false
 }
 
-function startEdit(note: SessionNote) {
+function startNoteEdit(note: SessionNote) {
   editingNoteId.value = note.id
   editContent.value = note.content
 }
 
-function cancelEdit() {
+function cancelNoteEdit() {
   editingNoteId.value = null
   editContent.value = ''
 }
 
-async function saveEdit(noteId: string) {
+async function saveNoteEdit(noteId: string) {
   if (!editContent.value.trim()) return
   await updateDoc(doc(db, 'sessionNotes', noteId), {
     content: editContent.value.trim(),
@@ -184,64 +206,85 @@ function canDeleteNote(note: SessionNote): boolean {
     </div>
 
     <div v-else>
-      <div class="flex items-center gap-3 mb-2">
-        <span class="text-[#ef233c] font-bold text-2xl" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
-        <span class="text-zinc-600">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
+      <!-- Edit mode -->
+      <div v-if="editing" class="card-flat p-5 mb-6">
+        <h2 class="text-lg font-semibold text-[#ef233c] mb-4" style="font-family: Manrope, sans-serif">✏️ Edit Session</h2>
+        <SessionForm
+          :session="session"
+          @submit="handleEdit"
+          @cancel="editing = false"
+        />
       </div>
-      <h1 class="text-3xl font-bold text-white mb-6" style="font-family: Manrope, sans-serif">{{ session.title }}</h1>
 
-      <!-- Session Art -->
-      <div v-if="(session as any).imageUrl" class="mb-6 -mx-1">
-        <img :src="(session as any).imageUrl" class="w-full max-h-80 object-cover rounded-xl border border-white/10" />
-      </div>
-
-      <button
-        v-if="auth.isAuthenticated && !(session as any).imageUrl"
-        @click="generateSessionArt"
-        :disabled="genLoading"
-        class="btn !text-[0.65rem] !py-1.5 !px-3 mb-6"
-      >
-        {{ genLoading ? '🎨 Generating scene...' : '🎨 Generate Scene Art' }}
-      </button>
-      <div v-if="genError" class="text-red-400 text-xs mb-4">{{ genError }}</div>
-
-      <!-- Participants -->
-      <div v-if="session.participants?.length" class="mb-6">
-        <h2 class="text-lg font-semibold text-[#ef233c] mb-2" style="font-family: Manrope, sans-serif">🧙 Adventurers</h2>
-        <div class="flex flex-wrap gap-2">
-          <span v-for="p in session.participants" :key="p.characterId" class="bg-white/[0.05] border border-white/[0.06] text-zinc-200 px-3 py-1 rounded-lg text-sm">
-            {{ p.characterName }}
-          </span>
+      <!-- View mode -->
+      <template v-else>
+        <div class="flex items-center gap-3 mb-2">
+          <span class="text-[#ef233c] font-bold text-2xl" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
+          <span class="text-zinc-600">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
+          <span v-if="session.sessionLocationName" class="text-zinc-600 text-sm">📍 {{ session.sessionLocationName }}</span>
+          <button
+            v-if="canEdit"
+            @click="editing = true"
+            class="btn !text-xs !py-1.5 !px-3 ml-auto"
+          >
+            ✏️ Edit
+          </button>
         </div>
-      </div>
+        <h1 class="text-3xl font-bold text-white mb-6" style="font-family: Manrope, sans-serif">{{ session.title }}</h1>
 
-      <!-- Summary -->
-      <div class="mb-6">
-        <h2 class="text-lg font-semibold text-[#ef233c] mb-2" style="font-family: Manrope, sans-serif">📜 Summary</h2>
-        <div class="card p-4 relative z-10">
-          <div class="relative z-10 text-zinc-300 whitespace-pre-wrap">{{ session.summary }}</div>
+        <!-- Session Art -->
+        <div v-if="(session as any).imageUrl" class="mb-6 -mx-1">
+          <img :src="(session as any).imageUrl" class="w-full max-h-80 object-cover rounded-xl border border-white/10" />
         </div>
-      </div>
 
-      <!-- Loot -->
-      <div v-if="session.loot?.length" class="mb-6">
-        <h2 class="text-lg font-semibold text-[#ef233c] mb-2" style="font-family: Manrope, sans-serif">💰 Loot</h2>
-        <div class="card divide-y divide-white/[0.06] relative z-10">
-          <div v-for="(item, i) in session.loot" :key="i" class="relative z-10 p-3 flex items-center justify-between">
-            <div>
-              <span class="text-zinc-100">{{ item.name }}</span>
-              <span v-if="item.quantity > 1" class="text-zinc-500 ml-1">×{{ item.quantity }}</span>
-              <span v-if="item.description" class="text-zinc-500 text-sm ml-2">— {{ item.description }}</span>
-            </div>
-            <span v-if="item.recipient" class="text-zinc-500 text-sm">→ {{ item.recipient }}</span>
+        <button
+          v-if="auth.isAuthenticated && !(session as any).imageUrl"
+          @click="generateSessionArt"
+          :disabled="genLoading"
+          class="btn !text-[0.65rem] !py-1.5 !px-3 mb-6"
+        >
+          {{ genLoading ? '🎨 Generating scene...' : '🎨 Generate Scene Art' }}
+        </button>
+        <div v-if="genError" class="text-red-400 text-xs mb-4">{{ genError }}</div>
+
+        <!-- Participants -->
+        <div v-if="session.participants?.length" class="mb-6">
+          <h2 class="text-lg font-semibold text-[#ef233c] mb-2" style="font-family: Manrope, sans-serif">🧙 Adventurers</h2>
+          <div class="flex flex-wrap gap-2">
+            <span v-for="p in session.participants" :key="p.characterId" class="bg-white/[0.05] border border-white/[0.06] text-zinc-200 px-3 py-1 rounded-lg text-sm">
+              {{ p.characterName }}
+            </span>
           </div>
         </div>
-      </div>
 
-      <!-- Tags -->
-      <div v-if="session.tags?.length" class="mb-6 flex gap-2 flex-wrap">
-        <span v-for="tag in session.tags" :key="tag" class="text-xs bg-white/[0.05] text-zinc-500 px-2 py-0.5 rounded-md border border-white/[0.06]">{{ tag }}</span>
-      </div>
+        <!-- Summary -->
+        <div class="mb-6">
+          <h2 class="text-lg font-semibold text-[#ef233c] mb-2" style="font-family: Manrope, sans-serif">📜 Summary</h2>
+          <div class="card p-4 relative z-10">
+            <div class="relative z-10 text-zinc-300 whitespace-pre-wrap">{{ session.summary }}</div>
+          </div>
+        </div>
+
+        <!-- Loot -->
+        <div v-if="session.loot?.length" class="mb-6">
+          <h2 class="text-lg font-semibold text-[#ef233c] mb-2" style="font-family: Manrope, sans-serif">💰 Loot</h2>
+          <div class="card divide-y divide-white/[0.06] relative z-10">
+            <div v-for="(item, i) in session.loot" :key="i" class="relative z-10 p-3 flex items-center justify-between">
+              <div>
+                <span class="text-zinc-100">{{ item.name }}</span>
+                <span v-if="item.quantity > 1" class="text-zinc-500 ml-1">×{{ item.quantity }}</span>
+                <span v-if="item.description" class="text-zinc-500 text-sm ml-2">— {{ item.description }}</span>
+              </div>
+              <span v-if="item.recipient" class="text-zinc-500 text-sm">→ {{ item.recipient }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tags -->
+        <div v-if="session.tags?.length" class="mb-6 flex gap-2 flex-wrap">
+          <span v-for="tag in session.tags" :key="tag" class="text-xs bg-white/[0.05] text-zinc-500 px-2 py-0.5 rounded-md border border-white/[0.06]">{{ tag }}</span>
+        </div>
+      </template>
 
       <!-- Player Notes Section -->
       <div class="mt-8 border-t border-white/[0.06] pt-6">
@@ -263,7 +306,7 @@ function canDeleteNote(note: SessionNote): boolean {
                   <span class="text-zinc-600 text-xs">{{ (note.createdAt as any)?.toDate ? new Date((note.createdAt as any).toDate()).toLocaleDateString() : '' }}</span>
                 </div>
                 <div class="flex gap-2">
-                  <button v-if="canEditNote(note)" @click="startEdit(note)" class="text-zinc-500 hover:text-[#ef233c] text-xs transition-colors">Edit</button>
+                  <button v-if="canEditNote(note)" @click="startNoteEdit(note)" class="text-zinc-500 hover:text-[#ef233c] text-xs transition-colors">Edit</button>
                   <button v-if="canDeleteNote(note)" @click="deleteNote(note.id)" class="text-zinc-500 hover:text-red-400 text-xs transition-colors">Delete</button>
                 </div>
               </div>
@@ -272,8 +315,8 @@ function canDeleteNote(note: SessionNote): boolean {
               <div v-if="editingNoteId === note.id">
                 <textarea v-model="editContent" rows="3" class="input w-full text-sm mb-2" />
                 <div class="flex gap-2 justify-end">
-                  <button @click="cancelEdit" class="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
-                  <button @click="saveEdit(note.id)" class="btn text-sm !py-1 !px-3">Save</button>
+                  <button @click="cancelNoteEdit" class="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
+                  <button @click="saveNoteEdit(note.id)" class="btn text-sm !py-1 !px-3">Save</button>
                 </div>
               </div>
 

@@ -148,6 +148,8 @@ export interface SessionLog {
   summary: string
   dmId?: string
   dmName?: string
+  sessionLocationId?: string
+  sessionLocationName?: string
   participants: SessionParticipant[]
   locationsVisited: string[]  // location IDs
   npcsEncountered: string[]   // npc IDs

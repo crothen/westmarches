@@ -24,6 +24,7 @@ const routes = [
   { path: '/admin/users', name: 'admin-users', component: () => import('../views/AdminUsersView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/admin/markers', name: 'admin-markers', component: () => import('../views/AdminMarkersView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/admin/tiles', name: 'admin-tiles', component: () => import('../views/AdminTilesView.vue'), meta: { auth: true, role: 'admin' } },
+  { path: '/admin/session-locations', name: 'admin-session-locations', component: () => import('../views/AdminSessionLocationsView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/dm', name: 'dm', component: () => import('../views/DmView.vue'), meta: { auth: true, role: 'dm' } },
 ]
 

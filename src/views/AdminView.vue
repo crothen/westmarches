@@ -3,6 +3,7 @@ const sections = [
   { to: '/admin/users', icon: '👥', label: 'User Management', desc: 'Manage users, assign roles (player, DM, admin).' },
   { to: '/admin/markers', icon: '📌', label: 'Marker Management', desc: 'Edit marker types, labels, and icons for locations, features, and hex tags.' },
   { to: '/admin/tiles', icon: '🗺️', label: 'Tile Management', desc: 'Manage terrain types, colors, and textures. Generate textures with AI.' },
+  { to: '/admin/session-locations', icon: '📍', label: 'Session Locations', desc: 'Manage where sessions take place — online, game stores, etc.' },
 ]
 </script>
 
