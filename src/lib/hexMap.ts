@@ -188,7 +188,23 @@ export class HexMap {
       quest: '/icons/markers/quest.png',
       locked: '/icons/markers/locked.png',
       unlocked: '/icons/markers/unlocked.png',
-      // Feature fallback
+      // Feature types (prefixed with f: to avoid collision with location types)
+      'f:barracks': '/icons/features/barracks.png',
+      'f:blacksmith': '/icons/features/blacksmith.png',
+      'f:cave': '/icons/features/cave.png',
+      'f:dock': '/icons/features/dock.png',
+      'f:gate': '/icons/features/gate.png',
+      'f:guild': '/icons/features/guild.png',
+      'f:inn': '/icons/features/inn.png',
+      'f:library': '/icons/features/library.png',
+      'f:market': '/icons/features/market.png',
+      'f:shop': '/icons/features/shop.png',
+      'f:shrine': '/icons/features/shrine.png',
+      'f:tavern': '/icons/features/tavern.png',
+      'f:temple': '/icons/features/temple.png',
+      'f:tower': '/icons/features/tower.png',
+      'f:warehouse': '/icons/features/warehouse.png',
+      'f:other': '/icons/features/other.png',
       feature: '/icons/features/other.png',
     }
 
@@ -629,7 +645,7 @@ export class HexMap {
         return { img: this.iconImages[entry.type] || this.iconImages['other'] || null }
       }
       if (entry.kind === 'feature') {
-        return { img: this.iconImages[entry.type] || this.iconImages['feature'] || this.iconImages['other'] || null }
+        return { img: this.iconImages[`f:${entry.type}`] || this.iconImages['feature'] || this.iconImages['other'] || null }
       }
       // marker
       return { img: this.iconImages[entry.type] || null }
