@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { collection, getDocs, getDocsFromServer, query } from 'firebase/firestore'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { collection, getDocs, getDocsFromServer, query, addDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { HexMap } from '../../lib/hexMap'
-import type { HexMarkerData } from '../../lib/hexMap'
+import type { HexMarkerData, MapPath, MapPathType } from '../../lib/hexMap'
 import { MAP_CONFIG } from '../../lib/mapData'
 import { useMapData } from '../../composables/useMapData'
 import { useTypeConfig } from '../../composables/useTypeConfig'
@@ -28,10 +28,214 @@ const selectedHex = ref<{ x: number; y: number } | null>(null)
 const hexMarkers = ref<Record<string, HexMarkerData>>({})
 const currentZoom = ref(1)
 
+// === Draw mode state ===
+const drawMode = ref(false)
+const drawPathType = ref<MapPathType>('road-solid')
+const drawingPoints = ref<{ x: number; y: number }[]>([])
+const cursorWorldPos = ref<{ x: number; y: number } | null>(null)
+const mapPaths = ref<MapPath[]>([])
+const selectedPathId = ref<string | null>(null)
+
+const canDraw = computed(() => auth.isDm || auth.isAdmin)
+
+const pathTypeOptions: { value: MapPathType; label: string; icon: string }[] = [
+  { value: 'road-solid', label: 'Road', icon: '━' },
+  { value: 'road-dotted', label: 'Trail', icon: '┅' },
+  { value: 'river', label: 'River', icon: '〰' },
+]
+
+// === Path loading ===
+async function loadPaths() {
+  try {
+    const snap = await getDocs(query(collection(db, 'mapPaths')))
+    mapPaths.value = snap.docs.map(d => {
+      const data = d.data()
+      return {
+        id: d.id,
+        type: data.type as MapPathType,
+        points: data.points || [],
+        createdBy: data.createdBy,
+        createdAt: data.createdAt?.toDate?.() || new Date()
+      }
+    })
+  } catch (e) {
+    console.warn('Failed to load map paths:', e)
+  }
+}
+
+async function savePath(type: MapPathType, points: { x: number; y: number }[]) {
+  if (points.length < 2) return
+  try {
+    const docRef = await addDoc(collection(db, 'mapPaths'), {
+      type,
+      points,
+      createdBy: auth.firebaseUser?.uid || null,
+      createdAt: Timestamp.now()
+    })
+    mapPaths.value.push({ id: docRef.id, type, points, createdBy: auth.firebaseUser?.uid })
+  } catch (e) {
+    console.error('Failed to save path:', e)
+    alert('Failed to save path.')
+  }
+}
+
+async function deletePath(pathId: string) {
+  try {
+    await deleteDoc(doc(db, 'mapPaths', pathId))
+    mapPaths.value = mapPaths.value.filter(p => p.id !== pathId)
+    selectedPathId.value = null
+  } catch (e) {
+    console.error('Failed to delete path:', e)
+  }
+}
+
+// === Draw mode interaction ===
+function enterDrawMode() {
+  drawMode.value = true
+  drawingPoints.value = []
+  cursorWorldPos.value = null
+  selectedPathId.value = null
+  if (hexMap) hexMap.disableLeftDragPan = true
+}
+
+function exitDrawMode() {
+  drawMode.value = false
+  drawingPoints.value = []
+  cursorWorldPos.value = null
+  selectedPathId.value = null
+  if (hexMap) hexMap.disableLeftDragPan = false
+  redraw()
+}
+
+function onDrawClick(e: MouseEvent) {
+  if (!hexMap || !drawMode.value) return
+
+  // Right-click or ctrl+click to finish
+  if (e.button === 2) {
+    finishDrawing()
+    return
+  }
+  if (e.button !== 0) return
+
+  const world = hexMap.toWorld(e.clientX, e.clientY)
+
+  // If not currently drawing, check if clicking near an existing path to select it
+  if (drawingPoints.value.length === 0) {
+    const hitPath = findPathAtWorld(world)
+    if (hitPath) {
+      selectedPathId.value = selectedPathId.value === hitPath.id ? null : hitPath.id
+      redraw()
+      return
+    }
+  }
+
+  drawingPoints.value.push(world)
+  redraw()
+}
+
+function onDrawDblClick(e: MouseEvent) {
+  if (!drawMode.value) return
+  e.preventDefault()
+  e.stopPropagation()
+  // Remove the last point added by the second click of the double-click
+  if (drawingPoints.value.length > 1) {
+    drawingPoints.value.pop()
+  }
+  finishDrawing()
+}
+
+function onDrawMouseMove(e: MouseEvent) {
+  if (!hexMap || !drawMode.value || drawingPoints.value.length === 0) return
+  cursorWorldPos.value = hexMap.toWorld(e.clientX, e.clientY)
+  redraw()
+}
+
+function onDrawContextMenu(e: MouseEvent) {
+  if (drawMode.value) {
+    e.preventDefault()
+    if (drawingPoints.value.length > 0) {
+      finishDrawing()
+    }
+  }
+}
+
+function onDrawKeyDown(e: KeyboardEvent) {
+  if (!drawMode.value) return
+
+  if (e.key === 'Escape') {
+    if (drawingPoints.value.length > 0) {
+      // Cancel current drawing
+      drawingPoints.value = []
+      cursorWorldPos.value = null
+      redraw()
+    } else {
+      exitDrawMode()
+    }
+    return
+  }
+
+  if (e.key === 'Enter' && drawingPoints.value.length >= 2) {
+    finishDrawing()
+    return
+  }
+
+  if ((e.key === 'z' && (e.ctrlKey || e.metaKey)) && drawingPoints.value.length > 0) {
+    drawingPoints.value.pop()
+    redraw()
+    return
+  }
+
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selectedPathId.value) {
+      deletePath(selectedPathId.value)
+      redraw()
+    }
+  }
+}
+
+async function finishDrawing() {
+  if (drawingPoints.value.length >= 2) {
+    await savePath(drawPathType.value, [...drawingPoints.value])
+  }
+  drawingPoints.value = []
+  cursorWorldPos.value = null
+  redraw()
+}
+
+function findPathAtWorld(world: { x: number; y: number }): MapPath | null {
+  // Hit-test: find closest path within a threshold
+  const threshold = 15 / (hexMap?.camera.zoom || 1)
+  let closest: MapPath | null = null
+  let minDist = threshold
+
+  for (const path of mapPaths.value) {
+    for (let i = 0; i < path.points.length - 1; i++) {
+      const a = path.points[i]!
+      const b = path.points[i + 1]!
+      const dist = pointToSegmentDist(world, a, b)
+      if (dist < minDist) {
+        minDist = dist
+        closest = path
+      }
+    }
+  }
+  return closest
+}
+
+function pointToSegmentDist(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const lenSq = dx * dx + dy * dy
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y)
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq
+  t = Math.max(0, Math.min(1, t))
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
+}
+
+// === Hex markers loading ===
 async function loadHexMarkers(fromServer = false) {
   try {
     const fetchFn = fromServer ? getDocsFromServer : getDocs
-    // Use allSettled so one failing query doesn't break the rest
     const results = await Promise.allSettled([
       fetchFn(query(collection(db, 'locations'))),
       fetchFn(query(collection(db, 'features'))),
@@ -44,7 +248,6 @@ async function loadHexMarkers(fromServer = false) {
     const noteSnap = results[2].status === 'fulfilled' ? results[2].value : null
     const markerSnap = results[3].status === 'fulfilled' ? results[3].value : null
 
-    // Log individual failures
     results.forEach((r, i) => {
       if (r.status === 'rejected') {
         const names = ['locations', 'features', 'hexNotes', 'markers']
@@ -57,7 +260,6 @@ async function loadHexMarkers(fromServer = false) {
       if (!markers[key]) markers[key] = { icons: [] }
     }
 
-    // Locations
     locSnap?.docs.forEach(d => {
       const data = d.data()
       if (!data.hexKey) return
@@ -71,7 +273,6 @@ async function loadHexMarkers(fromServer = false) {
       if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
     })
 
-    // Features (only those directly on a hex, not via location)
     featSnap?.docs.forEach(d => {
       const data = d.data()
       if (!data.hexKey) return
@@ -85,7 +286,6 @@ async function loadHexMarkers(fromServer = false) {
       if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
     })
 
-    // Notes
     noteSnap?.docs.forEach(d => {
       const data = d.data()
       if (!data.hexKey) return
@@ -93,15 +293,12 @@ async function loadHexMarkers(fromServer = false) {
       markers[data.hexKey]!.icons.push({ kind: 'note', type: 'note' })
     })
 
-    // Hex-level markers only (skip markers that belong to a location)
     const currentUid = auth.firebaseUser?.uid
     const isAdmin = auth.isAdmin
     markerSnap?.docs.forEach(d => {
       const data = d.data()
       if (!data.hexKey) return
-      // Skip markers associated with a location — those belong to the location, not the hex
       if (data.locationId) return
-      // Skip private markers not visible to current user
       if (data.isPrivate && data.createdBy !== currentUid && !isAdmin) return
       ensure(data.hexKey)
       markers[data.hexKey]!.icons.push({
@@ -119,13 +316,28 @@ async function loadHexMarkers(fromServer = false) {
   }
 }
 
+// === Drawing helper ===
+function redraw() {
+  if (!hexMap) return
+  const preview = drawMode.value && drawingPoints.value.length > 0
+    ? { type: drawPathType.value, points: drawingPoints.value, cursor: cursorWorldPos.value || undefined }
+    : undefined
+
+  // Highlight selected path
+  const pathsToRender = selectedPathId.value
+    ? mapPaths.value.map(p => p.id === selectedPathId.value ? { ...p, _selected: true } : p)
+    : mapPaths.value
+
+  hexMap.draw(hexData.value, selectedHex.value, false, auth.role, hexMarkers.value, pathsToRender, preview)
+}
+
+// === Init ===
 onMounted(() => {
   if (!canvasRef.value || !containerRef.value) return
 
-  // Load marker data
   loadHexMarkers()
+  loadPaths()
 
-  // Wait for configs to load, then init
   const stopWatch = watch([terrainConfig, tagsConfig], ([tc, tg]) => {
     if (Object.keys(tc).length && Object.keys(tg).length && !hexMap) {
       hexMap = new HexMap(
@@ -135,7 +347,6 @@ onMounted(() => {
         tc,
         tg
       )
-      // Load icons from Firestore config (Storage URLs) if available
       const markerTypesConfig = {
         locationTypes: Object.fromEntries(locationTypes.value.map(t => [t.key, { iconUrl: t.iconUrl }])),
         featureTypes: Object.fromEntries(featureTypes.value.map(t => [t.key, { iconUrl: t.iconUrl }])),
@@ -145,6 +356,7 @@ onMounted(() => {
         hexMap.loadIconImages(markerTypesConfig)
       }
       hexMap.onHexClick = (hex: any, _x: number, _y: number, type: string) => {
+        if (drawMode.value) return // Don't select hexes when drawing
         if (type === 'click' && hex) {
           selectedHex.value = hex
           emit('hex-click', hex)
@@ -152,9 +364,8 @@ onMounted(() => {
       }
       hexMap.onCameraChange = () => {
         if (hexMap) currentZoom.value = hexMap.camera.zoom
-        hexMap?.draw(hexData.value, selectedHex.value, false, auth.role, hexMarkers.value)
+        redraw()
       }
-      // If there's an initial hex from the URL, focus on it; otherwise fit to view
       if (props.initialHex) {
         selectedHex.value = props.initialHex
         hexMap.focusOnHex(props.initialHex.x, props.initialHex.y)
@@ -162,23 +373,23 @@ onMounted(() => {
       } else {
         hexMap.fitToView()
       }
-      hexMap.draw(hexData.value, selectedHex.value, false, auth.role, hexMarkers.value)
+      redraw()
       stopWatch()
     }
   }, { immediate: true })
+
+  window.addEventListener('keydown', onDrawKeyDown)
 })
 
-watch([hexData, selectedHex, hexMarkers], () => {
-  if (hexMap) {
-    hexMap.draw(hexData.value, selectedHex.value, false, auth.role, hexMarkers.value)
-  }
+watch([hexData, selectedHex, hexMarkers, mapPaths], () => {
+  redraw()
 })
 
 function focusOnHex(x: number, y: number) {
   if (hexMap) {
     selectedHex.value = { x, y }
     hexMap.focusOnHex(x, y)
-    hexMap.draw(hexData.value, selectedHex.value, false, auth.role, hexMarkers.value)
+    redraw()
   }
 }
 
@@ -186,16 +397,13 @@ function clearSelection() {
   selectedHex.value = null
   if (hexMap) {
     hexMap.fitToView()
-    hexMap.draw(hexData.value, selectedHex.value, false, auth.role, hexMarkers.value)
+    redraw()
   }
 }
 
 async function refreshMarkers() {
   await loadHexMarkers(true)
-  // Force redraw in case watcher doesn't trigger
-  if (hexMap) {
-    hexMap.draw(hexData.value, selectedHex.value, false, auth.role, hexMarkers.value)
-  }
+  redraw()
 }
 
 defineExpose({ focusOnHex, clearSelection, refreshMarkers })
@@ -205,6 +413,7 @@ onUnmounted(() => {
     hexMap.destroy()
     hexMap = null
   }
+  window.removeEventListener('keydown', onDrawKeyDown)
 })
 </script>
 
@@ -213,7 +422,67 @@ onUnmounted(() => {
     <div v-if="loading" class="absolute inset-0 flex items-center justify-center">
       <span class="text-[#ef233c] animate-pulse">Loading map...</span>
     </div>
-    <canvas ref="canvasRef" class="block w-full h-full" />
+    <canvas
+      ref="canvasRef"
+      class="block w-full h-full"
+      :class="drawMode ? 'cursor-crosshair' : ''"
+      @click="drawMode ? onDrawClick($event) : undefined"
+      @dblclick="drawMode ? onDrawDblClick($event) : undefined"
+      @mousemove="drawMode ? onDrawMouseMove($event) : undefined"
+      @contextmenu="onDrawContextMenu"
+    />
+
+    <!-- Draw mode toolbar (admin/DM only) -->
+    <div v-if="canDraw && !drawMode" class="absolute top-3 right-3 z-20">
+      <button
+        @click="enterDrawMode"
+        class="bg-black/60 backdrop-blur-sm text-zinc-300 hover:text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 transition-colors flex items-center gap-1.5"
+        title="Draw roads & rivers"
+      >
+        ✏️ Draw
+      </button>
+    </div>
+
+    <!-- Draw mode panel -->
+    <div v-if="drawMode" class="absolute top-3 right-3 z-20 bg-black/80 backdrop-blur-sm rounded-xl border border-white/10 p-3 space-y-3 min-w-[180px]">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold text-zinc-200" style="font-family: Manrope, sans-serif">Draw Mode</span>
+        <button @click="exitDrawMode" class="text-zinc-500 hover:text-white text-xs transition-colors">✕</button>
+      </div>
+
+      <!-- Path type selector -->
+      <div class="flex gap-1">
+        <button
+          v-for="opt in pathTypeOptions" :key="opt.value"
+          @click="drawPathType = opt.value"
+          :class="['flex-1 text-xs py-1.5 px-2 rounded-lg border transition-all', drawPathType === opt.value ? 'border-[#ef233c]/40 bg-[#ef233c]/10 text-white' : 'border-white/10 text-zinc-500 hover:text-zinc-300']"
+        >
+          <span class="block text-center">{{ opt.icon }}</span>
+          <span class="block text-center text-[0.6rem]">{{ opt.label }}</span>
+        </button>
+      </div>
+
+      <!-- Instructions -->
+      <div class="text-[0.6rem] text-zinc-500 space-y-0.5">
+        <p>Click to place waypoints</p>
+        <p>Double-click / Enter to finish</p>
+        <p>Right-click to finish</p>
+        <p>Esc to cancel · Ctrl+Z to undo</p>
+        <p v-if="drawingPoints.length > 0" class="text-[#ef233c]">{{ drawingPoints.length }} point{{ drawingPoints.length === 1 ? '' : 's' }} placed</p>
+      </div>
+
+      <!-- Selected path actions -->
+      <div v-if="selectedPathId" class="border-t border-white/10 pt-2">
+        <p class="text-[0.6rem] text-zinc-400 mb-1">Path selected</p>
+        <button @click="deletePath(selectedPathId!)" class="text-xs text-red-400 hover:text-red-300 transition-colors">🗑 Delete path</button>
+      </div>
+
+      <!-- Path count -->
+      <div class="text-[0.6rem] text-zinc-600">
+        {{ mapPaths.length }} path{{ mapPaths.length === 1 ? '' : 's' }} on map
+      </div>
+    </div>
+
     <!-- Zoom indicator -->
     <div class="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm text-zinc-400 text-xs font-mono px-2 py-1 rounded-lg border border-white/[0.06] pointer-events-none select-none">
       {{ currentZoom.toFixed(2) }}×

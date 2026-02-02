@@ -39,6 +39,17 @@ export interface HexCoord {
   y: number
 }
 
+export type MapPathType = 'road-solid' | 'road-dotted' | 'river'
+
+export interface MapPath {
+  id: string
+  type: MapPathType
+  /** Waypoints in world coordinates (hex map space, not screen) */
+  points: { x: number; y: number }[]
+  createdBy?: string
+  createdAt?: Date
+}
+
 export interface HexIconEntry {
   kind: 'location' | 'feature' | 'marker' | 'note'
   type: string        // location type, feature type, marker type, or 'note'
@@ -95,6 +106,9 @@ export class HexMap {
   onHexClick: ((hex: HexCoord | null, clientX: number, clientY: number, type: string) => void) | null
   onCameraChange: (() => void) | null
 
+  /** When true, left-click drag does NOT pan — used for draw mode */
+  disableLeftDragPan: boolean
+
   // Bound listeners for cleanup
   private _boundResize: () => void
   private _boundMouseMove: (e: MouseEvent) => void
@@ -149,6 +163,7 @@ export class HexMap {
 
     this.onHexClick = null
     this.onCameraChange = null
+    this.disableLeftDragPan = false
 
     // Bound listeners for cleanup
     this._boundResize = () => this.resizeCanvas()
@@ -428,7 +443,7 @@ export class HexMap {
     this.requestDraw()
   }
 
-  draw(hexData: Record<string, HexData>, selectedHex: HexCoord | null, isPaintMode: boolean, userRole: string = 'Player', markers?: Record<string, HexMarkerData>): void {
+  draw(hexData: Record<string, HexData>, selectedHex: HexCoord | null, isPaintMode: boolean, userRole: string = 'Player', markers?: Record<string, HexMarkerData>, paths?: MapPath[], drawingPreview?: { type: MapPathType; points: { x: number; y: number }[]; cursor?: { x: number; y: number } }): void {
     if (!Number.isFinite(this.camera.x)) this.camera = { x: 50, y: 50, zoom: 1 }
 
     this.ctx.setTransform(1, 0, 0, 1, 0, 0)
@@ -461,6 +476,10 @@ export class HexMap {
 
     // === PASS 2: Draw noise-based terrain blending ===
     this.drawTerrainBlending(hexData)
+
+    // === PASS 2.5: Draw map paths (roads/rivers) ===
+    if (paths && paths.length > 0) this.drawPaths(paths)
+    if (drawingPreview) this.drawPathPreview(drawingPreview)
 
     // === PASS 3: Draw all hex borders ===
     this.drawHexBorders()
@@ -984,6 +1003,103 @@ export class HexMap {
     }
   }
 
+  // === Path rendering (roads, rivers) ===
+
+  private getPathStyle(type: MapPathType): { color: string; width: number; dash: number[] } {
+    switch (type) {
+      case 'road-solid':
+        return { color: '#8B7355', width: 3, dash: [] }
+      case 'road-dotted':
+        return { color: '#8B7355', width: 3, dash: [8, 6] }
+      case 'river':
+        return { color: '#4A90D9', width: 3.5, dash: [] }
+      default:
+        return { color: '#888', width: 2, dash: [] }
+    }
+  }
+
+  private drawSinglePath(points: { x: number; y: number }[], style: { color: string; width: number; dash: number[] }): void {
+    if (points.length < 2) return
+    const ctx = this.ctx
+
+    ctx.save()
+    ctx.strokeStyle = style.color
+    // Constant width independent of zoom
+    ctx.lineWidth = style.width / this.camera.zoom
+    ctx.setLineDash(style.dash.map(d => d / this.camera.zoom))
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    ctx.beginPath()
+    ctx.moveTo(points[0]!.x, points[0]!.y)
+
+    if (points.length === 2) {
+      ctx.lineTo(points[1]!.x, points[1]!.y)
+    } else {
+      // Smooth curve through waypoints using quadratic bezier
+      for (let i = 1; i < points.length - 1; i++) {
+        const curr = points[i]!
+        const next = points[i + 1]!
+        const midX = (curr.x + next.x) / 2
+        const midY = (curr.y + next.y) / 2
+        ctx.quadraticCurveTo(curr.x, curr.y, midX, midY)
+      }
+      // Final segment to last point
+      const last = points[points.length - 1]!
+      ctx.lineTo(last.x, last.y)
+    }
+
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.restore()
+  }
+
+  drawPaths(paths: MapPath[]): void {
+    for (const path of paths) {
+      if (path.points.length < 2) continue
+      const style = this.getPathStyle(path.type)
+      this.drawSinglePath(path.points, style)
+    }
+  }
+
+  drawPathPreview(preview: { type: MapPathType; points: { x: number; y: number }[]; cursor?: { x: number; y: number } }): void {
+    const allPoints = [...preview.points]
+    if (preview.cursor && allPoints.length > 0) {
+      allPoints.push(preview.cursor)
+    }
+    if (allPoints.length < 2) {
+      // Draw single waypoint dot
+      if (allPoints.length === 1) {
+        const ctx = this.ctx
+        ctx.save()
+        const r = 4 / this.camera.zoom
+        ctx.fillStyle = '#ef233c'
+        ctx.beginPath()
+        ctx.arc(allPoints[0]!.x, allPoints[0]!.y, r, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.restore()
+      }
+      return
+    }
+
+    const style = this.getPathStyle(preview.type)
+    // Draw with reduced opacity for preview
+    const previewStyle = { ...style, color: style.color + 'AA' }
+    this.drawSinglePath(allPoints, previewStyle)
+
+    // Draw waypoint dots
+    const ctx = this.ctx
+    ctx.save()
+    const r = 3 / this.camera.zoom
+    for (const pt of preview.points) {
+      ctx.fillStyle = '#ef233c'
+      ctx.beginPath()
+      ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.restore()
+  }
+
   defineShorePath(
     hex: HexCoord,
     center: { x: number; y: number },
@@ -1039,11 +1155,13 @@ export class HexMap {
           this.hasDragged = true
         }
       }
-      // Pan with any held button (left, middle, right)
-      this.camera.x += dx
-      this.camera.y += dy
-      this.container.style.cursor = 'grabbing'
-      if (this.onCameraChange) this.onCameraChange()
+      // Pan — skip left-drag pan when disableLeftDragPan is set (draw mode)
+      if (this.isPanning || (this.isLeftMouseDown && !this.disableLeftDragPan)) {
+        this.camera.x += dx
+        this.camera.y += dy
+        this.container.style.cursor = 'grabbing'
+        if (this.onCameraChange) this.onCameraChange()
+      }
     }
     this.lastMouse = { x: e.clientX, y: e.clientY }
   }
