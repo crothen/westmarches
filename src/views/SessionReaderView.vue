@@ -203,6 +203,11 @@ function getNpcName(id: string): string {
   return npcNames.value[id] || 'Unknown'
 }
 
+// Strip @[Name](type:id) mention syntax to just the name
+function stripMentions(text: string): string {
+  return text.replace(/@\[([^\]]+)\]\((char|npc):[^)]+\)/g, '$1')
+}
+
 // Generate sketches for all images when data loads
 function generateSketches() {
   if (session.value && (session.value as any).imageUrl) {
@@ -258,17 +263,17 @@ onUnmounted(() => {
       <div class="relative">
         <button
           @click="showFontPicker = !showFontPicker"
-          class="text-amber-900/40 hover:text-amber-900/70 bg-amber-100/10 hover:bg-amber-100/20 backdrop-blur text-xs px-2.5 py-1.5 rounded-lg border border-amber-900/10 transition-all"
+          class="text-zinc-300 hover:text-white bg-black/40 hover:bg-black/60 backdrop-blur-sm text-sm px-3.5 py-2 rounded-lg border border-white/15 transition-all"
           title="Change font"
         >Font</button>
-        <div v-if="showFontPicker" class="absolute right-0 top-full mt-1 bg-[#2a2218] border border-amber-900/20 rounded-lg shadow-xl py-1 min-w-[180px] z-30">
+        <div v-if="showFontPicker" class="absolute right-0 top-full mt-1 bg-zinc-900 border border-white/15 rounded-lg shadow-xl py-1 min-w-[200px] z-30">
           <button
             v-for="font in fonts"
             :key="font.key"
             @click="selectedFont = font.key; showFontPicker = false"
             :class="[
-              'w-full text-left px-3 py-2 text-sm transition-colors',
-              selectedFont === font.key ? 'text-amber-200 bg-amber-900/20' : 'text-amber-100/60 hover:text-amber-100 hover:bg-amber-900/10'
+              'w-full text-left px-4 py-2.5 text-base transition-colors',
+              selectedFont === font.key ? 'text-white bg-white/10' : 'text-zinc-400 hover:text-white hover:bg-white/5'
             ]"
             :style="{ fontFamily: font.family }"
           >
@@ -278,7 +283,7 @@ onUnmounted(() => {
       </div>
       <button
         @click="router.push(`/sessions/${sessionId}`)"
-        class="text-amber-900/40 hover:text-amber-900/70 bg-amber-100/10 hover:bg-amber-100/20 backdrop-blur text-lg px-2 py-1 rounded-lg border border-amber-900/10 transition-all"
+        class="text-zinc-300 hover:text-white bg-black/40 hover:bg-black/60 backdrop-blur-sm text-lg w-10 h-10 flex items-center justify-center rounded-lg border border-white/15 transition-all"
         title="Close (Esc)"
       >✕</button>
     </div>
@@ -298,12 +303,12 @@ onUnmounted(() => {
       <button
         v-if="currentPage > 0"
         @click="prevPage"
-        class="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-amber-900/10 border border-amber-900/20 text-amber-800/40 hover:text-amber-700 hover:bg-amber-900/20 transition-all text-xl"
+        class="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm border border-white/15 text-zinc-300 hover:text-white transition-all text-2xl"
       >&lsaquo;</button>
       <button
         v-if="currentPage < totalPages - 1"
         @click="nextPage"
-        class="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-amber-900/10 border border-amber-900/20 text-amber-800/40 hover:text-amber-700 hover:bg-amber-900/20 transition-all text-xl"
+        class="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm border border-white/15 text-zinc-300 hover:text-white transition-all text-2xl"
       >&rsaquo;</button>
 
       <!-- Page container -->
@@ -365,7 +370,7 @@ onUnmounted(() => {
 
                 <!-- Summary as italic block -->
                 <div v-if="session.summary" class="journal-text italic border-l-2 border-amber-900/15 pl-4 mt-4 !leading-relaxed" :style="{ fontFamily: currentFontFamily }">
-                  {{ session.summary }}
+                  {{ stripMentions(session.summary) }}
                 </div>
               </div>
             </div>
@@ -403,7 +408,7 @@ onUnmounted(() => {
 
               <!-- Description -->
               <div v-if="currentEntry.description" class="journal-text whitespace-pre-wrap !leading-relaxed mb-6">
-                {{ currentEntry.description }}
+                {{ stripMentions(currentEntry.description) }}
               </div>
 
               <!-- People of Interest -->
@@ -421,16 +426,16 @@ onUnmounted(() => {
       </div>
 
       <!-- Page indicators -->
-      <div class="mt-4 flex items-center gap-1 z-10">
+      <div class="mt-4 flex items-center gap-1.5 z-10">
         <button
           v-for="page in totalPages"
           :key="page - 1"
           @click="goToPage(page - 1)"
           :class="[
-            'transition-all duration-200 rounded-md text-xs font-medium',
+            'transition-all duration-200 rounded-lg text-sm font-medium',
             currentPage === page - 1
-              ? 'bg-amber-800 text-amber-100 px-3 py-1 shadow-lg shadow-amber-900/30'
-              : 'bg-amber-900/15 text-amber-800/40 hover:text-amber-700 hover:bg-amber-900/25 px-2.5 py-1'
+              ? 'bg-white/20 text-white px-3.5 py-1.5 shadow-lg'
+              : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 px-3 py-1.5'
           ]"
           style="font-family: Manrope, sans-serif"
         >
@@ -439,7 +444,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Page label -->
-      <div class="mt-2 text-amber-800/30 text-xs z-10" :style="{ fontFamily: currentFontFamily }">
+      <div class="mt-2 text-zinc-500 text-sm z-10" :style="{ fontFamily: currentFontFamily }">
         {{ currentPage === 0 ? session.title : currentEntry?.title || '' }}
       </div>
     </template>
