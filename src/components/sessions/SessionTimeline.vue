@@ -256,7 +256,7 @@ function formatCommentDate(date: any): string {
     </div>
 
     <!-- Classic vertical timeline -->
-    <div v-if="entries.length > 0" class="relative pb-4">
+    <div v-if="entries.length > 0" class="relative pb-4 max-w-[1200px] mx-auto">
       <!-- Center line (desktop) -->
       <div class="hidden sm:block absolute left-1/2 top-0 bottom-0 w-0.5 bg-zinc-700 -translate-x-1/2" />
       <!-- Left line (mobile) -->
@@ -308,43 +308,47 @@ function formatCommentDate(date: any): string {
               @drop="canEdit && onDrop($event, entry.id)"
               @dragend="canEdit && onDragEnd()"
             >
-              <!-- Image banner at top -->
-              <div v-if="entry.imageUrl" class="w-full overflow-hidden rounded-t-[inherit] cursor-pointer" style="aspect-ratio: 3 / 1" @click="lightboxUrl = entry.imageUrl!">
-                <img :src="entry.imageUrl" class="w-full h-full object-cover" draggable="false" />
-              </div>
-              <div class="px-3 pt-2.5 pb-2">
-                <!-- Type badge + edit/delete -->
-                <div class="flex items-start justify-between gap-1 mb-1">
-                  <span :class="['text-[0.65rem] px-1.5 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
-                    {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
-                  </span>
-                  <div v-if="canEdit" class="flex items-center gap-0.5 shrink-0 -mt-0.5">
-                    <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-[0.65rem] p-0.5 transition-colors" title="Edit">✏️</button>
-                    <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-[0.65rem] p-0.5 transition-colors" title="Delete">🗑️</button>
+              <!-- Card inner: image + content side by side on desktop -->
+              <div class="flex flex-col sm:flex-row" :class="idx % 2 === 0 ? '' : 'sm:flex-row-reverse'">
+                <!-- Image (outer edge side on desktop, top on mobile) -->
+                <div v-if="entry.imageUrl" class="sm:w-2/5 shrink-0 overflow-hidden cursor-pointer" :class="[idx % 2 === 0 ? 'sm:rounded-l-[inherit]' : 'sm:rounded-r-[inherit]', 'rounded-t-[inherit] sm:rounded-t-none']" @click="lightboxUrl = entry.imageUrl!">
+                  <img :src="entry.imageUrl" class="w-full h-full object-cover sm:min-h-full" :class="entry.imageUrl ? 'aspect-[3/1] sm:aspect-auto' : ''" draggable="false" />
+                </div>
+                <!-- Text content -->
+                <div class="flex-1 min-w-0 px-3 pt-2.5 pb-2">
+                  <!-- Type badge + edit/delete -->
+                  <div class="flex items-start justify-between gap-1 mb-1">
+                    <span :class="['text-[0.65rem] px-1.5 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
+                      {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
+                    </span>
+                    <div v-if="canEdit" class="flex items-center gap-0.5 shrink-0 -mt-0.5">
+                      <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-[0.65rem] p-0.5 transition-colors" title="Edit">✏️</button>
+                      <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-[0.65rem] p-0.5 transition-colors" title="Delete">🗑️</button>
+                    </div>
                   </div>
-                </div>
-                <!-- Title -->
-                <h3 class="text-sm font-semibold text-zinc-100 leading-tight mb-1" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
-                <!-- Participants -->
-                <div v-if="entry.allParticipantsPresent === false && entry.presentParticipants?.length" class="mb-1">
-                  <div class="flex items-center gap-1 flex-wrap">
-                    <span class="text-[0.6rem] text-zinc-600 uppercase tracking-wider">Present:</span>
-                    <span v-for="p in entry.presentParticipants" :key="p.characterId" class="text-[0.65rem] bg-white/5 text-zinc-500 px-1 py-0.5 rounded">{{ p.characterName }}</span>
+                  <!-- Title -->
+                  <h3 class="text-sm font-semibold text-zinc-100 leading-tight mb-1" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
+                  <!-- Participants -->
+                  <div v-if="entry.allParticipantsPresent === false && entry.presentParticipants?.length" class="mb-1">
+                    <div class="flex items-center gap-1 flex-wrap">
+                      <span class="text-[0.6rem] text-zinc-600 uppercase tracking-wider">Present:</span>
+                      <span v-for="p in entry.presentParticipants" :key="p.characterId" class="text-[0.65rem] bg-white/5 text-zinc-500 px-1 py-0.5 rounded">{{ p.characterName }}</span>
+                    </div>
                   </div>
-                </div>
-                <!-- Description -->
-                <div v-if="entry.description" class="text-xs text-zinc-400 leading-relaxed line-clamp-4 mb-2">
-                  <MentionText :text="entry.description" />
-                </div>
-                <!-- NPC / Location / Feature badges -->
-                <div v-if="(entry.npcIds?.length || entry.linkedLocationIds?.length || entry.linkedFeatureIds?.length)" class="flex flex-wrap gap-1 mb-2">
-                  <span v-for="id in entry.npcIds" :key="'npc-'+id" class="text-[0.6rem] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">👤 {{ getNpcName(id) }}</span>
-                  <span v-for="id in entry.linkedLocationIds" :key="'loc-'+id" class="text-[0.6rem] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">🏰 {{ getLocationName(id) }}</span>
-                  <span v-for="id in entry.linkedFeatureIds" :key="'feat-'+id" class="text-[0.6rem] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded border border-green-500/20">📌 {{ getFeatureName(id) }}</span>
-                </div>
-                <!-- Attachments -->
-                <div v-if="entry.attachments?.length" class="flex flex-wrap gap-1 mb-2">
-                  <a v-for="att in entry.attachments" :key="att.url" :href="att.url" target="_blank" class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/[0.06] transition-colors">📎 {{ att.name }}</a>
+                  <!-- Description -->
+                  <div v-if="entry.description" class="text-xs text-zinc-400 leading-relaxed line-clamp-4 mb-2">
+                    <MentionText :text="entry.description" />
+                  </div>
+                  <!-- NPC / Location / Feature badges -->
+                  <div v-if="(entry.npcIds?.length || entry.linkedLocationIds?.length || entry.linkedFeatureIds?.length)" class="flex flex-wrap gap-1 mb-2">
+                    <span v-for="id in entry.npcIds" :key="'npc-'+id" class="text-[0.6rem] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">👤 {{ getNpcName(id) }}</span>
+                    <span v-for="id in entry.linkedLocationIds" :key="'loc-'+id" class="text-[0.6rem] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">🏰 {{ getLocationName(id) }}</span>
+                    <span v-for="id in entry.linkedFeatureIds" :key="'feat-'+id" class="text-[0.6rem] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded border border-green-500/20">📌 {{ getFeatureName(id) }}</span>
+                  </div>
+                  <!-- Attachments -->
+                  <div v-if="entry.attachments?.length" class="flex flex-wrap gap-1 mb-2">
+                    <a v-for="att in entry.attachments" :key="att.url" :href="att.url" target="_blank" class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/[0.06] transition-colors">📎 {{ att.name }}</a>
+                  </div>
                 </div>
               </div>
               <!-- Comments section -->
