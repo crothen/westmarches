@@ -39,14 +39,17 @@ export interface HexCoord {
   y: number
 }
 
+export interface HexIconEntry {
+  kind: 'location' | 'feature' | 'marker' | 'note'
+  type: string        // location type, feature type, marker type, or 'note'
+  order?: number      // display priority (lower = show first)
+  hidden?: boolean
+}
+
 export interface HexMarkerData {
-  locationType?: string
-  featureCount: number
-  noteCount: number
-  markerCount?: number
-  markerTypes?: string[]  // marker types present in this hex
-  hidden?: boolean  // true if ALL locations/features in this hex are hidden
-  hasHiddenItems?: boolean  // true if ANY location/feature in this hex is hidden
+  icons: HexIconEntry[]
+  hidden?: boolean  // true if ALL items in this hex are hidden
+  hasHiddenItems?: boolean  // true if ANY item in this hex is hidden
 }
 
 export class HexMap {
@@ -606,38 +609,31 @@ export class HexMap {
   }
 
   /**
-   * Collect all drawable icons for a hex into a flat list.
-   * Priority: location > feature > markers > notes
+   * Collect all drawable icons for a hex, sorted by order.
    */
   private collectHexIcons(data: HexMarkerData): { img: HTMLImageElement | null; emoji?: string }[] {
-    const icons: { img: HTMLImageElement | null; emoji?: string }[] = []
+    // Sort by order (lower first), then by kind priority
+    const kindPriority: Record<string, number> = { location: 0, feature: 1, marker: 2, note: 3 }
+    const sorted = [...data.icons].sort((a, b) => {
+      const oa = a.order ?? 999
+      const ob = b.order ?? 999
+      if (oa !== ob) return oa - ob
+      return (kindPriority[a.kind] ?? 9) - (kindPriority[b.kind] ?? 9)
+    })
 
-    // Location icon
-    if (data.locationType) {
-      const img = this.iconImages[data.locationType] || this.iconImages['other'] || null
-      icons.push({ img })
-    }
-
-    // Feature icon (always show if features exist, even alongside a location)
-    if (data.featureCount > 0) {
-      const img = this.iconImages['feature'] || null
-      icons.push({ img })
-    }
-
-    // Marker type icons (each unique type gets an icon)
-    if (data.markerTypes) {
-      for (const mt of data.markerTypes) {
-        const img = this.iconImages[mt] || null
-        icons.push({ img })
+    return sorted.map(entry => {
+      if (entry.kind === 'note') {
+        return { img: null, emoji: '💬' }
       }
-    }
-
-    // Note indicator
-    if (data.noteCount > 0) {
-      icons.push({ img: null, emoji: '💬' })
-    }
-
-    return icons
+      if (entry.kind === 'location') {
+        return { img: this.iconImages[entry.type] || this.iconImages['other'] || null }
+      }
+      if (entry.kind === 'feature') {
+        return { img: this.iconImages[entry.type] || this.iconImages['feature'] || this.iconImages['other'] || null }
+      }
+      // marker
+      return { img: this.iconImages[entry.type] || null }
+    })
   }
 
   /**
@@ -697,23 +693,30 @@ export class HexMap {
       if (isNaN(col) || isNaN(row)) continue
       if (col < 1 || col > this.CONFIG.gridW || row < 1 || row > this.CONFIG.gridH) continue
 
-      // For players, skip entirely hidden markers
-      if (data.hidden && !isDmOrAdmin) continue
+      // Filter out hidden icons for non-DM/admin
+      const visibleIcons = isDmOrAdmin ? data.icons : data.icons.filter(i => !i.hidden)
+      if (visibleIcons.length === 0) continue
 
       const center = this.getHexCenter(col, row)
-      const isHidden = data.hasHiddenItems || data.hidden
+      const isHidden = data.hasHiddenItems
 
-      // Collect all icons for this hex
-      const allIcons = this.collectHexIcons(data)
+      // Collect drawable icons for this hex
+      const filteredData: HexMarkerData = { ...data, icons: visibleIcons }
+      const allIcons = this.collectHexIcons(filteredData)
       if (allIcons.length === 0) continue
 
       const showCount = Math.min(allIcons.length, maxIcons)
       const iconsToShow = allIcons.slice(0, showCount)
 
-      // Determine icon draw size
-      const iconDrawSize = iconsToShow.length === 1
-        ? size * 2 * singleIconFill   // single icon: fill hex diameter
-        : size * 0.7                  // multiple: fit inside hex corners
+      // Determine icon draw size — smaller for more icons
+      let iconDrawSize: number
+      if (iconsToShow.length === 1) {
+        iconDrawSize = size * 2 * singleIconFill
+      } else if (iconsToShow.length <= 3) {
+        iconDrawSize = size * 0.7
+      } else {
+        iconDrawSize = size * 0.5  // smaller for 4-7 to avoid overlap
+      }
 
       const positions = this.getIconPositions(center.x, center.y, iconsToShow.length, size)
 

@@ -51,77 +51,64 @@ async function loadHexMarkers(fromServer = false) {
     })
 
     const markers: Record<string, HexMarkerData> = {}
-
-    // Track per-hex location counts to determine hidden state correctly
-    const hexLocationCounts: Record<string, { total: number; hidden: number }> = {}
-    locSnap?.docs.forEach(d => {
-      const data = d.data()
-      if (data.hexKey) {
-        if (!markers[data.hexKey]) markers[data.hexKey] = { featureCount: 0, noteCount: 0 }
-        if (!hexLocationCounts[data.hexKey]) hexLocationCounts[data.hexKey] = { total: 0, hidden: 0 }
-        hexLocationCounts[data.hexKey]!.total++
-        if (data.hidden) {
-          hexLocationCounts[data.hexKey]!.hidden++
-          markers[data.hexKey]!.hasHiddenItems = true
-        } else {
-          // Prefer the first visible location's type for the icon
-          if (!markers[data.hexKey]!.locationType || markers[data.hexKey]!.hidden) {
-            markers[data.hexKey]!.locationType = data.type || 'other'
-          }
-        }
-        // Fallback: if no visible location set the type yet, use this one
-        if (!markers[data.hexKey]!.locationType) {
-          markers[data.hexKey]!.locationType = data.type || 'other'
-        }
-      }
-    })
-    // Only mark hex as hidden if ALL locations are hidden
-    for (const [hexKey, counts] of Object.entries(hexLocationCounts)) {
-      if (counts.total > 0 && counts.total === counts.hidden) {
-        markers[hexKey]!.hidden = true
-      }
+    const ensure = (key: string) => {
+      if (!markers[key]) markers[key] = { icons: [] }
     }
 
+    // Locations
+    locSnap?.docs.forEach(d => {
+      const data = d.data()
+      if (!data.hexKey) return
+      ensure(data.hexKey)
+      markers[data.hexKey]!.icons.push({
+        kind: 'location',
+        type: data.type || 'other',
+        order: data.mapOrder ?? undefined,
+        hidden: !!data.hidden
+      })
+      if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
+    })
+
+    // Features (only those directly on a hex, not via location)
     featSnap?.docs.forEach(d => {
       const data = d.data()
-      if (data.hexKey) {
-        if (!markers[data.hexKey]) markers[data.hexKey] = { featureCount: 0, noteCount: 0 }
-        markers[data.hexKey]!.featureCount++
-        if (data.hidden) {
-          markers[data.hexKey]!.hasHiddenItems = true
-        }
-      }
+      if (!data.hexKey) return
+      ensure(data.hexKey)
+      markers[data.hexKey]!.icons.push({
+        kind: 'feature',
+        type: data.type || 'other',
+        order: data.mapOrder ?? undefined,
+        hidden: !!data.hidden
+      })
+      if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
     })
 
+    // Notes
     noteSnap?.docs.forEach(d => {
       const data = d.data()
-      if (data.hexKey) {
-        if (!markers[data.hexKey]) markers[data.hexKey] = { featureCount: 0, noteCount: 0 }
-        markers[data.hexKey]!.noteCount++
-      }
+      if (!data.hexKey) return
+      ensure(data.hexKey)
+      markers[data.hexKey]!.icons.push({ kind: 'note', type: 'note' })
     })
 
-    // Hex markers (clue, battle, etc.) — respect privacy
+    // Hex-level markers only (skip markers that belong to a location)
     const currentUid = auth.firebaseUser?.uid
     const isAdmin = auth.isAdmin
     markerSnap?.docs.forEach(d => {
       const data = d.data()
-      if (data.hexKey) {
-        // Skip private markers not visible to current user
-        if (data.isPrivate) {
-          if (data.createdBy !== currentUid && !isAdmin) return
-        }
-        if (!markers[data.hexKey]) markers[data.hexKey] = { featureCount: 0, noteCount: 0 }
-        const m = markers[data.hexKey]!
-        m.markerCount = (m.markerCount || 0) + 1
-        if (!m.markerTypes) m.markerTypes = []
-        if (data.type && !m.markerTypes.includes(data.type)) {
-          m.markerTypes.push(data.type)
-        }
-        if (data.hidden) {
-          m.hasHiddenItems = true
-        }
-      }
+      if (!data.hexKey) return
+      // Skip markers associated with a location — those belong to the location, not the hex
+      if (data.locationId) return
+      // Skip private markers not visible to current user
+      if (data.isPrivate && data.createdBy !== currentUid && !isAdmin) return
+      ensure(data.hexKey)
+      markers[data.hexKey]!.icons.push({
+        kind: 'marker',
+        type: data.type || 'clue',
+        order: data.mapOrder ?? undefined,
+        hidden: !!data.hidden
+      })
+      if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
     })
 
     hexMarkers.value = markers
