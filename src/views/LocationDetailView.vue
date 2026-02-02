@@ -241,6 +241,24 @@ async function removeSubLocationFromMap(loc: CampaignLocation) {
   }
 }
 
+async function unlinkSubLocation(loc: CampaignLocation) {
+  if (!confirm(`Unlink "${loc.name}" from this location?`)) return
+  try {
+    await updateDoc(doc(db, 'locations', loc.id), { parentLocationId: null, mapPosition: null })
+  } catch (e) {
+    console.error('Failed to unlink sub-location:', e)
+  }
+}
+
+async function deleteMarker(marker: HexMarker) {
+  if (!confirm(`Delete marker "${marker.name}"?`)) return
+  try {
+    await deleteDoc(doc(db, 'markers', marker.id))
+  } catch (e) {
+    console.error('Failed to delete marker:', e)
+  }
+}
+
 function onMapClick(x: number, y: number) {
   // Only show quick-add if not placing an existing feature
   if (placingFeature.value) return
@@ -531,7 +549,14 @@ async function toggleFeatureHidden(feat: LocationFeature) {
             @click-sublocation="onClickSubLocation"
             @map-click="onMapClick"
           />
-          <p class="text-zinc-600 text-[0.6rem] mt-1.5">Scroll/pinch to zoom · Drag to pan · Click/tap to add a marker</p>
+          <div class="flex items-center gap-2 mt-3">
+            <p class="text-zinc-600 text-[0.6rem]">Scroll/pinch to zoom · Drag to pan · Click to pin</p>
+            <div v-if="auth.isDm || auth.isAdmin" class="flex gap-1.5 ml-auto">
+              <button @click="showAddSubLocation = true" class="text-[0.65rem] px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors">+ Location</button>
+              <button @click="showAddFeature = true" class="text-[0.65rem] px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 transition-colors">+ Feature</button>
+            </div>
+            <button v-else-if="auth.isAuthenticated && !auth.isGuest" @click="showAddFeature = true" class="text-[0.65rem] px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 transition-colors ml-auto">+ Feature</button>
+          </div>
         </div>
 
         <div v-else class="card-flat p-6 text-center">
@@ -603,9 +628,6 @@ async function toggleFeatureHidden(feat: LocationFeature) {
       <div v-if="subLocations.length > 0 || auth.isDm || auth.isAdmin" class="mb-8">
         <div class="flex items-center gap-3 mb-3">
           <h2 class="label">Sub-Locations ({{ subLocations.length }})</h2>
-          <button v-if="auth.isDm || auth.isAdmin" @click="showAddSubLocation = true" class="btn !text-xs !py-1">
-            + Add Location
-          </button>
         </div>
         <div v-if="subLocations.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-3">
           <div
@@ -623,9 +645,10 @@ async function toggleFeatureHidden(feat: LocationFeature) {
                 </span>
               </div>
             </RouterLink>
-            <div v-if="(auth.isDm || auth.isAdmin) && location!.mapImageUrl" class="flex gap-1 mt-1.5">
-              <button v-if="!sub.mapPosition" @click="placingSubLocation = sub.id" class="text-zinc-600 hover:text-zinc-300 text-[0.6rem] transition-colors">📍 Place</button>
-              <button v-if="sub.mapPosition" @click="removeSubLocationFromMap(sub)" class="text-zinc-600 hover:text-zinc-400 text-[0.6rem] transition-colors" title="Remove from map">📍✕</button>
+            <div v-if="auth.isDm || auth.isAdmin" class="flex gap-1 mt-1.5">
+              <button v-if="location!.mapImageUrl && !sub.mapPosition" @click="placingSubLocation = sub.id" class="text-zinc-600 hover:text-zinc-300 text-[0.6rem] transition-colors">📍 Place</button>
+              <button v-if="location!.mapImageUrl && sub.mapPosition" @click="removeSubLocationFromMap(sub)" class="text-zinc-600 hover:text-zinc-400 text-[0.6rem] transition-colors" title="Remove from map">📍✕</button>
+              <button @click.prevent="unlinkSubLocation(sub)" class="text-zinc-600 hover:text-red-400 text-[0.6rem] transition-colors" title="Unlink from parent">🔗✕</button>
             </div>
           </div>
         </div>
@@ -638,10 +661,11 @@ async function toggleFeatureHidden(feat: LocationFeature) {
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
           <div v-for="marker in locationMarkers" :key="marker.id" class="card-flat p-3 flex items-center gap-2">
             <img :src="getIconUrl(marker.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
-            <div class="min-w-0">
+            <div class="min-w-0 flex-1">
               <span class="text-xs font-semibold text-zinc-200 truncate block" style="font-family: Manrope, sans-serif">{{ marker.name }}</span>
               <span class="text-[0.6rem] text-zinc-600">{{ marker.type }}</span>
             </div>
+            <button v-if="auth.isDm || auth.isAdmin" @click="deleteMarker(marker)" class="text-zinc-600 hover:text-red-400 text-xs transition-colors shrink-0" title="Delete marker">🗑️</button>
           </div>
         </div>
       </div>
@@ -650,9 +674,6 @@ async function toggleFeatureHidden(feat: LocationFeature) {
       <div>
         <div class="flex items-center gap-3 mb-3">
           <h2 class="label">Features & Points of Interest ({{ visibleFeatures.length }})</h2>
-          <button v-if="auth.isAuthenticated && !auth.isGuest" @click="showAddFeature = true" class="btn !text-xs !py-1">
-            + Add Feature
-          </button>
         </div>
 
         <!-- Add feature form is now a modal (see Teleport below) -->
