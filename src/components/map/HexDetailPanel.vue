@@ -390,8 +390,8 @@ async function unassignPoi(poi: any, kind: 'location' | 'feature') {
     <!-- Header -->
     <div class="sticky top-0 z-10 bg-black/90 backdrop-blur-xl border-b border-white/[0.06] p-4 flex items-center justify-between">
       <div>
-        <h3 class="text-sm font-semibold text-zinc-100" style="font-family: Manrope, sans-serif">Hex {{ hex.x }}, {{ hex.y }}</h3>
-        <p class="text-xs text-zinc-600">{{ terrainName }}</p>
+        <h3 class="text-base font-semibold text-zinc-100" style="font-family: Manrope, sans-serif">Hex {{ hex.x }}, {{ hex.y }}</h3>
+        <p class="text-sm text-zinc-600">{{ terrainName }}</p>
       </div>
       <button @click="emit('close')" class="text-zinc-600 hover:text-zinc-300 transition-colors">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -401,18 +401,18 @@ async function unassignPoi(poi: any, kind: 'location' | 'feature') {
     <div class="p-4 space-y-5">
       <!-- Tags info (visible to all) -->
       <div v-if="currentMainTag || currentSideTags.length > 0">
-        <h4 class="label mb-2">Tags</h4>
+        <h4 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-2">Tags</h4>
         <div class="flex flex-wrap gap-1.5">
-          <span v-if="currentMainTag" class="text-xs bg-[#ef233c]/15 text-[#ef233c] px-2 py-0.5 rounded-full">{{ currentMainTag }}</span>
-          <span v-for="tag in currentSideTags" :key="tag" class="text-xs bg-white/5 text-zinc-500 px-2 py-0.5 rounded-full">{{ tag }}</span>
+          <span v-if="currentMainTag" class="text-sm bg-[#ef233c]/15 text-[#ef233c] px-2.5 py-1 rounded-full">{{ currentMainTag }}</span>
+          <span v-for="tag in currentSideTags" :key="tag" class="text-sm bg-white/5 text-zinc-500 px-2.5 py-1 rounded-full">{{ tag }}</span>
         </div>
       </div>
 
       <!-- Markers in this hex (unified sorted list) -->
       <div v-if="sortedHexItems.length > 0 || auth.isAuthenticated">
         <div class="flex items-center justify-between mb-2">
-          <h4 class="label">Markers</h4>
-          <button v-if="auth.isAuthenticated && !auth.isGuest" @click="openMarkerModal" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Marker</button>
+          <h4 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Markers</h4>
+          <button v-if="auth.isAuthenticated && !auth.isGuest" @click="openMarkerModal" class="text-sm font-medium text-white hover:text-[#ef233c] transition-colors">+ Marker</button>
         </div>
         <div class="space-y-1.5">
           <div
@@ -421,25 +421,25 @@ async function unassignPoi(poi: any, kind: 'location' | 'feature') {
               item.hidden ? 'opacity-50 !border-dashed' : '',
               item._kind === 'marker' && item.isPrivate ? 'border-dashed !border-purple-500/30' : '']"
           >
-            <div class="flex items-center gap-2 flex-1 min-w-0">
+            <div class="flex items-center gap-2.5 flex-1 min-w-0">
               <!-- Order arrows (DM/admin only) -->
               <div v-if="auth.isDm || auth.isAdmin" class="flex flex-col shrink-0 -my-1">
-                <button @click="moveItem(item, idx, -1)" :disabled="idx === 0" :class="['text-[0.6rem] leading-none transition-colors', idx === 0 ? 'text-zinc-800' : 'text-zinc-600 hover:text-zinc-300']">▲</button>
-                <button @click="moveItem(item, idx, 1)" :disabled="idx === sortedHexItems.length - 1" :class="['text-[0.6rem] leading-none transition-colors', idx === sortedHexItems.length - 1 ? 'text-zinc-800' : 'text-zinc-600 hover:text-zinc-300']">▼</button>
+                <button @click="moveItem(item, idx, -1)" :disabled="idx === 0" :class="['text-xs leading-none transition-colors', idx === 0 ? 'text-zinc-800' : 'text-zinc-600 hover:text-zinc-300']">▲</button>
+                <button @click="moveItem(item, idx, 1)" :disabled="idx === sortedHexItems.length - 1" :class="['text-xs leading-none transition-colors', idx === sortedHexItems.length - 1 ? 'text-zinc-800' : 'text-zinc-600 hover:text-zinc-300']">▼</button>
               </div>
-              <img :src="getIconUrl(item.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
+              <img :src="getIconUrl(item.type || 'other')" class="w-6 h-6 object-contain shrink-0" />
               <span :class="['text-sm truncate', item._kind === 'location' ? 'text-zinc-200 font-medium' : 'text-zinc-300']">{{ item.name }}</span>
-              <span v-if="item._kind === 'marker' && item.isPrivate" class="text-[0.55rem] bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded-full shrink-0">🔒</span>
-              <span v-if="item.hidden && (auth.isDm || auth.isAdmin)" class="text-[0.55rem] text-amber-400/70 shrink-0">🚫</span>
-              <span class="text-[0.6rem] text-zinc-600 shrink-0">{{ item.type }}</span>
+              <span v-if="item._kind === 'marker' && item.isPrivate" class="text-xs bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded-full shrink-0">🔒</span>
+              <span v-if="item.hidden && (auth.isDm || auth.isAdmin)" class="text-xs text-amber-400/70 shrink-0">🚫</span>
+              <span class="text-xs text-zinc-600 shrink-0">{{ item.type }}</span>
             </div>
-            <div class="flex items-center gap-1 ml-2 shrink-0">
-              <RouterLink v-if="item._kind === 'location'" :to="`/locations/${item.id}`" class="text-zinc-600 hover:text-[#ef233c] text-sm transition-colors" title="View detail">🔍</RouterLink>
-              <RouterLink v-if="item._kind === 'feature' && item.locationId" :to="`/locations/${item.locationId}`" class="text-zinc-600 hover:text-[#ef233c] text-sm transition-colors" title="View parent location">🔍</RouterLink>
-              <button v-if="(auth.isDm || auth.isAdmin) && item._kind !== 'marker'" @click="togglePoiHidden(item, item._kind)" :class="['text-sm transition-colors', item.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-700 hover:text-amber-400']" :title="item.hidden ? 'Show' : 'Hide'">{{ item.hidden ? '🚫' : '👁️' }}</button>
-              <button v-if="(auth.isDm || auth.isAdmin) && item._kind === 'marker'" @click="toggleMarkerHidden(item)" :class="['text-sm transition-colors', item.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-700 hover:text-amber-400']" :title="item.hidden ? 'Show' : 'Hide'">{{ item.hidden ? '🚫' : '👁️' }}</button>
-              <button v-if="(auth.isDm || auth.isAdmin) && item._kind !== 'marker'" @click="unassignPoi(item, item._kind)" class="text-zinc-700 hover:text-red-400 text-sm transition-colors" title="Remove from hex">✕</button>
-              <button v-if="item._kind === 'marker' && (auth.isDm || auth.isAdmin || item.createdBy === auth.firebaseUser?.uid)" @click="deleteHexMarker(item)" class="text-zinc-700 hover:text-red-400 text-sm transition-colors" title="Delete">🗑️</button>
+            <div class="flex items-center gap-1.5 ml-2 shrink-0">
+              <RouterLink v-if="item._kind === 'location'" :to="`/locations/${item.id}`" class="text-zinc-600 hover:text-[#ef233c] text-base transition-colors" title="View detail">🔍</RouterLink>
+              <RouterLink v-if="item._kind === 'feature' && item.locationId" :to="`/locations/${item.locationId}`" class="text-zinc-600 hover:text-[#ef233c] text-base transition-colors" title="View parent location">🔍</RouterLink>
+              <button v-if="(auth.isDm || auth.isAdmin) && item._kind !== 'marker'" @click="togglePoiHidden(item, item._kind)" :class="['text-base transition-colors', item.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-700 hover:text-amber-400']" :title="item.hidden ? 'Show' : 'Hide'">{{ item.hidden ? '🚫' : '👁️' }}</button>
+              <button v-if="(auth.isDm || auth.isAdmin) && item._kind === 'marker'" @click="toggleMarkerHidden(item)" :class="['text-base transition-colors', item.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-700 hover:text-amber-400']" :title="item.hidden ? 'Show' : 'Hide'">{{ item.hidden ? '🚫' : '👁️' }}</button>
+              <button v-if="(auth.isDm || auth.isAdmin) && item._kind !== 'marker'" @click="unassignPoi(item, item._kind)" class="text-zinc-700 hover:text-red-400 text-base transition-colors" title="Remove from hex">✕</button>
+              <button v-if="item._kind === 'marker' && (auth.isDm || auth.isAdmin || item.createdBy === auth.firebaseUser?.uid)" @click="deleteHexMarker(item)" class="text-zinc-700 hover:text-red-400 text-base transition-colors" title="Delete">🗑️</button>
             </div>
           </div>
         </div>
@@ -447,11 +447,11 @@ async function unassignPoi(poi: any, kind: 'location' | 'feature') {
 
       <!-- DM/Admin Edit Section -->
       <div v-if="auth.isDm || auth.isAdmin" class="card-flat !rounded-lg p-3 space-y-3">
-        <h4 class="label text-[#ef233c]">DM Tools</h4>
+        <h4 class="text-sm font-semibold text-[#ef233c] uppercase tracking-wider">DM Tools</h4>
         
         <!-- Terrain picker -->
         <div>
-          <label class="block text-xs text-zinc-600 mb-1">Terrain</label>
+          <label class="block text-sm text-zinc-600 mb-1">Terrain</label>
           <select :value="currentHexData?.type || 1" @change="onTerrainChange" class="input w-full text-sm">
             <option v-for="t in terrainOptions" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
@@ -460,7 +460,7 @@ async function unassignPoi(poi: any, kind: 'location' | 'feature') {
 
       <!-- Detail Map Preview (visible to non-DMs/non-admins) -->
       <div v-if="detailMapUrl && !auth.isDm && !auth.isAdmin">
-        <h4 class="label mb-2">Detail Map</h4>
+        <h4 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-2">Detail Map</h4>
         <img :src="detailMapUrl" class="w-full max-h-48 object-contain rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors" @click="showDetailMapViewer = true" />
       </div>
 

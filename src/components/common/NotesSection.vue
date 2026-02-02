@@ -196,7 +196,7 @@ function formatDate(date: any): string {
 
 <template>
   <div>
-    <h4 v-if="title" :class="variant === 'full' ? 'text-lg font-semibold text-[#ef233c] mb-4' : 'label mb-3'" :style="variant === 'full' ? 'font-family: Manrope, sans-serif' : ''">{{ title }}</h4>
+    <h4 v-if="title" :class="variant === 'full' ? 'text-lg font-semibold text-[#ef233c] mb-4' : 'text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3'" :style="variant === 'full' ? 'font-family: Manrope, sans-serif' : ''">{{ title }}</h4>
 
     <div v-if="visibleNotes.length === 0" class="text-zinc-700 text-sm mb-4">No notes yet.</div>
 
