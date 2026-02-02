@@ -19,7 +19,8 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const { generating: genLoading, error: genError, generateImage } = useImageGen()
+const { generating: genLoading, error: genError, generateImage, generateEntryImagePrompt } = useImageGen()
+const suggestingPrompt = ref(false)
 
 const entryTypes: { key: SessionEntryType; label: string; icon: string }[] = [
   { key: 'interaction', label: 'Interaction', icon: '🤝' },
@@ -209,6 +210,43 @@ function buildDefaultEntryPrompt(): string {
   if (npcDescriptions.length) prompt += ` NPCs: ${npcDescriptions.join('; ')}.`
   prompt += ` Style: epic fantasy art, dramatic lighting, painterly.`
   return prompt
+}
+
+async function suggestPrompt() {
+  suggestingPrompt.value = true
+  showImagePrompt.value = true
+
+  // Build character context
+  const participantChars = allParticipantsPresent.value
+    ? (props.sessionParticipants || [])
+    : selectedParticipants.value
+  const charContext = participantChars.map(p => {
+    const char = characters.value.find(c => c.id === p.characterId)
+    return {
+      name: p.characterName,
+      race: char?.race,
+      class: char?.class,
+      appearance: char?.appearance,
+    }
+  })
+
+  // Build NPC context
+  const npcContext = selectedNpcIds.value.map(id => {
+    const npc = npcs.value.find(n => n.id === id)
+    if (!npc) return null
+    return { name: npc.name, race: npc.race, appearance: npc.appearance }
+  }).filter(Boolean) as { name: string; race?: string; appearance?: string }[]
+
+  const result = await generateEntryImagePrompt({
+    title: title.value,
+    description: description.value,
+    type: type.value,
+    characters: charContext,
+    npcs: npcContext,
+  })
+
+  if (result) imagePrompt.value = result
+  suggestingPrompt.value = false
 }
 
 async function generateEntryImage() {
@@ -420,18 +458,24 @@ function getFeatureName(id: string): string {
             📁 Upload
             <input type="file" accept="image/*" class="hidden" @change="handleImageUpload" />
           </label>
+          <button type="button" @click="suggestPrompt" class="btn-action" :disabled="suggestingPrompt || genLoading">
+            {{ suggestingPrompt ? '✨ Thinking...' : '✨ Suggest Prompt' }}
+          </button>
           <button type="button" @click="showImagePrompt = !showImagePrompt" class="btn-action" :disabled="genLoading">
-            {{ genLoading ? '🎨 Generating...' : '🎨 Generate' }}
+            ✏️ Custom Prompt
           </button>
         </div>
         <div v-if="uploadingImage" class="text-xs text-zinc-500 animate-pulse">Uploading...</div>
         <div v-if="showImagePrompt" class="space-y-2">
-          <textarea v-model="imagePrompt" rows="3" class="input w-full text-sm" :placeholder="`Fantasy illustration: ${title}...`" />
+          <textarea v-model="imagePrompt" rows="4" class="input w-full text-sm" :placeholder="`Fantasy illustration: ${title}...`" />
           <div class="flex gap-2">
-            <button type="button" @click="generateEntryImage" :disabled="genLoading" class="btn !text-xs !py-1.5">
-              {{ genLoading ? 'Generating...' : 'Generate' }}
+            <button type="button" @click="generateEntryImage" :disabled="genLoading || !imagePrompt.trim()" class="btn !text-xs !py-1.5">
+              {{ genLoading ? '🎨 Generating...' : '🎨 Generate Image' }}
             </button>
-            <button type="button" @click="showImagePrompt = false" class="btn-action">Cancel</button>
+            <button type="button" @click="suggestPrompt" :disabled="suggestingPrompt" class="btn-action">
+              {{ suggestingPrompt ? '✨ Thinking...' : '✨ Re-suggest' }}
+            </button>
+            <button type="button" @click="showImagePrompt = false; imagePrompt = ''" class="btn-action">Cancel</button>
           </div>
         </div>
         <div v-if="genError" class="text-red-400 text-xs">{{ genError }}</div>

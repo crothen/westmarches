@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "sessionEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sessionId", "order": "ASCENDING" },
+        { "fieldPath": "order", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "sessionNotes",
       "queryScope": "COLLECTION",
       "fields": [

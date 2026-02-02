@@ -176,5 +176,72 @@ export function useImageGen() {
     }
   }
 
-  return { generating, error, generateImage, generateTexturePrompt }
+  /**
+   * Generate a focused image prompt for a session timeline entry using the text model.
+   */
+  async function generateEntryImagePrompt(context: {
+    title: string
+    description: string
+    type: string
+    characters: { name: string; race?: string; class?: string; appearance?: string }[]
+    npcs: { name: string; race?: string; appearance?: string }[]
+  }): Promise<string | null> {
+    if (!apiKey) {
+      error.value = 'Gemini API key not configured'
+      return null
+    }
+
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+      const charList = context.characters.map(c => {
+        const parts = [c.name]
+        if (c.race) parts.push(c.race)
+        if (c.class) parts.push(c.class)
+        if (c.appearance) parts.push(`Appearance: ${c.appearance}`)
+        return parts.join(', ')
+      }).join('\n- ')
+
+      const npcList = context.npcs.map(n => {
+        const parts = [n.name]
+        if (n.race) parts.push(n.race)
+        if (n.appearance) parts.push(`Appearance: ${n.appearance}`)
+        return parts.join(', ')
+      }).join('\n- ')
+
+      const systemPrompt = `You are an image prompt engineer for a D&D fantasy RPG campaign.
+Given a session timeline entry (title, description, type, characters, NPCs), generate a concise image generation prompt.
+
+RULES:
+- Focus on ONE key visual moment from the entry — the most dramatic or interesting scene
+- Include specific character appearances when provided — these are critical for visual consistency
+- Style: detailed fantasy art, dramatic lighting, painterly, medieval setting
+- Keep it under 200 words
+- Output ONLY the prompt text, nothing else
+- If the entry is long, pick the single most visually compelling moment
+- Always describe the scene composition, lighting, and mood`
+
+      const userPrompt = `Entry type: ${context.type}
+Title: "${context.title}"
+Description: ${context.description.substring(0, 800)}
+${charList ? `\nCharacters present:\n- ${charList}` : ''}
+${npcList ? `\nNPCs present:\n- ${npcList}` : ''}
+
+Generate the image prompt.`
+
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
+      })
+
+      return result.response.text()?.trim() || null
+    } catch (e: any) {
+      console.error('Entry prompt generation failed:', e)
+      error.value = e.message || 'Prompt generation failed'
+      return null
+    }
+  }
+
+  return { generating, error, generateImage, generateTexturePrompt, generateEntryImagePrompt }
 }
