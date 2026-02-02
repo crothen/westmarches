@@ -178,7 +178,7 @@ function buildSessionPrompt(): string {
     if (npcDescriptions.length) npcStr = ` NPCs present: ${npcDescriptions.join('; ')}.`
   }
 
-  return `Create a dramatic D&D fantasy scene illustration. CRITICAL: The image MUST be an extremely wide panoramic banner with a 6:1 width-to-height ratio (e.g. 2400×400 pixels). It must be much wider than it is tall — like a website header banner. Session title: "${session.value.title}". Summary: ${session.value.summary?.substring(0, 500)}. Characters involved: ${participants}.${npcStr} Style: epic fantasy art, dramatic lighting, painterly, panoramic landscape composition, medieval fantasy setting. Remember: 6:1 aspect ratio, extremely wide and short.`
+  return `Create a dramatic D&D fantasy scene illustration with a wide panoramic composition. Session title: "${session.value.title}". Summary: ${session.value.summary?.substring(0, 500)}. Characters involved: ${participants}.${npcStr} Style: epic fantasy art, dramatic lighting, painterly, wide landscape composition, medieval fantasy setting. Keep the main subject centered — the image will be cropped to a wide banner.`
 }
 
 function openPromptEditor() {
@@ -191,7 +191,7 @@ async function generateSessionArt() {
   const prompt = showPromptEditor.value ? editablePrompt.value : buildSessionPrompt()
   showPromptEditor.value = false
 
-  const url = await generateImage(prompt, `session-art/${session.value.id}`)
+  const url = await generateImage(prompt, `session-art/${session.value.id}`, { cropAspectRatio: 6 })
   if (url) {
     await updateDoc(doc(db, 'sessions', session.value.id), { imageUrl: url })
   }

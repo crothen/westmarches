@@ -57,7 +57,54 @@ export function useImageGen() {
     }
   }
 
-  async function generateImage(prompt: string, storagePath: string): Promise<string | null> {
+  /**
+   * Center-crop image bytes to a target aspect ratio using an offscreen canvas.
+   * Returns new image bytes (PNG).
+   */
+  async function cropToAspectRatio(imageData: Uint8Array, mimeType: string, targetRatio: number): Promise<Blob> {
+    // Load image into an HTMLImageElement
+    const blob = new Blob([imageData as BlobPart], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = reject
+      el.src = url
+    })
+    URL.revokeObjectURL(url)
+
+    const srcW = img.naturalWidth
+    const srcH = img.naturalHeight
+    const srcRatio = srcW / srcH
+
+    let cropW: number, cropH: number, cropX: number, cropY: number
+
+    if (srcRatio > targetRatio) {
+      // Source is wider than target — crop width
+      cropH = srcH
+      cropW = Math.round(srcH * targetRatio)
+      cropX = Math.round((srcW - cropW) / 2)
+      cropY = 0
+    } else {
+      // Source is taller than target — crop height (center slice)
+      cropW = srcW
+      cropH = Math.round(srcW / targetRatio)
+      cropX = 0
+      cropY = Math.round((srcH - cropH) / 2)
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = cropW
+    canvas.height = cropH
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
+
+    // Export as PNG bytes
+    const outBlob: Blob = await new Promise<Blob>((resolve) => canvas.toBlob(b => resolve(b!), 'image/png'))
+    return outBlob
+  }
+
+  async function generateImage(prompt: string, storagePath: string, options?: { cropAspectRatio?: number }): Promise<string | null> {
     if (!apiKey) {
       error.value = 'Gemini API key not configured'
       return null
@@ -106,10 +153,17 @@ export function useImageGen() {
         return null
       }
 
+      // Post-process: center-crop to target aspect ratio if requested
+      let uploadData: Uint8Array | Blob = imageData
+      if (options?.cropAspectRatio) {
+        uploadData = await cropToAspectRatio(imageData, mimeType, options.cropAspectRatio)
+        mimeType = 'image/png'
+      }
+
       // Upload to Firebase Storage
       const ext = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : 'png'
       const fileRef = storageRef(storage, `${storagePath}.${ext}`)
-      await uploadBytes(fileRef, imageData, { contentType: mimeType })
+      await uploadBytes(fileRef, uploadData, { contentType: mimeType })
       const url = await getDownloadURL(fileRef)
 
       return url
