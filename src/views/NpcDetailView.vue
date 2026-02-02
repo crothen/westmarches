@@ -19,7 +19,7 @@ const loading = ref(true)
 
 // Edit state
 const showEditModal = ref(false)
-const editForm = ref({ name: '', race: '', description: '', locationEncountered: '', tags: [] as string[] })
+const editForm = ref({ name: '', race: '', description: '', appearance: '', locationEncountered: '', tags: [] as string[] })
 const savingEdit = ref(false)
 const portraitPrompt = ref('')
 const generatingPortrait = ref(false)
@@ -70,7 +70,8 @@ function getUnitAbbrev(): string | null {
 
 function getDefaultPortraitPrompt(): string {
   if (!npc.value) return ''
-  return `Fantasy character portrait for a D&D RPG. ${npc.value.name}, a ${npc.value.race || 'unknown race'}. ${npc.value.description || ''}. Style: detailed fantasy art, medieval setting, dramatic lighting, painterly. Head and shoulders portrait.`
+  const appearanceStr = npc.value.appearance ? ` Appearance: ${npc.value.appearance}.` : ''
+  return `Fantasy character portrait for a D&D RPG. ${npc.value.name}, a ${npc.value.race || 'unknown race'}.${appearanceStr} ${npc.value.description || ''}. Style: detailed fantasy art, medieval setting, dramatic lighting, painterly. Head and shoulders portrait.`
 }
 
 // --- Edit ---
@@ -80,6 +81,7 @@ function openEditModal() {
     name: npc.value.name,
     race: npc.value.race || '',
     description: npc.value.description || '',
+    appearance: npc.value.appearance || '',
     locationEncountered: npc.value.locationEncountered || '',
     tags: [...(npc.value.tags || [])],
   }
@@ -94,6 +96,7 @@ async function saveEdit() {
     name: editForm.value.name.trim(),
     race: editForm.value.race.trim(),
     description: editForm.value.description.trim(),
+    appearance: editForm.value.appearance.trim() || undefined,
     locationEncountered: editForm.value.locationEncountered.trim(),
     tags: editForm.value.tags,
     updatedAt: new Date(),
@@ -185,6 +188,11 @@ async function deletePortrait() {
             <span v-for="tag in (npc.tags || []).filter(t => !['commander','leader','subleader','deceased','ZFC','LDU','DDU','GDU','PCU','EFDU','UEU','VIU'].includes(t))" :key="tag" class="text-[0.65rem] px-2 py-0.5 rounded-full bg-white/5 text-zinc-500">{{ tag }}</span>
           </div>
 
+          <div v-if="npc.appearance" class="mt-3 text-sm">
+            <span class="text-zinc-600">🎨 Appearance:</span>
+            <span class="text-zinc-400 ml-1 italic">{{ npc.appearance }}</span>
+          </div>
+
           <div class="card mt-4 p-4 relative z-10">
             <div class="relative z-10">
               <p class="text-zinc-300 whitespace-pre-wrap">{{ npc.description }}</p>
@@ -245,6 +253,10 @@ async function deletePortrait() {
               <div><label class="label text-xs mb-1 block">Name</label><input v-model="editForm.name" class="input w-full" /></div>
               <div><label class="label text-xs mb-1 block">Race</label><input v-model="editForm.race" class="input w-full" /></div>
               <div><label class="label text-xs mb-1 block">Description</label><textarea v-model="editForm.description" class="input w-full" rows="4" /></div>
+              <div>
+                <label class="label text-xs mb-1 block">Appearance <span class="text-zinc-600 font-normal">({{ editForm.appearance.length }}/200 — used for AI art)</span></label>
+                <input v-model="editForm.appearance" class="input w-full" maxlength="200" placeholder="e.g. Grizzled dwarf with braided grey beard, missing left eye, wears chainmail" />
+              </div>
               <div><label class="label text-xs mb-1 block">Location Encountered</label><input v-model="editForm.locationEncountered" class="input w-full" /></div>
               <div><label class="label text-xs mb-1 block">Tags</label><TagInput v-model="editForm.tags" /></div>
 

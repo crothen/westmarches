@@ -194,8 +194,36 @@ async function handleImageUpload(e: Event) {
   }
 }
 
+function buildDefaultEntryPrompt(): string {
+  // Build character appearance descriptions for participants
+  const participantChars = allParticipantsPresent.value
+    ? (props.sessionParticipants || [])
+    : selectedParticipants.value
+  const charDescriptions = participantChars.map(p => {
+    const char = characters.value.find(c => c.id === p.characterId)
+    if (char?.appearance) {
+      return `${p.characterName} (${char.race || ''} ${char.class || ''} — ${char.appearance})`.replace(/\(\s+/, '(')
+    }
+    return p.characterName
+  }).filter(Boolean)
+
+  // Build NPC appearance descriptions
+  const npcDescriptions = selectedNpcIds.value.map(id => {
+    const npc = npcs.value.find(n => n.id === id)
+    if (!npc) return null
+    if (npc.appearance) return `${npc.name} (${npc.race || ''} — ${npc.appearance})`.replace(/\(\s+/, '(')
+    return npc.name
+  }).filter(Boolean)
+
+  let prompt = `Fantasy D&D illustration: ${title.value}. ${description.value?.substring(0, 300)}.`
+  if (charDescriptions.length) prompt += ` Characters: ${charDescriptions.join('; ')}.`
+  if (npcDescriptions.length) prompt += ` NPCs: ${npcDescriptions.join('; ')}.`
+  prompt += ` Style: epic fantasy art, dramatic lighting, painterly.`
+  return prompt
+}
+
 async function generateEntryImage() {
-  const prompt = imagePrompt.value || `Fantasy D&D illustration: ${title.value}. ${description.value?.substring(0, 300)}. Style: epic fantasy art, dramatic lighting, painterly.`
+  const prompt = imagePrompt.value || buildDefaultEntryPrompt()
   showImagePrompt.value = false
   const path = `session-entries/${props.entryId || crypto.randomUUID()}/generated`
   const url = await generateImage(prompt, path)

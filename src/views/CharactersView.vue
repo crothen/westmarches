@@ -11,7 +11,7 @@ const users = ref<{ uid: string; displayName: string }[]>([])
 const loading = ref(true)
 const showCreate = ref(false)
 
-const newChar = ref({ name: '', race: '', class: '', level: 1, description: '' })
+const newChar = ref({ name: '', race: '', class: '', level: 1, description: '', appearance: '' })
 
 const _unsubs: (() => void)[] = []
 
@@ -55,6 +55,7 @@ async function createCharacter() {
     class: newChar.value.class.trim(),
     level: newChar.value.level,
     description: newChar.value.description.trim(),
+    appearance: newChar.value.appearance.trim() || null,
     userId: auth.firebaseUser?.uid || null,
     isActive: true,
     createdAt: Timestamp.now(),
@@ -62,7 +63,7 @@ async function createCharacter() {
   }
   try {
     await addDoc(collection(db, 'characters'), data)
-    newChar.value = { name: '', race: '', class: '', level: 1, description: '' }
+    newChar.value = { name: '', race: '', class: '', level: 1, description: '', appearance: '' }
     showCreate.value = false
   } catch (e) {
     console.error('Failed to create:', e)
@@ -92,6 +93,10 @@ async function createCharacter() {
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div><label class="label text-xs block mb-1">Level</label><input v-model.number="newChar.level" type="number" min="1" max="20" class="input w-full" /></div>
           <div class="md:col-span-3"><label class="label text-xs block mb-1">Description</label><input v-model="newChar.description" class="input w-full" placeholder="Brief description..." /></div>
+        </div>
+        <div>
+          <label class="label text-xs block mb-1">Appearance <span class="text-zinc-600 font-normal">(used for AI art — {{ newChar.appearance.length }}/200)</span></label>
+          <input v-model="newChar.appearance" class="input w-full" maxlength="200" placeholder="e.g. Tall half-elf with silver hair, blue eyes, wears leather armor and a tattered red cloak" />
         </div>
         <button @click="createCharacter" :disabled="!newChar.name.trim()" class="btn text-sm">Create</button>
       </div>

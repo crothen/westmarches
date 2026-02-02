@@ -41,6 +41,7 @@ export interface Character {
   class: string
   level: number
   description: string
+  appearance?: string  // visual description for consistent AI image gen (max 200 chars)
   imageUrl?: string
   galleryUrls?: string[]  // additional images, first = hero portrait
   isActive: boolean
@@ -96,6 +97,7 @@ export interface Npc {
   name: string
   race?: string
   description: string
+  appearance?: string  // visual description for consistent AI image gen (max 200 chars)
   locationEncountered?: string
   hexCoords?: { q: number; r: number }
   tags: string[]

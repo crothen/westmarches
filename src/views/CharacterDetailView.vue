@@ -14,7 +14,7 @@ const auth = useAuthStore()
 const character = ref<Character | null>(null)
 const loading = ref(true)
 const editing = ref(false)
-const editForm = ref({ name: '', race: '', class: '', level: 1, description: '' })
+const editForm = ref({ name: '', race: '', class: '', level: 1, description: '', appearance: '' })
 const uploadingImage = ref(false)
 const uploadProgress = ref(0)
 
@@ -62,7 +62,8 @@ function startEdit() {
     race: character.value.race,
     class: character.value.class,
     level: character.value.level,
-    description: character.value.description || ''
+    description: character.value.description || '',
+    appearance: character.value.appearance || ''
   }
   editing.value = true
 }
@@ -75,6 +76,7 @@ async function saveEdit() {
     class: editForm.value.class.trim(),
     level: editForm.value.level,
     description: editForm.value.description.trim(),
+    appearance: editForm.value.appearance.trim() || null,
     updatedAt: Timestamp.now()
   }
   try {
@@ -305,6 +307,12 @@ async function deleteCharacter() {
               </template>
             </div>
 
+            <!-- Appearance -->
+            <div v-if="character.appearance" class="mt-4">
+              <h2 class="label mb-1">Appearance <span class="text-zinc-600 font-normal text-[0.65rem]">🎨 used for AI art</span></h2>
+              <p class="text-zinc-500 text-sm italic">{{ character.appearance }}</p>
+            </div>
+
             <!-- Description -->
             <div v-if="character.description" class="mt-6">
               <h2 class="label mb-2">Description</h2>
@@ -331,6 +339,10 @@ async function deleteCharacter() {
             <div>
               <label class="label text-xs block mb-1">Level</label>
               <input v-model.number="editForm.level" type="number" min="1" max="20" class="input w-24" />
+            </div>
+            <div>
+              <label class="label text-xs block mb-1">Appearance <span class="text-zinc-600 font-normal">({{ editForm.appearance.length }}/200 — used for AI art)</span></label>
+              <input v-model="editForm.appearance" class="input w-full" maxlength="200" placeholder="e.g. Tall half-elf with silver hair, blue eyes, wears leather armor and a tattered red cloak" />
             </div>
             <div>
               <label class="label text-xs block mb-1">Description</label>

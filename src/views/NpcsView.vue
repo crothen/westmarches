@@ -21,7 +21,7 @@ const generatingForNpc = ref<string | null>(null)
 // Modal edit state
 const showEditModal = ref(false)
 const editingNpcData = ref<Npc | null>(null)
-const editForm = ref({ name: '', race: '', description: '', locationEncountered: '', tags: [] as string[] })
+const editForm = ref({ name: '', race: '', description: '', appearance: '', locationEncountered: '', tags: [] as string[] })
 const savingEdit = ref(false)
 const portraitPrompt = ref('')
 
@@ -103,7 +103,8 @@ function noteCount(npcId: string): number {
 }
 
 function getDefaultPortraitPrompt(npc: Npc): string {
-  return `Fantasy character portrait for a D&D RPG. ${npc.name}, a ${npc.race || 'unknown race'}. ${npc.description || ''}. Style: detailed fantasy art, medieval setting, dramatic lighting, painterly. Head and shoulders portrait.`
+  const appearanceStr = npc.appearance ? ` Appearance: ${npc.appearance}.` : ''
+  return `Fantasy character portrait for a D&D RPG. ${npc.name}, a ${npc.race || 'unknown race'}.${appearanceStr} ${npc.description || ''}. Style: detailed fantasy art, medieval setting, dramatic lighting, painterly. Head and shoulders portrait.`
 }
 
 // --- Edit Modal ---
@@ -113,6 +114,7 @@ function openEditModal(npc: Npc) {
     name: npc.name,
     race: npc.race || '',
     description: npc.description || '',
+    appearance: npc.appearance || '',
     locationEncountered: npc.locationEncountered || '',
     tags: [...(npc.tags || [])],
   }
@@ -134,6 +136,7 @@ async function saveEdit() {
     name: editForm.value.name.trim(),
     race: editForm.value.race.trim(),
     description: editForm.value.description.trim(),
+    appearance: editForm.value.appearance.trim() || undefined,
     locationEncountered: editForm.value.locationEncountered.trim(),
     tags: editForm.value.tags,
     updatedAt: new Date(),
@@ -277,6 +280,10 @@ async function generatePortrait() {
               <div>
                 <label class="label text-xs mb-1 block">Description</label>
                 <textarea v-model="editForm.description" class="input w-full" rows="4" />
+              </div>
+              <div>
+                <label class="label text-xs mb-1 block">Appearance <span class="text-zinc-600 font-normal">({{ editForm.appearance.length }}/200 — used for AI art)</span></label>
+                <input v-model="editForm.appearance" class="input w-full" maxlength="200" placeholder="e.g. Grizzled dwarf with braided grey beard, missing left eye, wears chainmail" />
               </div>
               <div>
                 <label class="label text-xs mb-1 block">Location Encountered</label>

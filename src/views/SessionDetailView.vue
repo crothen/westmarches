@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
 import SessionForm from '../components/sessions/SessionForm.vue'
 import SessionTimeline from '../components/sessions/SessionTimeline.vue'
-import type { SessionLog, SessionNote } from '../types'
+import type { SessionLog, SessionNote, Character, Npc } from '../types'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -22,6 +22,10 @@ const newNoteContent = ref('')
 // Image generation state
 const showPromptEditor = ref(false)
 const editablePrompt = ref('')
+
+// Character & NPC lookup for image gen appearances
+const characters = ref<Character[]>([])
+const npcList = ref<Npc[]>([])
 
 // NPC name lookup
 const npcNames = ref<Record<string, string>>({})
@@ -66,11 +70,20 @@ onMounted(async () => {
     console.warn('Notes query error (index may need creating):', err.message)
   }))
 
-  // Load NPC names for display
+  // Load NPC names for display + appearance data for image gen
   _unsubs.push(onSnapshot(collection(db, 'npcs'), (snap) => {
     const names: Record<string, string> = {}
-    snap.docs.forEach(d => { names[d.id] = d.data().name || d.id })
+    npcList.value = snap.docs.map(d => {
+      const data = d.data()
+      names[d.id] = data.name || d.id
+      return { id: d.id, ...data } as Npc
+    })
     npcNames.value = names
+  }))
+
+  // Load characters for appearance data in image gen
+  _unsubs.push(onSnapshot(collection(db, 'characters'), (snap) => {
+    characters.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Character))
   }))
 })
 
@@ -143,8 +156,29 @@ async function deleteNote(noteId: string) {
 
 function buildSessionPrompt(): string {
   if (!session.value) return ''
-  const participants = session.value.participants?.map(p => p.characterName).join(', ') || 'adventurers'
-  return `Create a dramatic D&D fantasy scene illustration in ultra-wide cinematic aspect ratio (3:1 or wider). Session title: "${session.value.title}". Summary: ${session.value.summary?.substring(0, 500)}. Characters involved: ${participants}. Style: epic fantasy art, dramatic lighting, painterly, ultra-wide panoramic landscape composition, medieval setting. The image MUST be very wide and short — panoramic banner format.`
+  // Build character descriptions with appearances when available
+  const charDescriptions = (session.value.participants || []).map(p => {
+    const char = characters.value.find(c => c.id === p.characterId)
+    if (char?.appearance) {
+      return `${p.characterName} (${char.race || ''} ${char.class || ''} — ${char.appearance})`.replace(/\(\s+/, '(')
+    }
+    return p.characterName
+  })
+  const participants = charDescriptions.join('; ') || 'adventurers'
+
+  // Include NPC appearances if any encountered
+  let npcStr = ''
+  if (session.value.npcsEncountered?.length) {
+    const npcDescriptions = session.value.npcsEncountered.map(id => {
+      const npc = npcList.value.find(n => n.id === id)
+      if (!npc) return null
+      if (npc.appearance) return `${npc.name} (${npc.race || ''} — ${npc.appearance})`.replace(/\(\s+/, '(')
+      return npc.name
+    }).filter(Boolean)
+    if (npcDescriptions.length) npcStr = ` NPCs present: ${npcDescriptions.join('; ')}.`
+  }
+
+  return `Create a dramatic D&D fantasy scene illustration in ultra-wide cinematic aspect ratio (3:1 or wider). Session title: "${session.value.title}". Summary: ${session.value.summary?.substring(0, 500)}. Characters involved: ${participants}.${npcStr} Style: epic fantasy art, dramatic lighting, painterly, ultra-wide panoramic landscape composition, medieval setting. The image MUST be very wide and short — panoramic banner format.`
 }
 
 function openPromptEditor() {
