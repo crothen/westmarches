@@ -94,7 +94,7 @@ function hasVisibleItems(section: NavSection): boolean {
 
   <aside
     :class="[
-      'w-52 h-[calc(100vh-49px)] border-r border-white/[0.06]',
+      'w-56 h-[calc(100vh-49px)] border-r border-white/[0.06]',
       'bg-black/40 backdrop-blur-xl',
       'fixed lg:sticky lg:top-[49px] lg:self-start z-30 transition-transform duration-200 lg:translate-x-0 flex flex-col',
       open ? 'translate-x-0' : '-translate-x-full'
@@ -105,7 +105,7 @@ function hasVisibleItems(section: NavSection): boolean {
         <div v-if="hasVisibleItems(section)">
           <!-- Section title -->
           <div v-if="section.title" class="px-3 pt-4 pb-1.5 first:pt-0">
-            <span class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-zinc-600" style="font-family: Manrope, sans-serif">{{ section.title }}</span>
+            <span class="text-xs font-bold uppercase tracking-[0.15em] text-zinc-600" style="font-family: Manrope, sans-serif">{{ section.title }}</span>
           </div>
 
           <!-- Items -->
@@ -113,13 +113,13 @@ function hasVisibleItems(section: NavSection): boolean {
             v-for="item in section.items.filter(isVisible)" :key="item.to"
             :to="item.to"
             :class="[
-              'flex items-center gap-2.5 py-2 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-all duration-150',
-              item.sub ? 'pl-8 pr-3 text-xs' : 'px-3 text-sm'
+              'flex items-center gap-2.5 py-2.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-all duration-150',
+              item.sub ? 'pl-8 pr-3 text-sm' : 'px-3 text-[0.9375rem]'
             ]"
             active-class="!text-[#ef233c] bg-[#ef233c]/[0.06] hover:!bg-[#ef233c]/[0.1]"
             @click="$emit('close')"
           >
-            <span :class="['text-center', item.sub ? 'text-xs w-4' : 'text-sm w-5']">{{ item.icon }}</span>
+            <span :class="['text-center', item.sub ? 'text-sm w-4' : 'text-base w-5']">{{ item.icon }}</span>
             <span class="font-medium">{{ item.label }}</span>
           </RouterLink>
         </div>
@@ -130,14 +130,14 @@ function hasVisibleItems(section: NavSection): boolean {
     <div class="shrink-0 border-t border-white/[0.06] p-3">
       <div v-if="auth.isGuest" class="px-2 space-y-2">
         <div class="text-sm text-zinc-500 font-medium">👁️ Guest Mode</div>
-        <RouterLink to="/login" class="text-[#ef233c] hover:text-red-400 text-xs transition-colors" @click="handleLogout">Sign In</RouterLink>
+        <RouterLink to="/login" class="text-[#ef233c] hover:text-red-400 text-sm transition-colors" @click="handleLogout">Sign In</RouterLink>
       </div>
       <div v-else class="px-2 space-y-2">
-        <RouterLink to="/profile" class="text-sm text-zinc-400 font-medium truncate hover:text-white transition-colors block" @click="$emit('close')">{{ auth.appUser?.displayName }}</RouterLink>
+        <RouterLink to="/profile" class="text-[0.9375rem] text-zinc-400 font-medium truncate hover:text-white transition-colors block" @click="$emit('close')">{{ auth.appUser?.displayName }}</RouterLink>
         <div class="flex flex-wrap gap-1">
-          <span v-for="r in auth.roles" :key="r" class="text-[0.55rem] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest" :class="r === 'admin' ? 'bg-[#ef233c]/10 text-[#ef233c]' : r === 'dm' ? 'bg-purple-500/10 text-purple-400' : 'bg-white/5 text-zinc-400'" style="font-family: Manrope, sans-serif">{{ r }}</span>
+          <span v-for="r in auth.roles" :key="r" class="text-[0.65rem] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest" :class="r === 'admin' ? 'bg-[#ef233c]/10 text-[#ef233c]' : r === 'dm' ? 'bg-purple-500/10 text-purple-400' : 'bg-white/5 text-zinc-400'" style="font-family: Manrope, sans-serif">{{ r }}</span>
         </div>
-        <button @click="handleLogout" class="text-zinc-600 hover:text-white text-xs transition-colors">Logout</button>
+        <button @click="handleLogout" class="text-zinc-600 hover:text-white text-sm transition-colors">Logout</button>
       </div>
     </div>
   </aside>
