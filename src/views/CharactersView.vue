@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { collection, getDocs, query, orderBy, addDoc, Timestamp } from 'firebase/firestore'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { collection, query, orderBy, addDoc, Timestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import type { Character } from '../types'
@@ -13,20 +13,23 @@ const showCreate = ref(false)
 
 const newChar = ref({ name: '', race: '', class: '', level: 1, description: '' })
 
-onMounted(async () => {
-  try {
-    const [charSnap, userSnap] = await Promise.all([
-      getDocs(query(collection(db, 'characters'), orderBy('name', 'asc'))),
-      getDocs(query(collection(db, 'users'), orderBy('displayName', 'asc')))
-    ])
-    characters.value = charSnap.docs.map(d => ({ id: d.id, ...d.data() } as Character))
-    users.value = userSnap.docs.map(d => ({ uid: d.id, displayName: d.data().displayName || d.data().email || d.id }))
-  } catch (e) {
-    console.error('Failed to load:', e)
-  } finally {
+const _unsubs: (() => void)[] = []
+
+onMounted(() => {
+  _unsubs.push(onSnapshot(query(collection(db, 'characters'), orderBy('name', 'asc')), (snap) => {
+    characters.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Character))
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load characters:', e)
+    loading.value = false
+  }))
+
+  _unsubs.push(onSnapshot(query(collection(db, 'users'), orderBy('displayName', 'asc')), (snap) => {
+    users.value = snap.docs.map(d => ({ uid: d.id, displayName: d.data().displayName || d.data().email || d.id }))
+  }, (e) => console.error('Failed to load users:', e)))
 })
+
+onUnmounted(() => _unsubs.forEach(fn => fn()))
 
 const myCharacters = computed(() => {
   if (!auth.firebaseUser) return []
@@ -58,8 +61,7 @@ async function createCharacter() {
     updatedAt: Timestamp.now()
   }
   try {
-    const docRef = await addDoc(collection(db, 'characters'), data)
-    characters.value.push({ id: docRef.id, ...data } as any)
+    await addDoc(collection(db, 'characters'), data)
     newChar.value = { name: '', race: '', class: '', level: 1, description: '' }
     showCreate.value = false
   } catch (e) {

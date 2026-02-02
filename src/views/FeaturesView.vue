@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, Timestamp } from 'firebase/firestore'
+import { collection, addDoc, updateDoc, deleteDoc, doc, query, orderBy, Timestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import HexMiniMap from '../components/map/HexMiniMap.vue'
@@ -29,19 +29,20 @@ const editForm = ref({ name: '', type: 'other' as any, description: '' })
 
 const { featureTypes: featureTypeOptions } = useTypeConfig()
 
-onMounted(async () => {
-  try {
-    const [locSnap, featSnap] = await Promise.all([
-      getDocs(query(collection(db, 'locations'), orderBy('name', 'asc'))),
-      getDocs(query(collection(db, 'features'), orderBy('name', 'asc')))
-    ])
-    locations.value = locSnap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
-    features.value = featSnap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
-  } catch (e) {
-    console.error('Failed to load:', e)
-  } finally {
+const _unsubs: (() => void)[] = []
+
+onMounted(() => {
+  _unsubs.push(onSnapshot(query(collection(db, 'locations'), orderBy('name', 'asc')), (snap) => {
+    locations.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
+  }, (e) => console.error('Failed to load locations:', e)))
+
+  _unsubs.push(onSnapshot(query(collection(db, 'features'), orderBy('name', 'asc')), (snap) => {
+    features.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load features:', e)
+    loading.value = false
+  }))
 })
 
 const filteredFeatures = computed(() => {
@@ -116,11 +117,14 @@ function onGlobalClick() {
 }
 
 onMounted(() => document.addEventListener('click', onGlobalClick))
-onUnmounted(() => document.removeEventListener('click', onGlobalClick))
+onUnmounted(() => {
+  document.removeEventListener('click', onGlobalClick)
+  _unsubs.forEach(fn => fn())
+})
 
 async function addFeature() {
   if (!newFeat.value.name.trim()) return
-  const docRef = await addDoc(collection(db, 'features'), {
+  await addDoc(collection(db, 'features'), {
     name: newFeat.value.name.trim(),
     type: newFeat.value.type,
     description: newFeat.value.description.trim(),
@@ -131,8 +135,6 @@ async function addFeature() {
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now()
   })
-  features.value.push({ id: docRef.id, ...newFeat.value, tags: [], createdAt: new Date(), updatedAt: new Date() } as any)
-  features.value.sort((a, b) => a.name.localeCompare(b.name))
   newFeat.value = { name: '', type: 'other', description: '', locationId: '', hexKey: '' }
   showAddForm.value = false
 }
@@ -141,8 +143,6 @@ async function toggleHidden(feat: LocationFeature) {
   const newHidden = !feat.hidden
   try {
     await updateDoc(doc(db, 'features', feat.id), { hidden: newHidden, updatedAt: Timestamp.now() })
-    const idx = features.value.findIndex(f => f.id === feat.id)
-    if (idx >= 0) features.value[idx] = { ...features.value[idx], hidden: newHidden } as LocationFeature
   } catch (e) {
     console.error('Failed to toggle hidden:', e)
   }
@@ -164,8 +164,6 @@ async function saveEdit() {
   }
   try {
     await updateDoc(doc(db, 'features', id), updates)
-    const idx = features.value.findIndex(f => f.id === id)
-    if (idx >= 0) features.value[idx] = { ...features.value[idx], ...updates } as unknown as LocationFeature
     editingFeature.value = null
   } catch (e) {
     console.error('Failed to save:', e)
@@ -177,7 +175,6 @@ async function deleteFeature(feat: LocationFeature) {
   if (!confirm(`Delete "${feat.name}"? This cannot be undone.`)) return
   try {
     await deleteDoc(doc(db, 'features', feat.id))
-    features.value = features.value.filter(f => f.id !== feat.id)
   } catch (e) {
     console.error('Failed to delete:', e)
     alert('Failed to delete feature.')

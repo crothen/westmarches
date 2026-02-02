@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { collection, query, orderBy, doc, updateDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
@@ -28,24 +28,12 @@ const portraitPrompt = ref('')
 // Note state (used in edit modal only now)
 
 
-onMounted(async () => {
-  try {
-    const [npcSnap, orgSnap] = await Promise.all([
-      getDocs(query(collection(db, 'npcs'), orderBy('name', 'asc'))),
-      getDocs(query(collection(db, 'organizations'), orderBy('name', 'asc'))),
-    ])
-    npcs.value = npcSnap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
-    orgs.value = orgSnap.docs.map(d => ({ id: d.id, ...d.data() } as Organization))
+const _unsubs: (() => void)[] = []
 
-    if (auth.isAuthenticated) {
-      const noteSnap = await getDocs(query(collection(db, 'npcNotes'), orderBy('createdAt', 'desc')))
-      const allNotes = noteSnap.docs.map(d => ({ id: d.id, ...d.data() } as NpcNote))
-      for (const note of allNotes) {
-        if (note.isPrivate && note.userId !== auth.firebaseUser?.uid && !auth.isDm && !auth.isAdmin) continue
-        if (!npcNotes.value[note.npcId]) npcNotes.value[note.npcId] = []
-        npcNotes.value[note.npcId]!.push(note)
-      }
-    }
+onMounted(() => {
+  _unsubs.push(onSnapshot(query(collection(db, 'npcs'), orderBy('name', 'asc')), async (snap) => {
+    npcs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
+    loading.value = false
 
     if (window.location.hash) {
       const targetId = window.location.hash.slice(1)
@@ -54,12 +42,30 @@ onMounted(async () => {
         document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
     }
-  } catch (e) {
+  }, (e) => {
     console.error('Failed to load NPCs:', e)
-  } finally {
     loading.value = false
+  }))
+
+  _unsubs.push(onSnapshot(query(collection(db, 'organizations'), orderBy('name', 'asc')), (snap) => {
+    orgs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Organization))
+  }, (e) => console.error('Failed to load organizations:', e)))
+
+  if (auth.isAuthenticated) {
+    _unsubs.push(onSnapshot(query(collection(db, 'npcNotes'), orderBy('createdAt', 'desc')), (snap) => {
+      const newNpcNotes: Record<string, NpcNote[]> = {}
+      const allNotes = snap.docs.map(d => ({ id: d.id, ...d.data() } as NpcNote))
+      for (const note of allNotes) {
+        if (note.isPrivate && note.userId !== auth.firebaseUser?.uid && !auth.isDm && !auth.isAdmin) continue
+        if (!newNpcNotes[note.npcId]) newNpcNotes[note.npcId] = []
+        newNpcNotes[note.npcId]!.push(note)
+      }
+      npcNotes.value = newNpcNotes
+    }, (e) => console.warn('Failed to load NPC notes:', e)))
   }
 })
+
+onUnmounted(() => _unsubs.forEach(fn => fn()))
 
 const allTags = computed(() => {
   const tagSet = new Set<string>()

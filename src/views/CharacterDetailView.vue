@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { doc, getDoc, updateDoc, deleteDoc, getDocs, collection, query, orderBy, Timestamp } from 'firebase/firestore'
+import { doc, updateDoc, deleteDoc, collection, query, orderBy, Timestamp, onSnapshot } from 'firebase/firestore'
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
@@ -27,22 +27,27 @@ const canEdit = computed(() => {
   return character.value.userId === auth.firebaseUser.uid || auth.isDm || auth.isAdmin
 })
 
-onMounted(async () => {
-  try {
-    const charDoc = await getDoc(doc(db, 'characters', route.params.id as string))
-    if (charDoc.exists()) {
-      character.value = { id: charDoc.id, ...charDoc.data() } as Character
+const _unsubs: (() => void)[] = []
+
+onMounted(() => {
+  _unsubs.push(onSnapshot(doc(db, 'characters', route.params.id as string), (snap) => {
+    if (snap.exists()) {
+      character.value = { id: snap.id, ...snap.data() } as Character
     }
-    if (auth.isDm || auth.isAdmin) {
-      const userSnap = await getDocs(query(collection(db, 'users'), orderBy('displayName', 'asc')))
-      users.value = userSnap.docs.map(d => ({ uid: d.id, displayName: d.data().displayName || d.data().email || d.id }))
-    }
-  } catch (e) {
-    console.error('Failed to load character:', e)
-  } finally {
     loading.value = false
+  }, (e) => {
+    console.error('Failed to load character:', e)
+    loading.value = false
+  }))
+
+  if (auth.isDm || auth.isAdmin) {
+    _unsubs.push(onSnapshot(query(collection(db, 'users'), orderBy('displayName', 'asc')), (snap) => {
+      users.value = snap.docs.map(d => ({ uid: d.id, displayName: d.data().displayName || d.data().email || d.id }))
+    }, (e) => console.error('Failed to load users:', e)))
   }
 })
+
+onUnmounted(() => _unsubs.forEach(fn => fn()))
 
 function getOwnerName(userId?: string): string {
   if (!userId) return 'Unassigned'

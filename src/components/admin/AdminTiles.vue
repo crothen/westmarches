@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { doc, setDoc, onSnapshot } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../../firebase/config'
 import { useImageGen } from '../../composables/useImageGen'
@@ -31,18 +31,21 @@ const generatingPrompt = ref(false)
 // Hex preview canvas
 const hexPreviewRef = ref<HTMLCanvasElement | null>(null)
 
-onMounted(async () => {
-  try {
-    const snap = await getDoc(doc(db, 'config', 'terrain'))
+let _unsub: (() => void) | null = null
+
+onMounted(() => {
+  _unsub = onSnapshot(doc(db, 'config', 'terrain'), (snap) => {
     if (snap.exists()) {
       terrainConfig.value = snap.data() as Record<string, TerrainEntry>
     }
-  } catch (e) {
-    console.error('Failed to load terrain config:', e)
-  } finally {
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load terrain config:', e)
+    loading.value = false
+  })
 })
+
+onUnmounted(() => _unsub?.())
 
 const sortedTerrains = computed(() => {
   return Object.entries(terrainConfig.value)

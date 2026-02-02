@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, doc, Timestamp, getDocs } from 'firebase/firestore'
+import { collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, doc, Timestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { useAuthStore } from '../../stores/auth'
 import DetailMapViewer from './DetailMapViewer.vue'
@@ -87,30 +87,29 @@ const currentSideTags = computed(() => {
   })
 })
 
-watch(hexKey, async (newKey) => {
+const _hexUnsubs: (() => void)[] = []
+
+watch(hexKey, (newKey) => {
+  // Unsubscribe from previous hex listeners
+  _hexUnsubs.forEach(fn => fn())
+  _hexUnsubs.length = 0
+
   hexLocations.value = []
   hexFeatures.value = []
   hexMarkersList.value = []
   if (!newKey) return
-  
-  try {
-    const [locSnap, featSnap] = await Promise.all([
-      getDocs(query(collection(db, 'locations'), where('hexKey', '==', newKey))),
-      getDocs(query(collection(db, 'features'), where('hexKey', '==', newKey)))
-    ])
-    hexLocations.value = locSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-    hexFeatures.value = featSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-  } catch (e) {
-    console.warn('Failed to load hex locations:', e)
-  }
 
-  // Load markers separately — non-critical
-  try {
-    const markerSnap = await getDocs(query(collection(db, 'markers'), where('hexKey', '==', newKey)))
-    hexMarkersList.value = markerSnap.docs.map(d => ({ id: d.id, ...d.data() } as HexMarker))
-  } catch (e) {
-    console.warn('Failed to load hex markers:', e)
-  }
+  _hexUnsubs.push(onSnapshot(query(collection(db, 'locations'), where('hexKey', '==', newKey)), (snap) => {
+    hexLocations.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  }, (e) => console.warn('Failed to load hex locations:', e)))
+
+  _hexUnsubs.push(onSnapshot(query(collection(db, 'features'), where('hexKey', '==', newKey)), (snap) => {
+    hexFeatures.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  }, (e) => console.warn('Failed to load hex features:', e)))
+
+  _hexUnsubs.push(onSnapshot(query(collection(db, 'markers'), where('hexKey', '==', newKey)), (snap) => {
+    hexMarkersList.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as HexMarker))
+  }, (e) => console.warn('Failed to load hex markers:', e)))
 }, { immediate: true })
 
 // Filtered visible locations/features (hide hidden items from players)
@@ -285,7 +284,8 @@ async function togglePoiHidden(poi: any, kind: 'location' | 'feature') {
 }
 
 onUnmounted(() => {
-  // cleanup handled by NotesSection
+  _hexUnsubs.forEach(fn => fn())
+  _poiUnsubs.forEach(fn => fn())
 })
 
 function onTerrainChange(e: Event) {
@@ -297,18 +297,18 @@ function onTerrainChange(e: Event) {
 
 const detailMapUrl = computed(() => currentHexData.value?.detailMapUrl || null)
 
-async function loadAllPois() {
-  if (allLocations.value.length || allFeatures.value.length) return
-  try {
-    const [locSnap, featSnap] = await Promise.all([
-      getDocs(query(collection(db, 'locations'), orderBy('name', 'asc'))),
-      getDocs(query(collection(db, 'features'), orderBy('name', 'asc')))
-    ])
-    allLocations.value = locSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-    allFeatures.value = featSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-  } catch (e) {
-    console.warn('Failed to load all POIs:', e)
-  }
+const _poiUnsubs: (() => void)[] = []
+
+function loadAllPois() {
+  if (_poiUnsubs.length > 0) return // already subscribed
+
+  _poiUnsubs.push(onSnapshot(query(collection(db, 'locations'), orderBy('name', 'asc')), (snap) => {
+    allLocations.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  }, (e) => console.warn('Failed to load all locations:', e)))
+
+  _poiUnsubs.push(onSnapshot(query(collection(db, 'features'), orderBy('name', 'asc')), (snap) => {
+    allFeatures.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  }, (e) => console.warn('Failed to load all features:', e)))
 }
 
 

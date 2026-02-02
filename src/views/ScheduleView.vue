@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, getDocs, Timestamp } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import type { ScheduledSession, Mission } from '../types'
@@ -14,26 +14,24 @@ const newDate = ref('')
 const newTitle = ref('')
 const newDescription = ref('')
 const newMaxPlayers = ref<number | undefined>(undefined)
-let unsubSessions: (() => void) | null = null
+const _unsubs: (() => void)[] = []
 
-onMounted(async () => {
-  try {
-    const mSnap = await getDocs(collection(db, 'missions'))
-    missions.value = mSnap.docs.map(d => ({ id: d.id, ...d.data() } as Mission))
-  } catch (e) {
-    console.error('Failed to load missions:', e)
-  }
+onMounted(() => {
+  _unsubs.push(onSnapshot(collection(db, 'missions'), (snap) => {
+    missions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Mission))
+  }, (e) => console.error('Failed to load missions:', e)))
 
   const q = query(collection(db, 'scheduledSessions'), orderBy('date', 'asc'))
-  unsubSessions = onSnapshot(q, (snap) => {
+  _unsubs.push(onSnapshot(q, (snap) => {
     sessions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as ScheduledSession))
     loading.value = false
-  })
+  }, (e) => {
+    console.error('Failed to load scheduled sessions:', e)
+    loading.value = false
+  }))
 })
 
-onUnmounted(() => {
-  unsubSessions?.()
-})
+onUnmounted(() => _unsubs.forEach(fn => fn()))
 
 const upcomingSessions = computed(() => sessions.value.filter(s => s.status === 'upcoming' || s.status === 'in_progress'))
 const availableMissions = computed(() => missions.value.filter(m => m.status === 'available'))

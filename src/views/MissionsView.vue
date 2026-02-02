@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { collection, query, orderBy, doc, updateDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import type { Mission } from '../types'
@@ -12,16 +12,19 @@ const filterTier = ref<number | null>(null)
 const filterUnit = ref<string | null>(null)
 const sortBy = ref<'unit' | 'votes'>('unit')
 
-onMounted(async () => {
-  try {
-    const snap = await getDocs(query(collection(db, 'missions'), orderBy('tier', 'asc')))
+let _unsub: (() => void) | null = null
+
+onMounted(() => {
+  _unsub = onSnapshot(query(collection(db, 'missions'), orderBy('tier', 'asc')), (snap) => {
     missions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Mission))
-  } catch (e) {
-    console.error('Failed to load missions:', e)
-  } finally {
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load missions:', e)
+    loading.value = false
+  })
 })
+
+onUnmounted(() => _unsub?.())
 
 const units = computed(() => {
   const set = new Set(missions.value.map(m => m.unitName))

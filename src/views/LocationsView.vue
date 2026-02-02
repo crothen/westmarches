@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, query, orderBy, where, Timestamp } from 'firebase/firestore'
+import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, query, orderBy, where, Timestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import HexMiniMap from '../components/map/HexMiniMap.vue'
@@ -48,7 +48,10 @@ function onGlobalClick() {
 }
 
 onMounted(() => document.addEventListener('click', onGlobalClick))
-onUnmounted(() => document.removeEventListener('click', onGlobalClick))
+onUnmounted(() => {
+  document.removeEventListener('click', onGlobalClick)
+  _unsubs.forEach(fn => fn())
+})
 const newLoc = ref({ name: '', type: 'city' as any, description: '', hexKey: '' })
 
 // Edit location state
@@ -61,19 +64,22 @@ const typeIcons: Record<string, string> = {
   monastery: '📿', camp: '⛺', ruins: '🪨', other: '📍'
 }
 
-onMounted(async () => {
-  try {
-    const [locSnap, featSnap] = await Promise.all([
-      getDocs(query(collection(db, 'locations'), orderBy('name', 'asc'))),
-      getDocs(query(collection(db, 'features'), orderBy('name', 'asc')))
-    ])
-    locations.value = locSnap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
-    features.value = featSnap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
-  } catch (e) {
-    console.error('Failed to load:', e)
-  } finally {
+const _unsubs: (() => void)[] = []
+
+onMounted(() => {
+  _unsubs.push(onSnapshot(query(collection(db, 'locations'), orderBy('name', 'asc')), (snap) => {
+    locations.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load locations:', e)
+    loading.value = false
+  }))
+
+  _unsubs.push(onSnapshot(query(collection(db, 'features'), orderBy('name', 'asc')), (snap) => {
+    features.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
+  }, (e) => {
+    console.error('Failed to load features:', e)
+  }))
 })
 
 const filteredLocations = computed(() => {
@@ -107,7 +113,7 @@ function getFeatureCount(locId: string): number {
 
 async function addLocation() {
   if (!newLoc.value.name.trim()) return
-  const docRef = await addDoc(collection(db, 'locations'), {
+  await addDoc(collection(db, 'locations'), {
     name: newLoc.value.name.trim(),
     type: newLoc.value.type,
     description: newLoc.value.description.trim(),
@@ -117,8 +123,7 @@ async function addLocation() {
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now()
   })
-  locations.value.push({ id: docRef.id, ...newLoc.value, tags: [], createdAt: new Date(), updatedAt: new Date() } as any)
-  locations.value.sort((a, b) => a.name.localeCompare(b.name))
+  // onSnapshot will update the list automatically
   newLoc.value = { name: '', type: 'city', description: '', hexKey: '' }
   showAddForm.value = false
 }
@@ -131,8 +136,7 @@ async function deleteLocation(loc: CampaignLocation) {
     await Promise.all(featSnap.docs.map(d => deleteDoc(d.ref)))
     // Delete the location
     await deleteDoc(doc(db, 'locations', loc.id))
-    locations.value = locations.value.filter(l => l.id !== loc.id)
-    features.value = features.value.filter(f => f.locationId !== loc.id)
+    // onSnapshot will update lists automatically
   } catch (e) {
     console.error('Failed to delete:', e)
     alert('Failed to delete location.')
@@ -143,10 +147,7 @@ async function toggleHidden(loc: CampaignLocation) {
   const newHidden = !loc.hidden
   try {
     await updateDoc(doc(db, 'locations', loc.id), { hidden: newHidden, updatedAt: Timestamp.now() })
-    const idx = locations.value.findIndex(l => l.id === loc.id)
-    if (idx >= 0) {
-      locations.value[idx] = { ...locations.value[idx], hidden: newHidden } as CampaignLocation
-    }
+    // onSnapshot will update the list automatically
   } catch (e) {
     console.error('Failed to toggle hidden:', e)
     alert('Failed to update location.')
@@ -175,17 +176,7 @@ async function saveEditLocation() {
   }
   try {
     await updateDoc(doc(db, 'locations', id), updates)
-    const idx = locations.value.findIndex(l => l.id === id)
-    if (idx >= 0) {
-      locations.value[idx] = {
-        ...locations.value[idx],
-        name: updates.name,
-        type: updates.type as any,
-        description: updates.description,
-        hexKey: updates.hexKey || undefined
-      } as CampaignLocation
-    }
-    locations.value.sort((a, b) => a.name.localeCompare(b.name))
+    // onSnapshot will update the list automatically
     editingLocation.value = null
   } catch (e) {
     console.error('Failed to update location:', e)

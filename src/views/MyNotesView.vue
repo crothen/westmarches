@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { collection, query, where, doc, getDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import MentionText from '../components/common/MentionText.vue'
@@ -126,10 +126,15 @@ async function resolveEntityNames(ids: { npcIds: Set<string>, sessionIds: Set<st
   await Promise.all(promises)
 }
 
-onMounted(async () => {
-  if (!auth.firebaseUser) return
+const _unsubs: (() => void)[] = []
 
-  const uid = auth.firebaseUser.uid
+// Raw snapshot data
+const rawHexNotes = ref<any[]>([])
+const rawNpcNotes = ref<any[]>([])
+const rawSessionNotes = ref<any[]>([])
+const rawComments = ref<any[]>([])
+
+async function recomputeAllNotes() {
   const notes: NoteItem[] = []
   const entityIds = {
     npcIds: new Set<string>(),
@@ -139,112 +144,120 @@ onMounted(async () => {
     orgIds: new Set<string>()
   }
 
-  try {
-    // Fetch all note types in parallel
-    const [hexSnap, npcSnap, sessionSnap, commentSnap] = await Promise.all([
-      getDocs(query(collection(db, 'hexNotes'), where('userId', '==', uid))),
-      getDocs(query(collection(db, 'npcNotes'), where('userId', '==', uid))),
-      getDocs(query(collection(db, 'sessionNotes'), where('userId', '==', uid))),
-      getDocs(query(collection(db, 'comments'), where('authorId', '==', uid)))
-    ])
-
-    // Hex Notes
-    hexSnap.docs.forEach(d => {
-      const data = d.data() as HexNote & { deleted?: boolean }
-      if (data.deleted) return
-      const parts = data.hexKey.split('_')
-      notes.push({
-        id: d.id,
-        type: 'hex',
-        content: data.content,
-        sourceName: `Hex ${parts[0]}, ${parts[1]}`,
-        sourceLink: `/map?hex=${data.hexKey}`,
-        createdAt: toDate(data.createdAt),
-        isPrivate: data.isPrivate
-      })
+  // Hex Notes
+  rawHexNotes.value.forEach(({ id, data }) => {
+    if (data.deleted) return
+    const parts = data.hexKey.split('_')
+    notes.push({
+      id,
+      type: 'hex',
+      content: data.content,
+      sourceName: `Hex ${parts[0]}, ${parts[1]}`,
+      sourceLink: `/map?hex=${data.hexKey}`,
+      createdAt: toDate(data.createdAt),
+      isPrivate: data.isPrivate
     })
+  })
 
-    // NPC Notes
-    npcSnap.docs.forEach(d => {
-      const data = d.data() as NpcNote & { deleted?: boolean }
-      if (data.deleted) return
-      entityIds.npcIds.add(data.npcId)
-      notes.push({
-        id: d.id,
-        type: 'npc',
-        content: data.content,
-        sourceName: data.npcId, // Will be resolved
-        sourceLink: `/npcs/${data.npcId}`,
-        createdAt: toDate(data.createdAt),
-        isPrivate: data.isPrivate
-      })
+  // NPC Notes
+  rawNpcNotes.value.forEach(({ id, data }) => {
+    if (data.deleted) return
+    entityIds.npcIds.add(data.npcId)
+    notes.push({
+      id,
+      type: 'npc',
+      content: data.content,
+      sourceName: data.npcId,
+      sourceLink: `/npcs/${data.npcId}`,
+      createdAt: toDate(data.createdAt),
+      isPrivate: data.isPrivate
     })
+  })
 
-    // Session Notes
-    sessionSnap.docs.forEach(d => {
-      const data = d.data() as SessionNote & { deleted?: boolean }
-      if (data.deleted) return
-      entityIds.sessionIds.add(data.sessionId)
-      notes.push({
-        id: d.id,
-        type: 'session',
-        content: data.content,
-        sourceName: data.sessionId, // Will be resolved
-        sourceLink: `/sessions/${data.sessionId}`,
-        createdAt: toDate(data.createdAt),
-        isPrivate: data.isPrivate
-      })
+  // Session Notes
+  rawSessionNotes.value.forEach(({ id, data }) => {
+    if (data.deleted) return
+    entityIds.sessionIds.add(data.sessionId)
+    notes.push({
+      id,
+      type: 'session',
+      content: data.content,
+      sourceName: data.sessionId,
+      sourceLink: `/sessions/${data.sessionId}`,
+      createdAt: toDate(data.createdAt),
+      isPrivate: data.isPrivate
     })
+  })
 
-    // Comments
-    commentSnap.docs.forEach(d => {
-      const data = d.data() as Comment
-      // Collect entity IDs for resolution
-      switch (data.targetType) {
-        case 'npc': entityIds.npcIds.add(data.targetId); break
-        case 'character': entityIds.characterIds.add(data.targetId); break
-        case 'location': entityIds.locationIds.add(data.targetId); break
-        case 'organization': entityIds.orgIds.add(data.targetId); break
-      }
-      notes.push({
-        id: d.id,
-        type: 'comment',
-        content: data.content,
-        sourceName: `${data.targetType}:${data.targetId}`, // Will be resolved
-        sourceLink: getSourceLink('comment', data.targetType, data.targetId),
-        createdAt: toDate(data.createdAt),
-        isPrivate: data.isPrivate
-      })
+  // Comments
+  rawComments.value.forEach(({ id, data }) => {
+    switch (data.targetType) {
+      case 'npc': entityIds.npcIds.add(data.targetId); break
+      case 'character': entityIds.characterIds.add(data.targetId); break
+      case 'location': entityIds.locationIds.add(data.targetId); break
+      case 'organization': entityIds.orgIds.add(data.targetId); break
+    }
+    notes.push({
+      id,
+      type: 'comment',
+      content: data.content,
+      sourceName: `${data.targetType}:${data.targetId}`,
+      sourceLink: getSourceLink('comment', data.targetType, data.targetId),
+      createdAt: toDate(data.createdAt),
+      isPrivate: data.isPrivate
     })
+  })
 
-    // Resolve all entity names
-    await resolveEntityNames(entityIds)
+  // Resolve entity names
+  await resolveEntityNames(entityIds)
 
-    // Update NPC note source names
-    notes.forEach(note => {
-      if (note.type === 'npc') {
-        const npcId = note.sourceName // Stored the raw id temporarily
-        note.sourceName = npcNames.value[npcId] || `NPC ${npcId.slice(0, 6)}…`
-      }
-      if (note.type === 'session') {
-        const sessionId = note.sourceName
-        note.sourceName = sessionTitles.value[sessionId] || `Session ${sessionId.slice(0, 6)}…`
-      }
-      if (note.type === 'comment') {
-        const [targetType, targetId] = note.sourceName.split(':')
-        note.sourceName = getSourceName('comment', targetType!, targetId!)
-      }
-    })
+  // Update source names
+  notes.forEach(note => {
+    if (note.type === 'npc') {
+      const npcId = note.sourceName
+      note.sourceName = npcNames.value[npcId] || `NPC ${npcId.slice(0, 6)}…`
+    }
+    if (note.type === 'session') {
+      const sessionId = note.sourceName
+      note.sourceName = sessionTitles.value[sessionId] || `Session ${sessionId.slice(0, 6)}…`
+    }
+    if (note.type === 'comment') {
+      const [targetType, targetId] = note.sourceName.split(':')
+      note.sourceName = getSourceName('comment', targetType!, targetId!)
+    }
+  })
 
-    // Sort by most recent
-    notes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    allNotes.value = notes
-  } catch (e) {
-    console.error('Failed to load notes:', e)
-  } finally {
-    loading.value = false
-  }
+  notes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+  allNotes.value = notes
+  loading.value = false
+}
+
+onMounted(() => {
+  if (!auth.firebaseUser) { loading.value = false; return }
+  const uid = auth.firebaseUser.uid
+
+  _unsubs.push(onSnapshot(query(collection(db, 'hexNotes'), where('userId', '==', uid)), (snap) => {
+    rawHexNotes.value = snap.docs.map(d => ({ id: d.id, data: d.data() as HexNote & { deleted?: boolean } }))
+    recomputeAllNotes()
+  }, (e) => { console.error('Failed to load hex notes:', e); loading.value = false }))
+
+  _unsubs.push(onSnapshot(query(collection(db, 'npcNotes'), where('userId', '==', uid)), (snap) => {
+    rawNpcNotes.value = snap.docs.map(d => ({ id: d.id, data: d.data() as NpcNote & { deleted?: boolean } }))
+    recomputeAllNotes()
+  }, (e) => { console.error('Failed to load npc notes:', e); loading.value = false }))
+
+  _unsubs.push(onSnapshot(query(collection(db, 'sessionNotes'), where('userId', '==', uid)), (snap) => {
+    rawSessionNotes.value = snap.docs.map(d => ({ id: d.id, data: d.data() as SessionNote & { deleted?: boolean } }))
+    recomputeAllNotes()
+  }, (e) => { console.error('Failed to load session notes:', e); loading.value = false }))
+
+  _unsubs.push(onSnapshot(query(collection(db, 'comments'), where('authorId', '==', uid)), (snap) => {
+    rawComments.value = snap.docs.map(d => ({ id: d.id, data: d.data() as Comment }))
+    recomputeAllNotes()
+  }, (e) => { console.error('Failed to load comments:', e); loading.value = false }))
 })
+
+onUnmounted(() => _unsubs.forEach(fn => fn()))
 
 const filteredNotes = computed(() => {
   let notes = allNotes.value

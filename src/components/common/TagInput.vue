@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { collection, getDocs, query } from 'firebase/firestore'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { collection, query, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 
 const props = defineProps<{
@@ -15,20 +15,20 @@ const newTag = ref('')
 const showSuggestions = ref(false)
 const allKnownTags = ref<string[]>([])
 
-onMounted(async () => {
-  // Gather all existing tags from NPCs
-  try {
-    const snap = await getDocs(query(collection(db, 'npcs')))
+let _unsub: (() => void) | null = null
+
+onMounted(() => {
+  _unsub = onSnapshot(query(collection(db, 'npcs')), (snap) => {
     const tagSet = new Set<string>()
     snap.docs.forEach(d => {
       const tags = d.data().tags as string[] | undefined
       if (tags) tags.forEach(t => tagSet.add(t))
     })
     allKnownTags.value = Array.from(tagSet).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
-  } catch (e) {
-    console.warn('Failed to load tags:', e)
-  }
+  }, (e) => console.warn('Failed to load tags:', e))
 })
+
+onUnmounted(() => _unsub?.())
 
 const suggestions = computed(() => {
   const q = newTag.value.toLowerCase().trim()

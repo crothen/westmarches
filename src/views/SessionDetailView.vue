@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { doc, getDoc, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, Timestamp } from 'firebase/firestore'
+import { doc, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
@@ -19,7 +19,7 @@ const editingNoteId = ref<string | null>(null)
 const editContent = ref('')
 const replyingTo = ref<string | null>(null)
 const replyContent = ref('')
-let unsubNotes: (() => void) | null = null
+const _unsubs: (() => void)[] = []
 
 const sessionId = computed(() => route.params.id as string)
 
@@ -33,31 +33,31 @@ const visibleNotes = computed(() => {
 })
 
 onMounted(async () => {
-  try {
-    const snap = await getDoc(doc(db, 'sessions', sessionId.value))
+  // Listen to session document in real-time
+  _unsubs.push(onSnapshot(doc(db, 'sessions', sessionId.value), (snap) => {
     if (snap.exists()) {
       session.value = { id: snap.id, ...snap.data() } as SessionLog
     }
-  } catch (e) {
-    console.error('Failed to load session:', e)
-  } finally {
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load session:', e)
+    loading.value = false
+  }))
 
   const notesQuery = query(
     collection(db, 'sessionNotes'),
     where('sessionId', '==', sessionId.value),
     orderBy('createdAt', 'asc')
   )
-  unsubNotes = onSnapshot(notesQuery, (snap) => {
+  _unsubs.push(onSnapshot(notesQuery, (snap) => {
     notes.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as SessionNote))
   }, (err) => {
     console.warn('Notes query error (index may need creating):', err.message)
-  })
+  }))
 })
 
 onUnmounted(() => {
-  unsubNotes?.()
+  _unsubs.forEach(fn => fn())
 })
 
 async function addNote() {

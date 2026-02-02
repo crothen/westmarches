@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { doc, getDoc, collection, getDocs, query, orderBy, updateDoc } from 'firebase/firestore'
+import { doc, collection, query, orderBy, updateDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
@@ -27,22 +27,25 @@ const showImageOverlay = ref(false)
 
 const npcId = computed(() => route.params.id as string)
 
-onMounted(async () => {
-  try {
-    const snap = await getDoc(doc(db, 'npcs', npcId.value))
+const _unsubs: (() => void)[] = []
+
+onMounted(() => {
+  _unsubs.push(onSnapshot(doc(db, 'npcs', npcId.value), (snap) => {
     if (snap.exists()) {
       npc.value = { id: snap.id, ...snap.data() } as Npc
     }
-
-    // Load orgs
-    const orgSnap = await getDocs(query(collection(db, 'organizations'), orderBy('name', 'asc')))
-    orgs.value = orgSnap.docs.map(d => ({ id: d.id, ...d.data() } as Organization))
-  } catch (e) {
-    console.error('Failed to load NPC:', e)
-  } finally {
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load NPC:', e)
+    loading.value = false
+  }))
+
+  _unsubs.push(onSnapshot(query(collection(db, 'organizations'), orderBy('name', 'asc')), (snap) => {
+    orgs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Organization))
+  }, (e) => console.error('Failed to load organizations:', e)))
 })
+
+onUnmounted(() => _unsubs.forEach(fn => fn()))
 
 const npcOrgs = computed(() => {
   if (!npc.value?.organizationIds?.length) return []

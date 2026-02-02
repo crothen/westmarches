@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { collection, getDocs, query, orderBy } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 
 const props = withDefaults(defineProps<{
@@ -34,27 +34,29 @@ const allCandidates = ref<MentionCandidate[]>([])
 const dropdownPos = ref({ top: 0, left: 0 })
 const loaded = ref(false)
 
-async function loadCandidates() {
+const _mentionUnsubs: (() => void)[] = []
+const charCandidates = ref<MentionCandidate[]>([])
+const npcCandidates = ref<MentionCandidate[]>([])
+
+function loadCandidates() {
   if (loaded.value) return
-  try {
-    const [charSnap, npcSnap] = await Promise.all([
-      getDocs(query(collection(db, 'characters'), orderBy('name', 'asc'))),
-      getDocs(query(collection(db, 'npcs'), orderBy('name', 'asc'))),
-    ])
-    const chars: MentionCandidate[] = charSnap.docs.map(d => {
+  loaded.value = true
+
+  _mentionUnsubs.push(onSnapshot(query(collection(db, 'characters'), orderBy('name', 'asc')), (snap) => {
+    charCandidates.value = snap.docs.map(d => {
       const data = d.data()
       return { id: d.id, name: data.name, kind: 'char' as const, detail: `${data.race} ${data.class}` }
     })
-    const npcs: MentionCandidate[] = npcSnap.docs.map(d => {
+    allCandidates.value = [...charCandidates.value, ...npcCandidates.value]
+  }, (e) => console.warn('Failed to load character candidates:', e)))
+
+  _mentionUnsubs.push(onSnapshot(query(collection(db, 'npcs'), orderBy('name', 'asc')), (snap) => {
+    npcCandidates.value = snap.docs.map(d => {
       const data = d.data()
       return { id: d.id, name: data.name, kind: 'npc' as const, detail: data.race || '' }
     })
-    // Characters first, then NPCs
-    allCandidates.value = [...chars, ...npcs]
-    loaded.value = true
-  } catch (e) {
-    console.warn('Failed to load mention candidates:', e)
-  }
+    allCandidates.value = [...charCandidates.value, ...npcCandidates.value]
+  }, (e) => console.warn('Failed to load NPC candidates:', e)))
 }
 
 const filteredCandidates = computed(() => {
@@ -165,7 +167,10 @@ function onClickOutside(e: MouseEvent) {
 }
 
 onMounted(() => document.addEventListener('click', onClickOutside))
-onUnmounted(() => document.removeEventListener('click', onClickOutside))
+onUnmounted(() => {
+  document.removeEventListener('click', onClickOutside)
+  _mentionUnsubs.forEach(fn => fn())
+})
 </script>
 
 <template>

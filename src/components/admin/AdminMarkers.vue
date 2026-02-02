@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { doc, setDoc, onSnapshot } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../../firebase/config'
 import { locationTypeIcons, featureTypeIcons, markerTypeIcons } from '../../lib/icons'
@@ -65,25 +65,27 @@ const categoryDescriptions: Record<string, string> = {
   hexMarkerTypes: 'Pins that players and DMs place on hex maps and city maps — clues, battles, waypoints, etc.'
 }
 
-onMounted(async () => {
-  try {
-    const snap = await getDoc(doc(db, 'config', 'markerTypes'))
+let _unsub: (() => void) | null = null
+
+onMounted(() => {
+  const defaults = buildDefaults()
+  _unsub = onSnapshot(doc(db, 'config', 'markerTypes'), (snap) => {
     if (snap.exists()) {
       const data = snap.data() as MarkerTypesConfig
-      // Merge with defaults (keep defaults for missing keys)
-      const defaults = buildDefaults()
       config.value = {
         locationTypes: { ...defaults.locationTypes, ...data.locationTypes },
         featureTypes: { ...defaults.featureTypes, ...data.featureTypes },
         hexMarkerTypes: { ...defaults.hexMarkerTypes, ...data.hexMarkerTypes }
       }
     }
-  } catch (e) {
-    console.error('Failed to load marker types config:', e)
-  } finally {
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load marker types config:', e)
+    loading.value = false
+  })
 })
+
+onUnmounted(() => _unsub?.())
 
 const currentTypes = computed(() => {
   return Object.entries(config.value[activeCategory.value] || {})

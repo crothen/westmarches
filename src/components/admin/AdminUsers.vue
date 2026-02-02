@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/firestore'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { collection, doc, updateDoc, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { useAuthStore } from '../../stores/auth'
 import type { UserRole } from '../../types'
@@ -22,20 +22,23 @@ const searchQuery = ref('')
 const savingUid = ref<string | null>(null)
 const savedUid = ref<string | null>(null)
 
-onMounted(async () => {
-  try {
-    const snap = await getDocs(query(collection(db, 'users'), orderBy('displayName', 'asc')))
+let _unsub: (() => void) | null = null
+
+onMounted(() => {
+  _unsub = onSnapshot(query(collection(db, 'users'), orderBy('displayName', 'asc')), (snap) => {
     users.value = snap.docs.map(d => {
       const data = d.data() as any
       const roles: UserRole[] = data.roles || (data.role ? [data.role] : ['player'])
       return { uid: d.id, ...data, roles } as UserRecord
     })
-  } catch (e) {
-    console.error('Failed to load users:', e)
-  } finally {
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load users:', e)
+    loading.value = false
+  })
 })
+
+onUnmounted(() => _unsub?.())
 
 const filteredUsers = computed(() => {
   if (!searchQuery.value) return users.value

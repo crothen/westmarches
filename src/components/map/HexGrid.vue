@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import { collection, getDocs, getDocsFromServer, query, addDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore'
+import { collection, query, addDoc, deleteDoc, doc, Timestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { HexMap } from '../../lib/hexMap'
 import type { HexMarkerData, MapPath, MapPathType } from '../../lib/hexMap'
@@ -44,10 +44,11 @@ const pathTypeOptions: { value: MapPathType; label: string; icon: string }[] = [
   { value: 'river', label: 'River', icon: '〰' },
 ]
 
-// === Path loading ===
-async function loadPaths() {
-  try {
-    const snap = await getDocs(query(collection(db, 'mapPaths')))
+// === Path loading (real-time) ===
+const unsubs: (() => void)[] = []
+
+function subscribePaths() {
+  const unsub = onSnapshot(query(collection(db, 'mapPaths')), (snap) => {
     mapPaths.value = snap.docs.map(d => {
       const data = d.data()
       return {
@@ -58,21 +59,22 @@ async function loadPaths() {
         createdAt: data.createdAt?.toDate?.() || new Date()
       }
     })
-  } catch (e) {
+  }, (e) => {
     console.warn('Failed to load map paths:', e)
-  }
+  })
+  unsubs.push(unsub)
 }
 
 async function savePath(type: MapPathType, points: { x: number; y: number }[]) {
   if (points.length < 2) return
   try {
-    const docRef = await addDoc(collection(db, 'mapPaths'), {
+    await addDoc(collection(db, 'mapPaths'), {
       type,
       points,
       createdBy: auth.firebaseUser?.uid || null,
       createdAt: Timestamp.now()
     })
-    mapPaths.value.push({ id: docRef.id, type, points, createdBy: auth.firebaseUser?.uid })
+    // onSnapshot will update mapPaths automatically
   } catch (e) {
     console.error('Failed to save path:', e)
     alert('Failed to save path.')
@@ -82,7 +84,7 @@ async function savePath(type: MapPathType, points: { x: number; y: number }[]) {
 async function deletePath(pathId: string) {
   try {
     await deleteDoc(doc(db, 'mapPaths', pathId))
-    mapPaths.value = mapPaths.value.filter(p => p.id !== pathId)
+    // onSnapshot will update mapPaths automatically
     selectedPathId.value = null
   } catch (e) {
     console.error('Failed to delete path:', e)
@@ -232,88 +234,88 @@ function pointToSegmentDist(p: { x: number; y: number }, a: { x: number; y: numb
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
 }
 
-// === Hex markers loading ===
-async function loadHexMarkers(fromServer = false) {
-  try {
-    const fetchFn = fromServer ? getDocsFromServer : getDocs
-    const results = await Promise.allSettled([
-      fetchFn(query(collection(db, 'locations'))),
-      fetchFn(query(collection(db, 'features'))),
-      fetchFn(query(collection(db, 'hexNotes'))),
-      fetchFn(query(collection(db, 'markers')))
-    ])
+// === Hex markers loading (real-time) ===
+// We store raw snapshot data and recompute markers when any changes
+const rawLocDocs = ref<any[]>([])
+const rawFeatDocs = ref<any[]>([])
+const rawNoteDocs = ref<any[]>([])
+const rawMarkerDocs = ref<any[]>([])
 
-    const locSnap = results[0].status === 'fulfilled' ? results[0].value : null
-    const featSnap = results[1].status === 'fulfilled' ? results[1].value : null
-    const noteSnap = results[2].status === 'fulfilled' ? results[2].value : null
-    const markerSnap = results[3].status === 'fulfilled' ? results[3].value : null
-
-    results.forEach((r, i) => {
-      if (r.status === 'rejected') {
-        const names = ['locations', 'features', 'hexNotes', 'markers']
-        console.warn(`Failed to load ${names[i]}:`, r.reason)
-      }
-    })
-
-    const markers: Record<string, HexMarkerData> = {}
-    const ensure = (key: string) => {
-      if (!markers[key]) markers[key] = { icons: [] }
-    }
-
-    locSnap?.docs.forEach(d => {
-      const data = d.data()
-      if (!data.hexKey) return
-      ensure(data.hexKey)
-      markers[data.hexKey]!.icons.push({
-        kind: 'location',
-        type: data.type || 'other',
-        order: data.mapOrder ?? undefined,
-        hidden: !!data.hidden
-      })
-      if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
-    })
-
-    featSnap?.docs.forEach(d => {
-      const data = d.data()
-      if (!data.hexKey) return
-      ensure(data.hexKey)
-      markers[data.hexKey]!.icons.push({
-        kind: 'feature',
-        type: data.type || 'other',
-        order: data.mapOrder ?? undefined,
-        hidden: !!data.hidden
-      })
-      if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
-    })
-
-    noteSnap?.docs.forEach(d => {
-      const data = d.data()
-      if (!data.hexKey) return
-      ensure(data.hexKey)
-      markers[data.hexKey]!.icons.push({ kind: 'note', type: 'note' })
-    })
-
-    const currentUid = auth.firebaseUser?.uid
-    const isAdmin = auth.isAdmin
-    markerSnap?.docs.forEach(d => {
-      const data = d.data()
-      if (!data.hexKey) return
-      if (data.locationId) return
-      if (data.isPrivate && data.createdBy !== currentUid && !isAdmin) return
-      ensure(data.hexKey)
-      markers[data.hexKey]!.icons.push({
-        kind: 'marker',
-        type: data.type || 'clue',
-        order: data.mapOrder ?? undefined,
-        hidden: !!data.hidden
-      })
-      if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
-    })
-
-    hexMarkers.value = markers
-  } catch (e) {
-    console.warn('Failed to load hex markers:', e)
+function recomputeHexMarkers() {
+  const markers: Record<string, HexMarkerData> = {}
+  const ensure = (key: string) => {
+    if (!markers[key]) markers[key] = { icons: [] }
   }
+
+  rawLocDocs.value.forEach(data => {
+    if (!data.hexKey) return
+    ensure(data.hexKey)
+    markers[data.hexKey]!.icons.push({
+      kind: 'location',
+      type: data.type || 'other',
+      order: data.mapOrder ?? undefined,
+      hidden: !!data.hidden
+    })
+    if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
+  })
+
+  rawFeatDocs.value.forEach(data => {
+    if (!data.hexKey) return
+    ensure(data.hexKey)
+    markers[data.hexKey]!.icons.push({
+      kind: 'feature',
+      type: data.type || 'other',
+      order: data.mapOrder ?? undefined,
+      hidden: !!data.hidden
+    })
+    if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
+  })
+
+  rawNoteDocs.value.forEach(data => {
+    if (!data.hexKey) return
+    ensure(data.hexKey)
+    markers[data.hexKey]!.icons.push({ kind: 'note', type: 'note' })
+  })
+
+  const currentUid = auth.firebaseUser?.uid
+  const isAdmin = auth.isAdmin
+  rawMarkerDocs.value.forEach(data => {
+    if (!data.hexKey) return
+    if (data.locationId) return
+    if (data.isPrivate && data.createdBy !== currentUid && !isAdmin) return
+    ensure(data.hexKey)
+    markers[data.hexKey]!.icons.push({
+      kind: 'marker',
+      type: data.type || 'clue',
+      order: data.mapOrder ?? undefined,
+      hidden: !!data.hidden
+    })
+    if (data.hidden) markers[data.hexKey]!.hasHiddenItems = true
+  })
+
+  hexMarkers.value = markers
+}
+
+function subscribeHexMarkers() {
+  unsubs.push(onSnapshot(query(collection(db, 'locations')), (snap) => {
+    rawLocDocs.value = snap.docs.map(d => d.data())
+    recomputeHexMarkers()
+  }, (e) => console.warn('Failed to load locations:', e)))
+
+  unsubs.push(onSnapshot(query(collection(db, 'features')), (snap) => {
+    rawFeatDocs.value = snap.docs.map(d => d.data())
+    recomputeHexMarkers()
+  }, (e) => console.warn('Failed to load features:', e)))
+
+  unsubs.push(onSnapshot(query(collection(db, 'hexNotes')), (snap) => {
+    rawNoteDocs.value = snap.docs.map(d => d.data())
+    recomputeHexMarkers()
+  }, (e) => console.warn('Failed to load hexNotes:', e)))
+
+  unsubs.push(onSnapshot(query(collection(db, 'markers')), (snap) => {
+    rawMarkerDocs.value = snap.docs.map(d => d.data())
+    recomputeHexMarkers()
+  }, (e) => console.warn('Failed to load markers:', e)))
 }
 
 // === Drawing helper ===
@@ -335,8 +337,8 @@ function redraw() {
 onMounted(() => {
   if (!canvasRef.value || !containerRef.value) return
 
-  loadHexMarkers()
-  loadPaths()
+  subscribeHexMarkers()
+  subscribePaths()
 
   const stopWatch = watch([terrainConfig, tagsConfig], ([tc, tg]) => {
     if (Object.keys(tc).length && Object.keys(tg).length && !hexMap) {
@@ -402,7 +404,8 @@ function clearSelection() {
 }
 
 async function refreshMarkers() {
-  await loadHexMarkers(true)
+  // With real-time listeners, markers auto-refresh. Force a redraw.
+  recomputeHexMarkers()
   redraw()
 }
 
@@ -414,6 +417,7 @@ onUnmounted(() => {
     hexMap = null
   }
   window.removeEventListener('keydown', onDrawKeyDown)
+  unsubs.forEach(fn => fn())
 })
 </script>
 

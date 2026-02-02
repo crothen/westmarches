@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore'
+import { doc, collection, query, where, addDoc, updateDoc, deleteDoc, Timestamp, onSnapshot } from 'firebase/firestore'
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
@@ -48,7 +48,10 @@ function onGlobalClick() {
 }
 
 onMounted(() => document.addEventListener('click', onGlobalClick))
-onUnmounted(() => document.removeEventListener('click', onGlobalClick))
+onUnmounted(() => {
+  document.removeEventListener('click', onGlobalClick)
+  _unsubs.forEach(fn => fn())
+})
 const location = ref<CampaignLocation | null>(null)
 const features = ref<LocationFeature[]>([])
 const loading = ref(true)
@@ -80,33 +83,36 @@ const newSubLoc = ref({ name: '', type: 'other' as any, description: '' })
 const subLocations = ref<CampaignLocation[]>([])
 const locationMarkers = ref<HexMarker[]>([])
 
-onMounted(async () => {
-  try {
-    const locationId = route.params.id as string
-    // Load location, features, sub-locations first (essential data)
-    const [locSnap, featSnap, subLocSnap] = await Promise.all([
-      getDoc(doc(db, 'locations', locationId)),
-      getDocs(query(collection(db, 'features'), where('locationId', '==', locationId))),
-      getDocs(query(collection(db, 'locations'), where('parentLocationId', '==', locationId)))
-    ])
-    if (locSnap.exists()) {
-      location.value = { id: locSnap.id, ...locSnap.data() } as CampaignLocation
-    }
-    features.value = featSnap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
-    subLocations.value = subLocSnap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
+const _unsubs: (() => void)[] = []
 
-    // Load markers separately — non-critical, don't block page if it fails
-    try {
-      const markerSnap = await getDocs(query(collection(db, 'markers'), where('locationId', '==', locationId)))
-      locationMarkers.value = markerSnap.docs.map(d => ({ id: d.id, ...d.data() } as HexMarker))
-    } catch (e) {
-      console.warn('Failed to load location markers:', e)
+onMounted(() => {
+  const locationId = route.params.id as string
+
+  // Listen to location document
+  _unsubs.push(onSnapshot(doc(db, 'locations', locationId), (snap) => {
+    if (snap.exists()) {
+      location.value = { id: snap.id, ...snap.data() } as CampaignLocation
     }
-  } catch (e) {
-    console.error('Failed to load:', e)
-  } finally {
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load location:', e)
+    loading.value = false
+  }))
+
+  // Listen to features for this location
+  _unsubs.push(onSnapshot(query(collection(db, 'features'), where('locationId', '==', locationId)), (snap) => {
+    features.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
+  }, (e) => console.warn('Failed to load features:', e)))
+
+  // Listen to sub-locations
+  _unsubs.push(onSnapshot(query(collection(db, 'locations'), where('parentLocationId', '==', locationId)), (snap) => {
+    subLocations.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
+  }, (e) => console.warn('Failed to load sub-locations:', e)))
+
+  // Listen to markers for this location
+  _unsubs.push(onSnapshot(query(collection(db, 'markers'), where('locationId', '==', locationId)), (snap) => {
+    locationMarkers.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as HexMarker))
+  }, (e) => console.warn('Failed to load location markers:', e)))
 })
 
 async function uploadMapImage(event: Event) {

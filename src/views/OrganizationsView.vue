@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { collection, getDocs, query, orderBy, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { collection, query, orderBy, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import NpcLink from '../components/common/NpcLink.vue'
@@ -30,20 +30,23 @@ const RANK_ORDER: Record<OrgRank, number> = { leader: 0, subleader: 1, officer: 
 const RANK_LABELS: Record<OrgRank, string> = { leader: 'Leader', subleader: 'Vice-Leader', officer: 'Officer', underofficer: 'Under-Officer', member: 'Member' }
 const ALL_RANKS: OrgRank[] = ['leader', 'subleader', 'officer', 'underofficer', 'member']
 
-onMounted(async () => {
-  try {
-    const [orgSnap, npcSnap] = await Promise.all([
-      getDocs(query(collection(db, 'organizations'), orderBy('name', 'asc'))),
-      getDocs(query(collection(db, 'npcs'), orderBy('name', 'asc'))),
-    ])
-    orgs.value = orgSnap.docs.map(d => ({ id: d.id, ...d.data() } as Organization))
-    npcs.value = npcSnap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
-  } catch (e) {
-    console.error('Failed to load organizations:', e)
-  } finally {
+const _unsubs: (() => void)[] = []
+
+onMounted(() => {
+  _unsubs.push(onSnapshot(query(collection(db, 'organizations'), orderBy('name', 'asc')), (snap) => {
+    orgs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Organization))
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load organizations:', e)
+    loading.value = false
+  }))
+
+  _unsubs.push(onSnapshot(query(collection(db, 'npcs'), orderBy('name', 'asc')), (snap) => {
+    npcs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
+  }, (e) => console.error('Failed to load NPCs:', e)))
 })
+
+onUnmounted(() => _unsubs.forEach(fn => fn()))
 
 const filteredOrgs = computed(() => {
   if (!searchQuery.value) return orgs.value

@@ -1,23 +1,26 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { collection, query, orderBy, getDocs } from 'firebase/firestore'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import type { SessionLog } from '../types'
 
 const sessions = ref<SessionLog[]>([])
 const loading = ref(true)
 
-onMounted(async () => {
-  try {
-    const q = query(collection(db, 'sessions'), orderBy('sessionNumber', 'desc'))
-    const snap = await getDocs(q)
-    sessions.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SessionLog))
-  } catch (e) {
-    console.error('Failed to load sessions:', e)
-  } finally {
+let _unsub: (() => void) | null = null
+
+onMounted(() => {
+  const q = query(collection(db, 'sessions'), orderBy('sessionNumber', 'desc'))
+  _unsub = onSnapshot(q, (snap) => {
+    sessions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as SessionLog))
     loading.value = false
-  }
+  }, (e) => {
+    console.error('Failed to load sessions:', e)
+    loading.value = false
+  })
 })
+
+onUnmounted(() => _unsub?.())
 </script>
 
 <template>
