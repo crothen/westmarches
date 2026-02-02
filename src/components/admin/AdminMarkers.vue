@@ -91,6 +91,40 @@ const currentTypes = computed(() => {
     .sort((a, b) => a.label.localeCompare(b.label))
 })
 
+// Detect duplicate icon URLs across ALL categories
+const duplicateIcons = computed(() => {
+  const urlToKeys: Record<string, { section: string; key: string; label: string }[]> = {}
+  for (const section of ['locationTypes', 'featureTypes', 'hexMarkerTypes'] as const) {
+    for (const [key, entry] of Object.entries(config.value[section] || {})) {
+      const url = entry.iconUrl || ''
+      if (!url) continue
+      if (!urlToKeys[url]) urlToKeys[url] = []
+      urlToKeys[url]!.push({ section, key, label: entry.label })
+    }
+  }
+  // Only keep URLs that appear more than once
+  const dupes: Record<string, { section: string; key: string; label: string }[]> = {}
+  for (const [url, entries] of Object.entries(urlToKeys)) {
+    if (entries.length > 1) dupes[url] = entries
+  }
+  return dupes
+})
+
+function isDuplicate(key: string): boolean {
+  const entry = config.value[activeCategory.value]?.[key]
+  if (!entry?.iconUrl) return false
+  return !!duplicateIcons.value[entry.iconUrl]
+}
+
+function getDuplicateInfo(key: string): string {
+  const entry = config.value[activeCategory.value]?.[key]
+  if (!entry?.iconUrl) return ''
+  const dupes = duplicateIcons.value[entry.iconUrl]
+  if (!dupes) return ''
+  const others = dupes.filter(d => !(d.section === activeCategory.value && d.key === key))
+  return others.map(d => `${d.label} (${categoryLabels[d.section]?.replace(/^[^ ]+ /, '') || d.section})`).join(', ')
+}
+
 function getIconUrl(url: string): string {
   if (!url) return '/icons/locations/other.png'
   return url
@@ -291,10 +325,14 @@ async function seedDefaults() {
           :class="['card-flat p-4 transition-all', savedSection === t.key ? '!border-green-500/40' : '']"
         >
           <div class="flex items-center gap-3 mb-3">
-            <img :src="getIconUrl(t.iconUrl)" class="w-10 h-10 object-contain shrink-0" :alt="t.key" />
+            <div class="relative shrink-0">
+              <img :src="getIconUrl(t.iconUrl)" class="w-10 h-10 object-contain" :alt="t.key" />
+              <span v-if="isDuplicate(t.key)" class="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-black text-[0.6rem] font-bold rounded-full flex items-center justify-center" :title="'Duplicate icon — also used by: ' + getDuplicateInfo(t.key)">!</span>
+            </div>
             <div class="min-w-0">
               <div class="text-sm font-semibold text-zinc-200 truncate" style="font-family: Manrope, sans-serif">{{ t.label }}</div>
               <div class="text-xs text-zinc-600 font-mono">{{ t.key }}</div>
+              <div v-if="isDuplicate(t.key)" class="text-[0.6rem] text-amber-400/80 mt-0.5 truncate">⚠️ Same icon as: {{ getDuplicateInfo(t.key) }}</div>
             </div>
           </div>
           <div class="flex flex-wrap gap-1.5 mt-1">
