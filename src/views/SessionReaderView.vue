@@ -160,17 +160,6 @@ function gaussianBlur(src: Float32Array, w: number, h: number): Float32Array {
   return out
 }
 
-// Entry type labels (no icons)
-const entryTypeLabels: Record<string, string> = {
-  interaction: 'Interaction',
-  task: 'Task',
-  encounter: 'Encounter',
-  discovery: 'Discovery',
-  travel: 'Travel',
-  rest: 'Rest',
-  custom: 'Note',
-}
-
 const totalPages = computed(() => 1 + entries.value.length)
 const currentEntry = computed(() => currentPage.value > 0 ? entries.value[currentPage.value - 1] ?? null : null)
 
@@ -360,7 +349,7 @@ onUnmounted(() => {
 
                 <!-- Adventurers as tilde-separated list -->
                 <div v-if="session.participants?.length" :style="{ fontFamily: currentFontFamily }">
-                  <div class="journal-text underline mb-1" :style="{ fontFamily: currentFontFamily }">Adventurers</div>
+                  <div class="journal-text mb-1" style="font-size: 1.8rem" :style="{ fontFamily: currentFontFamily }">Adventurers</div>
                   <div class="journal-text">
                     <template v-for="(p, i) in session.participants" :key="p.characterId">
                       {{ p.characterName }}<template v-if="i < session.participants.length - 1"> ~ </template>
@@ -378,11 +367,8 @@ onUnmounted(() => {
 
           <!-- ==================== ENTRY PAGES ==================== -->
           <div v-else-if="currentEntry" class="relative h-full flex flex-col overflow-y-auto">
-            <!-- Title + type above image, centered -->
+            <!-- Title above image, centered -->
             <div class="px-10 sm:px-14 pt-6 pb-2 text-center" :style="{ fontFamily: currentFontFamily }">
-              <div class="journal-text underline mb-1" :style="{ fontFamily: currentFontFamily }">
-                {{ entryTypeLabels[currentEntry.type] || 'Note' }}
-              </div>
               <h2 class="text-4xl text-amber-950 leading-tight" :style="{ fontFamily: currentFontFamily }">
                 {{ currentEntry.title }}
               </h2>
@@ -413,7 +399,7 @@ onUnmounted(() => {
 
               <!-- People of Interest -->
               <div v-if="currentEntry.npcIds?.length" class="mt-auto pt-4 border-t border-amber-900/10">
-                <div class="journal-text underline mb-1" :style="{ fontFamily: currentFontFamily }">People of Interest</div>
+                <div class="journal-text mb-1" style="font-size: 1.8rem" :style="{ fontFamily: currentFontFamily }">People of Interest</div>
                 <div class="journal-text">
                   <template v-for="(id, i) in currentEntry.npcIds" :key="id">
                     {{ getNpcName(id) }}<template v-if="i < currentEntry.npcIds.length - 1"> ~ </template>
