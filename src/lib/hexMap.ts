@@ -437,75 +437,56 @@ export class HexMap {
     this.ctx.translate(this.camera.x, this.camera.y)
     this.ctx.scale(this.camera.zoom, this.camera.zoom)
 
-    const isWater = (id: number): boolean => {
-      const conf = this.terrainIdMap[id]
-      return conf != null && (conf.name === 'Water' || conf.name === 'Deep Water')
-    }
-
+    // === PASS 1: Draw all hex terrain fills (no borders) ===
     for (let col = 1; col <= this.CONFIG.gridW; col++) {
       for (let row = 1; row <= this.CONFIG.gridH; row++) {
         const center = this.getHexCenter(col, row)
         const key = `${col}_${row}`
         const data: HexData = hexData[key] || {}
 
-        // RESOLVE TYPE ID (Legacy support)
         const typeId = this.resolveTerrainId(data.type)
 
         let mainTagId: number | null = null
-        // RESOLVE TAG ID (Legacy support)
         if (data.mainTag) {
           mainTagId = this.resolveTagId(data.mainTag)
         }
-
         if (userRole === 'player' && data.mainTagIsPrivate) mainTagId = null
 
         const sideTags = (data.tags || []).map((t) => this.resolveTagId(t)).filter((t): t is number => t !== null)
 
-        const shoreEdges: boolean[] = []
-        if (isWater(typeId)) {
-          for (let i = 0; i < 6; i++) {
-            const n = this.getNeighbor(col, row, i)
-            const nKey = `${n.c}_${n.r}`
-            const nData = hexData[nKey]
-            const nType = nData ? this.resolveTerrainId(nData.type) : 1
-
-            if (nData && !isWater(nType)) {
-              shoreEdges[i] = true
-            } else {
-              shoreEdges[i] = false
-            }
-          }
-        }
-
-        this.drawSingleHex(col, row, center, typeId, mainTagId, sideTags, shoreEdges)
+        // Draw fill only (border drawn in pass 3)
+        this.drawSingleHexFill(col, row, center, typeId, mainTagId, sideTags)
       }
     }
+
+    // === PASS 2: Draw noise-based terrain blending ===
+    this.drawTerrainBlending(hexData)
+
+    // === PASS 3: Draw all hex borders ===
+    this.drawHexBorders()
 
     this.drawLabels(selectedHex)
     if (markers) this.drawHexIndicators(markers, userRole)
     if (!isPaintMode && selectedHex) this.drawSelectionHighlight(selectedHex)
   }
 
-  drawSingleHex(
-    col: number,
-    row: number,
+  drawSingleHexFill(
+    _col: number,
+    _row: number,
     center: { x: number; y: number },
     typeId: number,
     mainTagId: number | null,
-    sideTags: number[],
-    shoreEdges: boolean[] = []
+    sideTags: number[]
   ): void {
-    // Fallback to Water if invalid ID
     const config = this.terrainIdMap[typeId] || this.terrainIdMap[1]
-
-    // Safety: If config still missing, skip
     if (!config) return
 
     const size = this.CONFIG.hexSize
-
-    this.ctx.beginPath()
     const angle = (2 * Math.PI) / 6
     const drawSize = size * 1.02
+
+    // Draw hex fill
+    this.ctx.beginPath()
     for (let i = 0; i < 6; i++) {
       this.ctx.lineTo(center.x + drawSize * Math.cos(angle * i), center.y + drawSize * Math.sin(angle * i))
     }
@@ -513,50 +494,19 @@ export class HexMap {
 
     const terrainImg = this.terrainImages[typeId]
     if (terrainImg) {
-      // Clip to hex shape and draw full image fitted inside
       this.ctx.save()
       this.ctx.clip()
       const imgSize = size * 2.1
       this.ctx.drawImage(terrainImg, center.x - imgSize / 2, center.y - imgSize / 2, imgSize, imgSize)
       this.ctx.restore()
-      // Re-draw hex path for the stroke (clip consumed it)
-      this.ctx.beginPath()
-      for (let i = 0; i < 6; i++) {
-        this.ctx.lineTo(center.x + drawSize * Math.cos(angle * i), center.y + drawSize * Math.sin(angle * i))
-      }
-      this.ctx.closePath()
     } else {
       this.ctx.fillStyle = config.color || '#789'
       this.ctx.fill()
     }
 
-    this.ctx.strokeStyle = 'rgba(0,0,0,0.2)'
-    this.ctx.lineWidth = 1
-    this.ctx.stroke()
+    // Shore effects removed — terrain blending handles transitions
 
-    if (shoreEdges.some((e) => e)) {
-      const surfRadius = size * 1
-      this.defineShorePath({ x: col, y: row }, center, angle, shoreEdges, surfRadius)
-      this.ctx.save()
-      this.ctx.lineCap = 'round'
-      this.ctx.lineJoin = 'round'
-      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'
-      this.ctx.lineWidth = size / 5
-      this.ctx.shadowColor = 'rgba(255, 255, 255, 0.9)'
-      this.ctx.shadowBlur = size / 3
-      this.ctx.stroke()
-      this.ctx.restore()
-      this.ctx.save()
-      this.ctx.lineCap = 'round'
-      this.ctx.lineJoin = 'round'
-      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'
-      this.ctx.lineWidth = size / 12
-      this.ctx.shadowColor = 'rgba(255, 255, 255, 0.5)'
-      this.ctx.shadowBlur = size / 10
-      this.ctx.stroke()
-      this.ctx.restore()
-    }
-
+    // Tags
     if (mainTagId) {
       const img = this.tagImages[mainTagId]
       if (img) {
@@ -576,6 +526,34 @@ export class HexMap {
         const cy = center.y + dist * Math.sin(cornerAngle)
         this.ctx.drawImage(img, cx - markerSize / 2, cy - markerSize / 2, markerSize, markerSize)
       })
+    }
+  }
+
+  /**
+   * Draw hex borders as a separate pass (on top of blending).
+   */
+  drawHexBorders(): void {
+    const size = this.CONFIG.hexSize
+    const angle = (2 * Math.PI) / 6
+    const drawSize = size * 1.02
+
+    // Dark semi-transparent border that reads over any terrain texture
+    this.ctx.strokeStyle = 'rgba(30, 30, 30, 0.25)'
+    this.ctx.lineWidth = 1.5
+
+    for (let col = 1; col <= this.CONFIG.gridW; col++) {
+      for (let row = 1; row <= this.CONFIG.gridH; row++) {
+        const center = this.getHexCenter(col, row)
+        this.ctx.beginPath()
+        for (let i = 0; i < 6; i++) {
+          this.ctx.lineTo(
+            center.x + drawSize * Math.cos(angle * i),
+            center.y + drawSize * Math.sin(angle * i)
+          )
+        }
+        this.ctx.closePath()
+        this.ctx.stroke()
+      }
     }
   }
 
@@ -773,6 +751,237 @@ export class HexMap {
     const seed = x * 374761393 + y * 668265263 + edgeIndex * 19283 + stepIndex * 5347 + axis * 29384
     const val = Math.sin(seed) * 10000
     return val - Math.floor(val)
+  }
+
+  /**
+   * Simple 2D seeded noise for terrain blending.
+   * Returns a value between 0 and 1 that is deterministic for the same inputs.
+   */
+  private blendNoise(wx: number, wy: number, scale: number = 0.05): number {
+    const sx = wx * scale
+    const sy = wy * scale
+    const ix = Math.floor(sx)
+    const iy = Math.floor(sy)
+    const fx = sx - ix
+    const fy = sy - iy
+
+    // Smooth interpolation
+    const ux = fx * fx * (3 - 2 * fx)
+    const uy = fy * fy * (3 - 2 * fy)
+
+    const hash = (a: number, b: number): number => {
+      const h = a * 374761393 + b * 668265263
+      const v = Math.sin(h) * 43758.5453
+      return v - Math.floor(v)
+    }
+
+    const n00 = hash(ix, iy)
+    const n10 = hash(ix + 1, iy)
+    const n01 = hash(ix, iy + 1)
+    const n11 = hash(ix + 1, iy + 1)
+
+    const nx0 = n00 + (n10 - n00) * ux
+    const nx1 = n01 + (n11 - n01) * ux
+    return nx0 + (nx1 - nx0) * uy
+  }
+
+  /**
+   * Draw noise-based terrain blending along edges where adjacent hexes have different terrain.
+   * For each shared edge, one terrain's texture extends ~30% past the border into the neighbor.
+   * Noise carves the boundary shape — no blobs, just a continuous wiggly edge.
+   */
+  drawTerrainBlending(hexData: Record<string, HexData>): void {
+    const size = this.CONFIG.hexSize
+    const angle = (2 * Math.PI) / 6
+    const drawSize = size * 1.02
+    const maxSpill = size * 0.4     // how far texture can extend past border
+    const curvePoints = 24          // resolution of the noise boundary curve
+
+    const processedEdges = new Set<string>()
+
+    for (let col = 1; col <= this.CONFIG.gridW; col++) {
+      for (let row = 1; row <= this.CONFIG.gridH; row++) {
+        const key = `${col}_${row}`
+        const data = hexData[key] || {}
+        const typeId = this.resolveTerrainId(data.type)
+        const center = this.getHexCenter(col, row)
+
+        for (let edge = 0; edge < 6; edge++) {
+          const nb = this.getNeighbor(col, row, edge)
+          if (nb.c < 1 || nb.c > this.CONFIG.gridW || nb.r < 1 || nb.r > this.CONFIG.gridH) continue
+
+          const nKey = `${nb.c}_${nb.r}`
+          const nData = hexData[nKey]
+          if (!nData) continue
+
+          const nTypeId = this.resolveTerrainId(nData.type)
+          if (nTypeId === typeId) continue
+
+          // Process each shared edge only once
+          const edgeId = col < nb.c || (col === nb.c && row < nb.r)
+            ? `${col}_${row}_${nb.c}_${nb.r}`
+            : `${nb.c}_${nb.r}_${col}_${row}`
+          if (processedEdges.has(edgeId)) continue
+          processedEdges.add(edgeId)
+
+          const nCenter = this.getHexCenter(nb.c, nb.r)
+          const config = this.terrainIdMap[typeId]
+          const nConfig = this.terrainIdMap[nTypeId]
+          if (!config || !nConfig) continue
+
+          // Edge vertices
+          const v0x = center.x + drawSize * Math.cos(angle * edge)
+          const v0y = center.y + drawSize * Math.sin(angle * edge)
+          const v1x = center.x + drawSize * Math.cos(angle * ((edge + 1) % 6))
+          const v1y = center.y + drawSize * Math.sin(angle * ((edge + 1) % 6))
+
+          // Inward direction into each hex
+          const edgeMidX = (v0x + v1x) / 2
+          const edgeMidY = (v0y + v1y) / 2
+
+          // Use noise at edge midpoint to decide which terrain extends (consistent per edge)
+          const dirNoise = this.blendNoise(edgeMidX * 0.73, edgeMidY * 0.73, 0.04)
+
+          // Source = terrain that extends, dest = hex that receives the spill
+          let srcTypeId: number, srcCenter: { x: number; y: number }
+          let destCenter: { x: number; y: number }
+          let inwardDx: number, inwardDy: number
+
+          if (dirNoise > 0.5) {
+            // Current hex extends into neighbor
+            srcTypeId = typeId
+            srcCenter = center
+            destCenter = nCenter
+            inwardDx = nCenter.x - edgeMidX
+            inwardDy = nCenter.y - edgeMidY
+          } else {
+            // Neighbor extends into current hex
+            srcTypeId = nTypeId
+            srcCenter = nCenter
+            destCenter = center
+            inwardDx = center.x - edgeMidX
+            inwardDy = center.y - edgeMidY
+          }
+
+          const inLen = Math.sqrt(inwardDx * inwardDx + inwardDy * inwardDy) || 1
+          const inX = inwardDx / inLen
+          const inY = inwardDy / inLen
+
+          const srcConfig = this.terrainIdMap[srcTypeId]
+          if (!srcConfig) continue
+
+          // Build noise-perturbed spill path:
+          // - One side follows the hex edge (v0 → v1)
+          // - Other side is a noise-curved line offset inward into dest hex
+          // This creates a tongue/strip shape
+
+          // Generate the inner boundary points (noise-perturbed)
+          const innerPoints: { x: number; y: number }[] = []
+          for (let p = 0; p <= curvePoints; p++) {
+            const t = p / curvePoints
+            const ex = v0x + (v1x - v0x) * t
+            const ey = v0y + (v1y - v0y) * t
+
+            // Multi-octave noise for organic, varied boundary
+            const n1 = this.blendNoise(ex, ey, 0.04)          // large-scale shape
+            const n2 = this.blendNoise(ex + 400, ey + 400, 0.1)  // medium detail
+            const n3 = this.blendNoise(ex + 800, ey + 200, 0.2)  // fine detail
+            const noise = n1 * 0.45 + n2 * 0.35 + n3 * 0.2
+
+            // Vary depth more dramatically — some spots barely spill, others go deep
+            const depth = maxSpill * (noise * noise * 1.5 + 0.05)  // squared for more contrast
+
+            // Taper at the ends of the edge, but less aggressively
+            const edgeFade = Math.pow(Math.sin(t * Math.PI), 0.6)  // flatter plateau, softer taper
+            const finalDepth = depth * edgeFade
+
+            innerPoints.push({
+              x: ex + inX * finalDepth,
+              y: ey + inY * finalDepth
+            })
+          }
+
+          // Also generate a deeper fringe boundary (for soft alpha fade)
+          const fringePoints: { x: number; y: number }[] = []
+          for (let p = 0; p <= curvePoints; p++) {
+            const ip = innerPoints[p]!
+            const t2 = p / curvePoints
+            const ex2 = v0x + (v1x - v0x) * t2
+            const ey2 = v0y + (v1y - v0y) * t2
+            // Fringe extends 50% further than the inner boundary
+            fringePoints.push({
+              x: ip.x + (ip.x - ex2) * 0.5,
+              y: ip.y + (ip.y - ey2) * 0.5
+            })
+          }
+
+          const srcImg = this.terrainImages[srcTypeId]
+          const srcColor = srcConfig.color || '#789'
+
+          // Pass A: Draw soft fringe (outer zone, low alpha)
+          this.ctx.save()
+          this.ctx.beginPath()
+          for (let i = 0; i < 6; i++) {
+            this.ctx.lineTo(
+              destCenter.x + drawSize * Math.cos(angle * i),
+              destCenter.y + drawSize * Math.sin(angle * i)
+            )
+          }
+          this.ctx.closePath()
+          this.ctx.clip()
+
+          this.ctx.beginPath()
+          this.ctx.moveTo(v0x, v0y)
+          this.ctx.lineTo(v1x, v1y)
+          for (let p = curvePoints; p >= 0; p--) {
+            this.ctx.lineTo(fringePoints[p]!.x, fringePoints[p]!.y)
+          }
+          this.ctx.closePath()
+          this.ctx.clip()
+
+          this.ctx.globalAlpha = 0.35
+          if (srcImg) {
+            const imgSize = size * 2.5
+            this.ctx.drawImage(srcImg, srcCenter.x - imgSize / 2, srcCenter.y - imgSize / 2, imgSize, imgSize)
+          } else {
+            this.ctx.fillStyle = srcColor
+            this.ctx.fill()
+          }
+          this.ctx.restore()
+
+          // Pass B: Draw solid core (inner zone, full alpha)
+          this.ctx.save()
+          this.ctx.beginPath()
+          for (let i = 0; i < 6; i++) {
+            this.ctx.lineTo(
+              destCenter.x + drawSize * Math.cos(angle * i),
+              destCenter.y + drawSize * Math.sin(angle * i)
+            )
+          }
+          this.ctx.closePath()
+          this.ctx.clip()
+
+          this.ctx.beginPath()
+          this.ctx.moveTo(v0x, v0y)
+          this.ctx.lineTo(v1x, v1y)
+          for (let p = curvePoints; p >= 0; p--) {
+            this.ctx.lineTo(innerPoints[p]!.x, innerPoints[p]!.y)
+          }
+          this.ctx.closePath()
+          this.ctx.clip()
+
+          this.ctx.globalAlpha = 0.85
+          if (srcImg) {
+            const imgSize = size * 2.5
+            this.ctx.drawImage(srcImg, srcCenter.x - imgSize / 2, srcCenter.y - imgSize / 2, imgSize, imgSize)
+          } else {
+            this.ctx.fillStyle = srcColor
+            this.ctx.fill()
+          }
+          this.ctx.restore()
+        }
+      }
+    }
   }
 
   defineShorePath(

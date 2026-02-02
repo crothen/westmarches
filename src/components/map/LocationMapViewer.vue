@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import type { LocationFeature } from '../../types'
+import type { LocationFeature, CampaignLocation } from '../../types'
 
 const props = defineProps<{
   mapUrl: string
   features: LocationFeature[]
+  subLocations?: CampaignLocation[]
   placingFeature: string | null
+  placingSubLocation?: string | null
   isInteractive?: boolean
   highlightedFeatureId?: string | null
+  highlightedSubLocationId?: string | null
   maxHeight?: number
 }>()
 
 const emit = defineEmits<{
   'place': [featureId: string, x: number, y: number]
+  'place-sublocation': [locationId: string, x: number, y: number]
   'click-feature': [feature: LocationFeature]
+  'click-sublocation': [location: CampaignLocation]
   'map-click': [x: number, y: number]
 }>()
 
@@ -45,6 +50,8 @@ const MIN_ZOOM = 0.5
 const MAX_ZOOM = 20
 
 const placedFeatures = computed(() => props.features.filter(f => f.mapPosition))
+const placedSubLocations = computed(() => (props.subLocations || []).filter(l => l.mapPosition))
+const isPlacing = computed(() => !!props.placingFeature || !!props.placingSubLocation)
 
 function onWheel(e: WheelEvent) {
   e.preventDefault()
@@ -95,6 +102,12 @@ function onMapClick(e: MouseEvent) {
     return
   }
 
+  if (props.placingSubLocation) {
+    const pos = getMapPosition(e)
+    if (pos) emit('place-sublocation', props.placingSubLocation, pos.x, pos.y)
+    return
+  }
+
   const pos = getMapPosition(e)
   if (pos) emit('map-click', pos.x, pos.y)
 }
@@ -134,6 +147,16 @@ function onFeatureLeave() {
 function onFeatureClick(e: MouseEvent, feat: LocationFeature) {
   e.stopPropagation()
   emit('click-feature', feat)
+}
+
+function onSubLocationHover(e: MouseEvent, loc: CampaignLocation) {
+  hoveredFeature.value = { id: loc.id, name: loc.name, type: loc.type as any, description: loc.description } as any
+  tooltipPos.value = { x: e.clientX, y: e.clientY }
+}
+
+function onSubLocationClick(e: MouseEvent, loc: CampaignLocation) {
+  e.stopPropagation()
+  emit('click-sublocation', loc)
 }
 
 // --- Touch handlers ---
@@ -209,13 +232,18 @@ function onTouchEnd(e: TouchEvent) {
       const t = e.changedTouches[0]!
       // Check if tap hit a feature marker first
       const tappedFeat = getFeatureAtTouch(t)
+      const tappedSubLoc = !tappedFeat ? getSubLocationAtTouch(t) : null
       if (tappedFeat) {
         emit('click-feature', tappedFeat)
+      } else if (tappedSubLoc) {
+        emit('click-sublocation', tappedSubLoc)
       } else {
         const pos = getTouchMapPosition(t)
         if (pos) {
           if (props.placingFeature) {
             emit('place', props.placingFeature, pos.x, pos.y)
+          } else if (props.placingSubLocation) {
+            emit('place-sublocation', props.placingSubLocation, pos.x, pos.y)
           } else {
             emit('map-click', pos.x, pos.y)
           }
@@ -253,6 +281,33 @@ function getFeatureAtTouch(touch: Touch): LocationFeature | null {
     const dist = Math.hypot(dx, dy)
     if (dist < tapRadius && dist < closestDist) {
       closest = feat
+      closestDist = dist
+    }
+  }
+  return closest
+}
+
+function getSubLocationAtTouch(touch: Touch): CampaignLocation | null {
+  if (!container.value || !imgEl.value) return null
+  const rect = container.value.getBoundingClientRect()
+  const clickX = touch.clientX - rect.left
+  const clickY = touch.clientY - rect.top
+  const imgX = (clickX - panX.value) / zoom.value
+  const imgY = (clickY - panY.value) / zoom.value
+  const imgWidth = container.value.clientWidth
+  const imgHeight = imgEl.value.naturalHeight * (container.value.clientWidth / imgEl.value.naturalWidth)
+  const pctX = (imgX / imgWidth) * 100
+  const pctY = (imgY / imgHeight) * 100
+
+  const tapRadius = 3 / zoom.value
+  let closest: CampaignLocation | null = null
+  let closestDist = Infinity
+  for (const loc of placedSubLocations.value) {
+    const dx = pctX - loc.mapPosition!.x
+    const dy = pctY - loc.mapPosition!.y
+    const dist = Math.hypot(dx, dy)
+    if (dist < tapRadius && dist < closestDist) {
+      closest = loc
       closestDist = dist
     }
   }
@@ -313,7 +368,7 @@ onUnmounted(() => {
     <!-- Map container -->
     <div
       ref="container"
-      :class="['relative overflow-hidden rounded-xl border border-white/10 bg-zinc-950 select-none touch-none', placingFeature ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-grab']"
+      :class="['relative overflow-hidden rounded-xl border border-white/10 bg-zinc-950 select-none touch-none', isPlacing ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-grab']"
       :style="imgAspect ? { aspectRatio: `1 / ${imgAspect}`, maxHeight: '80vh', maxWidth: 'calc(100% - 2rem)' } : { height: '300px' }"
       @wheel="onWheel"
       @mousedown="onMouseDown"
@@ -340,6 +395,26 @@ onUnmounted(() => {
           @load="onImageLoad"
         />
 
+        <!-- Sub-location markers (positioned on the image) -->
+        <div
+          v-for="loc in placedSubLocations" :key="'loc-' + loc.id"
+          :class="['absolute flex items-center justify-center hover:scale-110']"
+          :style="{
+            left: loc.mapPosition!.x + '%',
+            top: loc.mapPosition!.y + '%',
+            width: `${(highlightedSubLocationId === loc.id ? 36 : 28) / zoom}px`,
+            height: `${(highlightedSubLocationId === loc.id ? 36 : 28) / zoom}px`,
+            transform: 'translate(-50%, -50%)',
+            zIndex: hoveredFeature?.id === loc.id || highlightedSubLocationId === loc.id ? 30 : 15,
+            transition: 'filter 0.2s, width 0.2s, height 0.2s'
+          }"
+          @mouseenter="onSubLocationHover($event, loc)"
+          @mouseleave="onFeatureLeave"
+          @click="onSubLocationClick($event, loc)"
+        >
+          <img :src="getIconPath(loc.type)" :class="['cursor-pointer transition-all duration-200 w-full h-full object-contain', highlightedSubLocationId === loc.id ? 'drop-shadow-[0_0_8px_rgba(239,35,60,0.8)]' : 'drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]']" />
+        </div>
+
         <!-- Feature markers (positioned on the image) -->
         <div
           v-for="feat in placedFeatures" :key="feat.id"
@@ -363,9 +438,10 @@ onUnmounted(() => {
     </div>
 
     <!-- Placing indicator -->
-    <div v-if="placingFeature" class="mt-2 text-xs text-[#ef233c] animate-pulse">
-      Click on the map to place the feature...
-      <button @click="$emit('place', '', 0, 0)" class="text-zinc-500 ml-2 hover:text-white">Cancel</button>
+    <div v-if="isPlacing" class="mt-2 text-xs text-[#ef233c] animate-pulse">
+      Click on the map to place the {{ placingSubLocation ? 'location' : 'feature' }}...
+      <button v-if="placingFeature" @click="$emit('place', '', 0, 0)" class="text-zinc-500 ml-2 hover:text-white">Cancel</button>
+      <button v-if="placingSubLocation" @click="$emit('place-sublocation', '', 0, 0)" class="text-zinc-500 ml-2 hover:text-white">Cancel</button>
     </div>
 
     <!-- Feature tooltip -->

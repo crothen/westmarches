@@ -56,7 +56,9 @@ const showAddFeature = ref(false)
 const uploadingMap = ref(false)
 const uploadProgress = ref(0)
 const placingFeature = ref<string | null>(null)
+const placingSubLocation = ref<string | null>(null)
 const highlightedFeature = ref<string | null>(null)
+const highlightedSubLocation = ref<string | null>(null)
 
 const { locationTypes: locationTypeOptions, featureTypes: featureTypeOptions, pinTypes: pinTypeOptions } = useTypeConfig()
 
@@ -143,6 +145,35 @@ async function onPlaceFeature(featureId: string, x: number, y: number) {
     features.value[idx] = { ...features.value[idx], mapPosition: { x, y } } as LocationFeature
   }
   placingFeature.value = null
+}
+
+async function onPlaceSubLocation(locationId: string, x: number, y: number) {
+  if (!locationId) {
+    placingSubLocation.value = null
+    return
+  }
+  await updateDoc(doc(db, 'locations', locationId), { mapPosition: { x, y } })
+  const idx = subLocations.value.findIndex(l => l.id === locationId)
+  if (idx >= 0) {
+    subLocations.value[idx] = { ...subLocations.value[idx], mapPosition: { x, y } } as CampaignLocation
+  }
+  placingSubLocation.value = null
+}
+
+function onClickSubLocation(loc: CampaignLocation) {
+  router.push(`/locations/${loc.id}`)
+}
+
+async function removeSubLocationFromMap(loc: CampaignLocation) {
+  try {
+    await updateDoc(doc(db, 'locations', loc.id), { mapPosition: null })
+    const idx = subLocations.value.findIndex(l => l.id === loc.id)
+    if (idx >= 0) {
+      subLocations.value[idx] = { ...subLocations.value[idx], mapPosition: undefined } as CampaignLocation
+    }
+  } catch (e) {
+    console.error('Failed to remove sub-location from map:', e)
+  }
 }
 
 function onMapClick(x: number, y: number) {
@@ -417,12 +448,17 @@ async function toggleFeatureHidden(feat: LocationFeature) {
           <LocationMapViewer
             :mapUrl="location.mapImageUrl"
             :features="features"
+            :subLocations="subLocations"
             :placingFeature="placingFeature"
+            :placingSubLocation="placingSubLocation"
             :highlightedFeatureId="highlightedFeature"
+            :highlightedSubLocationId="highlightedSubLocation"
             :maxHeight="400"
             :isInteractive="true"
             @place="onPlaceFeature"
+            @place-sublocation="onPlaceSubLocation"
             @click-feature="onClickFeature"
+            @click-sublocation="onClickSubLocation"
             @map-click="onMapClick"
           />
           <p class="text-zinc-600 text-[0.6rem] mt-1.5">Scroll/pinch to zoom · Drag to pan · Click/tap to add a marker</p>
@@ -495,24 +531,33 @@ async function toggleFeatureHidden(feat: LocationFeature) {
 
       <!-- Sub-Locations Section -->
       <div v-if="subLocations.length > 0 || auth.isDm || auth.isAdmin" class="mb-8">
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-3 mb-3">
           <h2 class="label">Sub-Locations ({{ subLocations.length }})</h2>
-          <button v-if="auth.isDm || auth.isAdmin" @click="showAddSubLocation = !showAddSubLocation" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">
+          <button v-if="auth.isDm || auth.isAdmin" @click="showAddSubLocation = !showAddSubLocation" class="btn !text-xs !py-1">
             {{ showAddSubLocation ? 'Cancel' : '+ Add Location' }}
           </button>
         </div>
         <div v-if="subLocations.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-3">
-          <RouterLink
+          <div
             v-for="sub in subLocations" :key="sub.id"
-            :to="`/locations/${sub.id}`"
-            class="card-flat p-3 hover:border-white/15 transition-all duration-200 flex items-center gap-2"
+            class="card-flat p-3 hover:border-white/15 transition-all duration-200"
+            @mouseenter="highlightedSubLocation = sub.id"
+            @mouseleave="highlightedSubLocation = null"
           >
-            <img :src="getIconPath(sub.type)" class="w-6 h-6 object-contain shrink-0" :alt="sub.type" />
-            <div class="min-w-0">
-              <span class="text-xs font-semibold text-zinc-200 truncate block" style="font-family: Manrope, sans-serif">{{ sub.name }}</span>
-              <span class="text-[0.6rem] text-zinc-600">{{ sub.type }}</span>
+            <RouterLink :to="`/locations/${sub.id}`" class="flex items-center gap-2">
+              <img :src="getIconPath(sub.type)" class="w-6 h-6 object-contain shrink-0" :alt="sub.type" />
+              <div class="min-w-0">
+                <span class="text-xs font-semibold text-zinc-200 truncate block" style="font-family: Manrope, sans-serif">{{ sub.name }}</span>
+                <span class="text-[0.6rem] text-zinc-600">{{ sub.type }}
+                  <span v-if="sub.mapPosition" class="text-green-400/50 ml-0.5">📍</span>
+                </span>
+              </div>
+            </RouterLink>
+            <div v-if="(auth.isDm || auth.isAdmin) && location!.mapImageUrl" class="flex gap-1 mt-1.5">
+              <button v-if="!sub.mapPosition" @click="placingSubLocation = sub.id" class="text-zinc-600 hover:text-zinc-300 text-[0.6rem] transition-colors">📍 Place</button>
+              <button v-if="sub.mapPosition" @click="removeSubLocationFromMap(sub)" class="text-zinc-600 hover:text-zinc-400 text-[0.6rem] transition-colors" title="Remove from map">📍✕</button>
             </div>
-          </RouterLink>
+          </div>
         </div>
         <!-- Add Sub-Location form -->
         <div v-if="showAddSubLocation" class="card-flat !rounded-lg p-3 space-y-2">
@@ -539,7 +584,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
 
       <!-- Features Section -->
       <div>
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-3 mb-3">
           <h2 class="label">Features & Points of Interest ({{ visibleFeatures.length }})</h2>
           <button v-if="auth.isAuthenticated" @click="showAddFeature = !showAddFeature" class="btn !text-xs !py-1">
             {{ showAddFeature ? 'Cancel' : '+ Add Feature' }}
