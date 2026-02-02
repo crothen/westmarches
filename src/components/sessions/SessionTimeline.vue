@@ -221,118 +221,77 @@ function formatCommentDate(date: any): string {
 
         <!-- Entry card -->
         <div :class="['card-flat border-l-4 overflow-visible', entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700']">
-          <!-- Header -->
-          <div class="px-4 pt-3 pb-2 flex items-start justify-between gap-2">
-            <div class="flex items-center gap-2 flex-wrap min-w-0">
-              <span :class="['text-xs px-2 py-0.5 rounded-md font-semibold', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
-                {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
-              </span>
-              <h3 class="text-sm font-semibold text-zinc-100" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
+          <div class="flex">
+            <!-- Hero image on the left -->
+            <div v-if="entry.imageUrl" class="shrink-0 w-28 sm:w-36 overflow-hidden rounded-l-[inherit]">
+              <img :src="entry.imageUrl" class="w-full h-full object-cover" />
             </div>
-            <div v-if="canEdit" class="flex items-center gap-1 shrink-0">
-              <button
-                v-if="idx > 0"
-                @click="moveEntry(entry.id, 'up')"
-                class="text-zinc-600 hover:text-zinc-300 text-xs p-1 transition-colors"
-                title="Move up"
-              >↑</button>
-              <button
-                v-if="idx < entries.length - 1"
-                @click="moveEntry(entry.id, 'down')"
-                class="text-zinc-600 hover:text-zinc-300 text-xs p-1 transition-colors"
-                title="Move down"
-              >↓</button>
-              <button
-                @click="openEditModal(entry)"
-                class="text-zinc-600 hover:text-[#ef233c] text-xs p-1 transition-colors"
-                title="Edit"
-              >✏️</button>
-              <button
-                @click="deleteEntry(entry.id)"
-                class="text-zinc-600 hover:text-red-400 text-xs p-1 transition-colors"
-                title="Delete"
-              >🗑️</button>
-            </div>
-          </div>
-
-          <!-- Participants (if not everyone) -->
-          <div v-if="entry.allParticipantsPresent === false && entry.presentParticipants?.length" class="px-4 pb-1">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span class="text-[0.65rem] text-zinc-600 uppercase tracking-wider">Present:</span>
-              <span v-for="p in entry.presentParticipants" :key="p.characterId" class="text-xs bg-white/5 text-zinc-400 px-1.5 py-0.5 rounded">
-                {{ p.characterName }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Description -->
-          <div v-if="entry.description" class="px-4 py-2">
-            <div class="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">
-              <MentionText :text="entry.description" />
-            </div>
-          </div>
-
-          <!-- Image -->
-          <div v-if="entry.imageUrl" class="px-4 pb-3">
-            <img :src="entry.imageUrl" class="w-full max-h-64 object-cover rounded-lg border border-white/10" />
-          </div>
-
-          <!-- Tags: NPCs, locations, features -->
-          <div v-if="(entry.npcIds?.length || entry.linkedLocationIds?.length || entry.linkedFeatureIds?.length)" class="px-4 pb-3">
-            <div class="flex flex-wrap gap-1.5">
-              <span v-for="id in entry.npcIds" :key="'npc-'+id" class="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/20">
-                👤 {{ getNpcName(id) }}
-              </span>
-              <span v-for="id in entry.linkedLocationIds" :key="'loc-'+id" class="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-md border border-blue-500/20">
-                🏰 {{ getLocationName(id) }}
-              </span>
-              <span v-for="id in entry.linkedFeatureIds" :key="'feat-'+id" class="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-md border border-green-500/20">
-                📌 {{ getFeatureName(id) }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Attachments -->
-          <div v-if="entry.attachments?.length" class="px-4 pb-3">
-            <div class="flex flex-wrap gap-2">
-              <a v-for="att in entry.attachments" :key="att.url" :href="att.url" target="_blank" class="text-xs text-zinc-400 hover:text-zinc-200 bg-white/5 px-2 py-1 rounded border border-white/[0.06] transition-colors">
-                📎 {{ att.name }}
-              </a>
-            </div>
-          </div>
-
-          <!-- Comments section -->
-          <div class="border-t border-white/[0.04] px-4 py-2">
-            <button @click="toggleComments(entry.id)" class="text-xs text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1">
-              <span>{{ expandedComments.has(entry.id) ? '▾' : '▸' }}</span>
-              <span>💬 {{ entry.comments?.length || 0 }} comment{{ (entry.comments?.length || 0) !== 1 ? 's' : '' }}</span>
-            </button>
-
-            <div v-if="expandedComments.has(entry.id)" class="mt-2 space-y-2">
-              <!-- Existing comments -->
-              <div v-for="comment in (entry.comments || [])" :key="comment.id" class="pl-3 border-l border-white/[0.06]">
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-xs text-[#ef233c]/80 font-medium">{{ comment.authorName }}</span>
-                    <span class="text-[0.65rem] text-zinc-600">{{ formatCommentDate(comment.createdAt) }}</span>
-                  </div>
-                  <button v-if="canDeleteComment(comment)" @click="deleteComment(entry.id, comment.id)" class="text-zinc-600 hover:text-red-400 text-xs transition-colors">✕</button>
+            <!-- Content -->
+            <div class="flex-1 min-w-0">
+              <!-- Header -->
+              <div class="px-4 pt-3 pb-2 flex items-start justify-between gap-2">
+                <div class="flex items-center gap-2 flex-wrap min-w-0">
+                  <span :class="['text-xs px-2 py-0.5 rounded-md font-semibold', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
+                    {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
+                  </span>
+                  <h3 class="text-sm font-semibold text-zinc-100" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
                 </div>
-                <p class="text-xs text-zinc-400 mt-0.5">{{ comment.content }}</p>
+                <div v-if="canEdit" class="flex items-center gap-1 shrink-0">
+                  <button v-if="idx > 0" @click="moveEntry(entry.id, 'up')" class="text-zinc-600 hover:text-zinc-300 text-xs p-1 transition-colors" title="Move up">↑</button>
+                  <button v-if="idx < entries.length - 1" @click="moveEntry(entry.id, 'down')" class="text-zinc-600 hover:text-zinc-300 text-xs p-1 transition-colors" title="Move down">↓</button>
+                  <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-xs p-1 transition-colors" title="Edit">✏️</button>
+                  <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-xs p-1 transition-colors" title="Delete">🗑️</button>
+                </div>
               </div>
-
-              <!-- Add comment -->
-              <div v-if="auth.isAuthenticated" class="flex gap-2 mt-2">
-                <input
-                  v-model="newCommentContent[entry.id]"
-                  type="text"
-                  placeholder="Add a comment..."
-                  class="input flex-1 !text-xs !py-1.5"
-                  @keydown.enter="addComment(entry.id)"
-                />
-                <button @click="addComment(entry.id)" :disabled="!newCommentContent[entry.id]?.trim()" class="btn-action !py-1.5">
-                  Send
+              <!-- Participants (if not everyone) -->
+              <div v-if="entry.allParticipantsPresent === false && entry.presentParticipants?.length" class="px-4 pb-1">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-[0.65rem] text-zinc-600 uppercase tracking-wider">Present:</span>
+                  <span v-for="p in entry.presentParticipants" :key="p.characterId" class="text-xs bg-white/5 text-zinc-400 px-1.5 py-0.5 rounded">{{ p.characterName }}</span>
+                </div>
+              </div>
+              <!-- Description -->
+              <div v-if="entry.description" class="px-4 py-2">
+                <div class="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">
+                  <MentionText :text="entry.description" />
+                </div>
+              </div>
+              <!-- Tags: NPCs, locations, features -->
+              <div v-if="(entry.npcIds?.length || entry.linkedLocationIds?.length || entry.linkedFeatureIds?.length)" class="px-4 pb-3">
+                <div class="flex flex-wrap gap-1.5">
+                  <span v-for="id in entry.npcIds" :key="'npc-'+id" class="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/20">👤 {{ getNpcName(id) }}</span>
+                  <span v-for="id in entry.linkedLocationIds" :key="'loc-'+id" class="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-md border border-blue-500/20">🏰 {{ getLocationName(id) }}</span>
+                  <span v-for="id in entry.linkedFeatureIds" :key="'feat-'+id" class="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-md border border-green-500/20">📌 {{ getFeatureName(id) }}</span>
+                </div>
+              </div>
+              <!-- Attachments -->
+              <div v-if="entry.attachments?.length" class="px-4 pb-3">
+                <div class="flex flex-wrap gap-2">
+                  <a v-for="att in entry.attachments" :key="att.url" :href="att.url" target="_blank" class="text-xs text-zinc-400 hover:text-zinc-200 bg-white/5 px-2 py-1 rounded border border-white/[0.06] transition-colors">📎 {{ att.name }}</a>
+                </div>
+              </div>
+              <!-- Comments section -->
+              <div class="border-t border-white/[0.04] px-4 py-2">
+                <button @click="toggleComments(entry.id)" class="text-xs text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1">
+                  <span>{{ expandedComments.has(entry.id) ? '▾' : '▸' }}</span>
+                  <span>💬 {{ entry.comments?.length || 0 }} comment{{ (entry.comments?.length || 0) !== 1 ? 's' : '' }}</span>
                 </button>
+                <div v-if="expandedComments.has(entry.id)" class="mt-2 space-y-2">
+                  <div v-for="comment in (entry.comments || [])" :key="comment.id" class="pl-3 border-l border-white/[0.06]">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-xs text-[#ef233c]/80 font-medium">{{ comment.authorName }}</span>
+                        <span class="text-[0.65rem] text-zinc-600">{{ formatCommentDate(comment.createdAt) }}</span>
+                      </div>
+                      <button v-if="canDeleteComment(comment)" @click="deleteComment(entry.id, comment.id)" class="text-zinc-600 hover:text-red-400 text-xs transition-colors">✕</button>
+                    </div>
+                    <p class="text-xs text-zinc-400 mt-0.5">{{ comment.content }}</p>
+                  </div>
+                  <div v-if="auth.isAuthenticated" class="flex gap-2 mt-2">
+                    <input v-model="newCommentContent[entry.id]" type="text" placeholder="Add a comment..." class="input flex-1 !text-xs !py-1.5" @keydown.enter="addComment(entry.id)" />
+                    <button @click="addComment(entry.id)" :disabled="!newCommentContent[entry.id]?.trim()" class="btn-action !py-1.5">Send</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
