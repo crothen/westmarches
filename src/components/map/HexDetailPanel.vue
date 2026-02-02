@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, doc, Timestamp, getDocs } from 'firebase/firestore'
-import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
-import { db, storage } from '../../firebase/config'
+import { db } from '../../firebase/config'
 import { useAuthStore } from '../../stores/auth'
 import DetailMapViewer from './DetailMapViewer.vue'
 import MentionTextarea from '../common/MentionTextarea.vue'
@@ -29,8 +28,6 @@ const emit = defineEmits<{
 }>()
 
 const auth = useAuthStore()
-const uploadProgress = ref(0)
-const isUploading = ref(false)
 const showDetailMapViewer = ref(false)
 const hexLocations = ref<any[]>([])
 const hexFeatures = ref<any[]>([])
@@ -70,11 +67,6 @@ const terrainOptions = computed(() => {
     .sort((a, b) => a.id - b.id)
 })
 
-const tagOptions = computed(() => {
-  return Object.entries(props.tagsConfig)
-    .map(([name, conf]) => ({ name, id: (conf as any).id }))
-    .sort((a, b) => a.name.localeCompare(b.name))
-})
 
 const currentMainTag = computed(() => {
   const tagId = currentHexData.value?.mainTag
@@ -220,51 +212,7 @@ function onTerrainChange(e: Event) {
   }
 }
 
-function onMainTagChange(e: Event) {
-  const val = (e.target as HTMLSelectElement).value
-  if (!hexKey.value) return
-  if (val === '') {
-    emit('set-main-tag', hexKey.value, null, false)
-  } else {
-    emit('set-main-tag', hexKey.value, parseInt(val), false)
-  }
-}
-
-function onToggleSideTag(tagId: number) {
-  if (hexKey.value) {
-    emit('toggle-tag', hexKey.value, tagId)
-  }
-}
-
 const detailMapUrl = computed(() => currentHexData.value?.detailMapUrl || null)
-
-async function uploadDetailMap(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file || !hexKey.value) return
-
-  isUploading.value = true
-  uploadProgress.value = 0
-
-  const ext = file.name.split('.').pop() || 'png'
-  const fileRef = storageRef(storage, `detail-maps/${hexKey.value}/map.${ext}`)
-  const uploadTask = uploadBytesResumable(fileRef, file)
-
-  uploadTask.on('state_changed',
-    (snapshot) => {
-      uploadProgress.value = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
-    },
-    (error) => {
-      console.error('Upload failed:', error)
-      isUploading.value = false
-    },
-    async () => {
-      const url = await getDownloadURL(uploadTask.snapshot.ref)
-      emit('update-detail-map', hexKey.value!, url)
-      isUploading.value = false
-      uploadProgress.value = 0
-    }
-  )
-}
 
 async function loadAllPois() {
   if (allLocations.value.length || allFeatures.value.length) return
@@ -389,19 +337,6 @@ async function createMarker() {
   }
 }
 
-async function removeDetailMap() {
-  if (!hexKey.value || !confirm('Remove the detail map?')) return
-  try {
-    for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
-      try {
-        const fileRef = storageRef(storage, `detail-maps/${hexKey.value}/map.${ext}`)
-        await deleteObject(fileRef)
-        break
-      } catch { /* try next */ }
-    }
-  } catch { /* storage cleanup is best-effort */ }
-  emit('update-detail-map', hexKey.value!, null)
-}
 </script>
 
 <template>
@@ -549,46 +484,6 @@ async function removeDetailMap() {
           <select :value="currentHexData?.type || 1" @change="onTerrainChange" class="input w-full text-sm">
             <option v-for="t in terrainOptions" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
-        </div>
-
-        <!-- Main tag picker -->
-        <div>
-          <label class="block text-xs text-zinc-600 mb-1">Main Tag</label>
-          <select :value="currentHexData?.mainTag || ''" @change="onMainTagChange" class="input w-full text-sm">
-            <option value="">None</option>
-            <option v-for="t in tagOptions" :key="t.id" :value="t.id">{{ t.name }}</option>
-          </select>
-        </div>
-
-        <!-- Side tags -->
-        <div>
-          <label class="block text-xs text-zinc-600 mb-1">Side Tags (max 6)</label>
-          <div class="flex flex-wrap gap-1">
-            <button
-              v-for="t in tagOptions" :key="t.id"
-              @click="onToggleSideTag(t.id)"
-              :class="[
-                'text-xs px-2 py-0.5 rounded-full transition-colors',
-                (currentHexData?.tags || []).includes(t.id) ? 'bg-[#ef233c]/20 text-[#ef233c]' : 'bg-white/5 text-zinc-600 hover:text-zinc-300'
-              ]"
-            >{{ t.name }}</button>
-          </div>
-        </div>
-
-        <!-- Detail Map -->
-        <div class="mt-3">
-          <label class="block text-xs text-zinc-500 mb-1">Detail Map</label>
-          <div v-if="detailMapUrl" class="mb-2">
-            <img :src="detailMapUrl" class="w-full max-h-48 object-contain rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors" @click="showDetailMapViewer = true" />
-            <button @click="removeDetailMap" class="text-xs text-zinc-600 hover:text-red-400 mt-1 transition-colors">Remove map</button>
-          </div>
-          <div v-if="isUploading" class="mb-2">
-            <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
-              <div class="h-full bg-[#ef233c] rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
-            </div>
-            <span class="text-xs text-zinc-500 mt-1">{{ uploadProgress }}%</span>
-          </div>
-          <input v-if="!isUploading" type="file" accept="image/*" @change="uploadDetailMap" class="text-xs text-zinc-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border file:border-white/10 file:bg-white/5 file:text-zinc-400 file:text-xs file:cursor-pointer hover:file:bg-white/10 file:transition-colors" />
         </div>
       </div>
 
