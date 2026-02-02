@@ -84,6 +84,9 @@ const filteredNpcs = computed(() => {
   })
 })
 
+const aliveNpcs = computed(() => filteredNpcs.value.filter(n => !isDeceased(n)))
+const deadNpcs = computed(() => filteredNpcs.value.filter(n => isDeceased(n)))
+
 const isDeceased = (npc: Npc) => (npc.tags || []).includes('deceased')
 
 function getUnitAbbrev(npc: Npc): string | null {
@@ -195,12 +198,14 @@ async function generatePortrait() {
       <div class="relative z-10"><p class="text-zinc-600">No NPCs found.</p></div>
     </div>
 
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+    <div v-else>
+      <!-- Living NPCs -->
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
       <RouterLink
-        v-for="npc in filteredNpcs" :key="npc.id"
+        v-for="npc in aliveNpcs" :key="npc.id"
         :id="npc.id"
         :to="'/npcs/' + npc.id"
-        :class="['card relative z-10 cursor-pointer hover:border-white/15 transition-colors block no-underline', isDeceased(npc) ? 'opacity-50' : '']"
+        class="card relative z-10 cursor-pointer hover:border-white/15 transition-colors block no-underline"
       >
         <div class="relative z-10 flex">
           <!-- Full-height portrait on the left -->
@@ -245,6 +250,53 @@ async function generatePortrait() {
           </div><!-- /flex-1 content -->
         </div><!-- /flex row -->
       </RouterLink>
+      </div>
+
+      <!-- Deceased NPCs -->
+      <div v-if="deadNpcs.length > 0" class="mt-10">
+        <h2 class="text-lg font-semibold text-zinc-500 mb-4 flex items-center gap-2" style="font-family: Manrope, sans-serif">
+          ☠️ Fallen
+          <span class="text-sm font-normal text-zinc-600">({{ deadNpcs.length }})</span>
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <RouterLink
+            v-for="npc in deadNpcs" :key="npc.id"
+            :id="npc.id"
+            :to="'/npcs/' + npc.id"
+            class="card relative z-10 cursor-pointer hover:border-white/15 transition-colors block no-underline opacity-50"
+          >
+            <div class="relative z-10 flex">
+              <div v-if="npc.imageUrl" class="shrink-0 w-24 overflow-hidden rounded-l-[inherit]">
+                <img :src="npc.imageUrl" class="w-full h-full object-cover grayscale" />
+              </div>
+              <div class="flex-1 min-w-0 p-4">
+                <div class="flex items-start justify-between mb-1">
+                  <div class="min-w-0">
+                    <span class="text-base font-semibold line-through text-zinc-500" style="font-family: Manrope, sans-serif">{{ npc.name }}</span>
+                    <div class="text-zinc-600 text-sm">{{ npc.race }}</div>
+                  </div>
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <span v-if="noteCount(npc.id)" class="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500/80" :title="noteCount(npc.id) + ' note(s)'">📝 {{ noteCount(npc.id) }}</span>
+                    <span v-if="getRoleBadge(npc)" class="badge bg-[#ef233c]/15 text-[#ef233c]">{{ getRoleBadge(npc) }}</span>
+                    <span v-if="getUnitAbbrev(npc)" class="badge bg-white/5 text-zinc-400">{{ getUnitAbbrev(npc) }}</span>
+                    <span class="badge bg-zinc-800 text-zinc-500">☠️ Dead</span>
+                    <button
+                      v-if="auth.isDm || auth.isAdmin"
+                      @click.prevent="openEditModal(npc)"
+                      class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors ml-1"
+                      title="Edit NPC"
+                    >✏️</button>
+                  </div>
+                </div>
+                <p class="text-sm mt-2 text-zinc-600 line-clamp-2">{{ npc.description }}</p>
+                <div class="mt-2 flex items-center gap-2">
+                  <span v-if="npc.locationEncountered" class="text-xs text-zinc-700">📍 {{ npc.locationEncountered }}</span>
+                </div>
+              </div>
+            </div>
+          </RouterLink>
+        </div>
+      </div>
     </div>
 
     <!-- Edit Modal -->
