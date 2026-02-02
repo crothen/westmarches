@@ -67,7 +67,7 @@ export async function getOrCreateUserProfile(user: User): Promise<AppUser> {
       data.roles = [data.role]
       await setDoc(userRef, { roles: data.roles }, { merge: true })
     } else if (!data.roles) {
-      data.roles = ['player']
+      data.roles = []
       await setDoc(userRef, { roles: data.roles }, { merge: true })
     }
     return data as AppUser
@@ -76,7 +76,7 @@ export async function getOrCreateUserProfile(user: User): Promise<AppUser> {
     uid: user.uid,
     email: user.email || '',
     displayName: user.displayName || user.email || 'Adventurer',
-    roles: ['player'],
+    roles: [],
     createdAt: new Date(),
   }
   await setDoc(userRef, newUser)

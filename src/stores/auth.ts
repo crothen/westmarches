@@ -12,7 +12,12 @@ export const useAuthStore = defineStore('auth', () => {
   const ready = new Promise<void>(r => { resolveReady = r })
 
   const isAuthenticated = computed(() => !!firebaseUser.value)
-  const isGuest = computed(() => !!firebaseUser.value?.isAnonymous)
+  const isGuest = computed(() => {
+    if (firebaseUser.value?.isAnonymous) return true
+    // Users with no meaningful roles are treated as guests until admin assigns a role
+    const r = appUser.value?.roles || []
+    return r.length === 0 || (r.length === 1 && r[0] === 'guest')
+  })
   const roles = computed(() => appUser.value?.roles || ['player'])
   const isAdmin = computed(() => roles.value.includes('admin'))
   const isDm = computed(() => roles.value.includes('dm'))
