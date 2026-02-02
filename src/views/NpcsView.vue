@@ -136,7 +136,7 @@ async function saveEdit() {
     name: editForm.value.name.trim(),
     race: editForm.value.race.trim(),
     description: editForm.value.description.trim(),
-    appearance: editForm.value.appearance.trim() || undefined,
+    appearance: editForm.value.appearance.trim() || '',
     locationEncountered: editForm.value.locationEncountered.trim(),
     tags: editForm.value.tags,
     updatedAt: new Date(),

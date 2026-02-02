@@ -179,20 +179,25 @@ function handleSubmit() {
 
   const spName = getStartingPointName()
 
-  emit('submit', {
+  const payload: Record<string, any> = {
     sessionNumber: sessionNumber.value,
     title: title.value.trim(),
-    date: new Date(date.value + 'T12:00:00') as any,
-    sessionLocationId: sessionLocationId.value || undefined,
-    sessionLocationName: locationName || undefined,
-    startingPointType: (startingPointType.value as 'location' | 'feature') || undefined,
-    startingPointId: startingPointId.value || undefined,
-    startingPointName: spName || undefined,
+    date: new Date(date.value + 'T12:00:00'),
     summary: summary.value.trim(),
     participants: selectedParticipants.value,
     npcsEncountered: selectedNpcIds.value,
     tags: tags.value,
-  })
+  }
+  if (sessionLocationId.value) {
+    payload.sessionLocationId = sessionLocationId.value
+    payload.sessionLocationName = locationName || ''
+  }
+  if (startingPointType.value && startingPointId.value) {
+    payload.startingPointType = startingPointType.value as 'location' | 'feature'
+    payload.startingPointId = startingPointId.value
+    payload.startingPointName = spName || ''
+  }
+  emit('submit', payload as any)
 }
 
 // Character search filter
