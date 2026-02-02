@@ -5,7 +5,6 @@ import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import HexMiniMap from '../components/map/HexMiniMap.vue'
 import type { CampaignLocation, LocationFeature } from '../types'
-import { getIconPath } from '../lib/icons'
 import { useTypeConfig } from '../composables/useTypeConfig'
 import TypeSelect from '../components/common/TypeSelect.vue'
 import MentionTextarea from '../components/common/MentionTextarea.vue'
@@ -27,7 +26,7 @@ const locationFilter = ref<string>('')
 const editingFeature = ref<LocationFeature | null>(null)
 const editForm = ref({ name: '', type: 'other' as any, description: '' })
 
-const { featureTypes: featureTypeOptions } = useTypeConfig()
+const { featureTypes: featureTypeOptions, getIconUrl } = useTypeConfig()
 
 const _unsubs: (() => void)[] = []
 
@@ -265,7 +264,7 @@ async function deleteFeature(feat: LocationFeature) {
           <div :class="feat.hidden ? 'mt-5' : ''">
             <div class="flex items-start justify-between gap-2 mb-1">
               <div class="flex items-center gap-2 min-w-0">
-                <img :src="getIconPath(feat.type)" class="w-6 h-6 object-contain" :alt="feat.type" />
+                <img :src="getIconUrl(feat.type)" class="w-6 h-6 object-contain" :alt="feat.type" />
                 <h3 class="text-base font-semibold text-white truncate" style="font-family: Manrope, sans-serif">{{ feat.name }}</h3>
               </div>
               <div v-if="auth.isDm || auth.isAdmin" class="flex gap-1 shrink-0">

@@ -22,7 +22,8 @@ const emit = defineEmits<{
   'map-click': [x: number, y: number]
 }>()
 
-import { getIconPath } from '../../lib/icons'
+import { useTypeConfig } from '../../composables/useTypeConfig'
+const { getIconUrl } = useTypeConfig()
 
 const container = ref<HTMLElement | null>(null)
 const imgEl = ref<HTMLImageElement | null>(null)
@@ -412,7 +413,7 @@ onUnmounted(() => {
           @mouseleave="onFeatureLeave"
           @click="onSubLocationClick($event, loc)"
         >
-          <img :src="getIconPath(loc.type)" :class="['cursor-pointer transition-all duration-200 w-full h-full object-contain', highlightedSubLocationId === loc.id ? 'drop-shadow-[0_0_8px_rgba(239,35,60,0.8)]' : 'drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]']" />
+          <img :src="getIconUrl(loc.type)" :class="['cursor-pointer transition-all duration-200 w-full h-full object-contain', highlightedSubLocationId === loc.id ? 'drop-shadow-[0_0_8px_rgba(239,35,60,0.8)]' : 'drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]']" />
         </div>
 
         <!-- Feature markers (positioned on the image) -->
@@ -432,7 +433,7 @@ onUnmounted(() => {
           @mouseleave="onFeatureLeave"
           @click="onFeatureClick($event, feat)"
         >
-          <img :src="getIconPath(feat.type)" :class="['cursor-pointer transition-all duration-200 w-full h-full object-contain', highlightedFeatureId === feat.id ? 'drop-shadow-[0_0_8px_rgba(239,35,60,0.8)]' : 'drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]']" />
+          <img :src="getIconUrl(feat.type)" :class="['cursor-pointer transition-all duration-200 w-full h-full object-contain', highlightedFeatureId === feat.id ? 'drop-shadow-[0_0_8px_rgba(239,35,60,0.8)]' : 'drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]']" />
         </div>
       </div>
     </div>
@@ -458,7 +459,7 @@ onUnmounted(() => {
           :style="{ left: (tooltipPos.x + 12) + 'px', top: (tooltipPos.y - 10) + 'px' }"
         >
           <div class="flex items-center gap-1.5 mb-0.5">
-            <img :src="getIconPath(hoveredFeature.type)" class="w-4 h-4 object-contain" />
+            <img :src="getIconUrl(hoveredFeature.type)" class="w-4 h-4 object-contain" />
             <span class="text-xs font-semibold text-white" style="font-family: Manrope, sans-serif">{{ hoveredFeature.name }}</span>
           </div>
           <span class="text-[0.6rem] text-zinc-500">{{ hoveredFeature.type }}</span>

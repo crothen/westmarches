@@ -9,7 +9,6 @@ import LocationMapViewer from '../components/map/LocationMapViewer.vue'
 import HexMiniMap from '../components/map/HexMiniMap.vue'
 import MentionTextarea from '../components/common/MentionTextarea.vue'
 import MentionText from '../components/common/MentionText.vue'
-import { getIconPath, markerTypeIcons } from '../lib/icons'
 import { useTypeConfig } from '../composables/useTypeConfig'
 import TypeSelect from '../components/common/TypeSelect.vue'
 import type { CampaignLocation, LocationFeature, HexMarker, MarkerType } from '../types'
@@ -63,7 +62,7 @@ const placingSubLocation = ref<string | null>(null)
 const highlightedFeature = ref<string | null>(null)
 const highlightedSubLocation = ref<string | null>(null)
 
-const { locationTypes: locationTypeOptions, featureTypes: featureTypeOptions, pinTypes: pinTypeOptions } = useTypeConfig()
+const { locationTypes: locationTypeOptions, featureTypes: featureTypeOptions, pinTypes: pinTypeOptions, getIconUrl } = useTypeConfig()
 
 // Quick-add from map click
 const showQuickAdd = ref(false)
@@ -421,7 +420,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
     <div v-else>
       <!-- Header -->
       <div class="flex items-center gap-3 mb-2">
-        <img :src="getIconPath(location.type)" class="w-8 h-8 object-contain" :alt="location.type" />
+        <img :src="getIconUrl(location.type)" class="w-8 h-8 object-contain" :alt="location.type" />
         <h1 class="text-3xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">{{ location.name }}</h1>
         <span class="badge bg-white/5 text-zinc-500">{{ location.type }}</span>
         <span v-if="location.hidden && (auth.isDm || auth.isAdmin)" class="badge bg-amber-500/15 text-amber-400 text-xs">👁️‍🗨️ Hidden</span>
@@ -551,7 +550,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
             @mouseleave="highlightedSubLocation = null"
           >
             <RouterLink :to="`/locations/${sub.id}`" class="flex items-center gap-2">
-              <img :src="getIconPath(sub.type)" class="w-6 h-6 object-contain shrink-0" :alt="sub.type" />
+              <img :src="getIconUrl(sub.type)" class="w-6 h-6 object-contain shrink-0" :alt="sub.type" />
               <div class="min-w-0">
                 <span class="text-xs font-semibold text-zinc-200 truncate block" style="font-family: Manrope, sans-serif">{{ sub.name }}</span>
                 <span class="text-[0.6rem] text-zinc-600">{{ sub.type }}
@@ -579,7 +578,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
         <h2 class="label mb-3">Markers ({{ locationMarkers.length }})</h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
           <div v-for="marker in locationMarkers" :key="marker.id" class="card-flat p-3 flex items-center gap-2">
-            <img :src="markerTypeIcons[marker.type] || getIconPath('other')" class="w-5 h-5 object-contain shrink-0" />
+            <img :src="getIconUrl(marker.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
             <div class="min-w-0">
               <span class="text-xs font-semibold text-zinc-200 truncate block" style="font-family: Manrope, sans-serif">{{ marker.name }}</span>
               <span class="text-[0.6rem] text-zinc-600">{{ marker.type }}</span>
@@ -634,7 +633,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
               <div v-if="feat.hidden" class="absolute top-0 left-0 right-0 bg-amber-500/20 text-amber-400 text-[0.5rem] font-bold uppercase tracking-widest text-center py-0.5 z-10" style="font-family: Manrope, sans-serif">🚫 Hidden</div>
               <div :class="feat.hidden ? 'mt-3' : ''">
                 <div class="flex items-center gap-1.5 mb-1">
-                  <img :src="getIconPath(feat.type)" class="w-5 h-5 object-contain shrink-0" :alt="feat.type" />
+                  <img :src="getIconUrl(feat.type)" class="w-5 h-5 object-contain shrink-0" :alt="feat.type" />
                   <span class="text-xs font-semibold text-zinc-200 truncate" style="font-family: Manrope, sans-serif">{{ feat.name }}</span>
                 </div>
                 <div class="flex items-center gap-1 mb-1">

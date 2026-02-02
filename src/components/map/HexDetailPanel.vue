@@ -6,7 +6,6 @@ import { useAuthStore } from '../../stores/auth'
 import DetailMapViewer from './DetailMapViewer.vue'
 import MentionTextarea from '../common/MentionTextarea.vue'
 import NotesSection from '../common/NotesSection.vue'
-import { getIconPath, markerTypeIcons } from '../../lib/icons'
 import { useTypeConfig } from '../../composables/useTypeConfig'
 import TypeSelect from '../common/TypeSelect.vue'
 import type { HexMarker } from '../../types'
@@ -43,7 +42,7 @@ const poiLocationFilter = ref<string | ''>('')
 const newMarkerKind = ref<'location' | 'feature' | 'pin'>('location')
 const newMarkerForm = ref({ name: '', type: 'other', description: '', isPrivate: false })
 
-const { locationTypes: locationTypeOptions, featureTypes: featureTypeOptions, pinTypes: pinTypeOptions } = useTypeConfig()
+const { locationTypes: locationTypeOptions, featureTypes: featureTypeOptions, pinTypes: pinTypeOptions, getIconUrl } = useTypeConfig()
 
 const hexKey = computed(() => props.hex ? `${props.hex.x}_${props.hex.y}` : null)
 
@@ -428,7 +427,7 @@ async function unassignPoi(poi: any, kind: 'location' | 'feature') {
                 <button @click="moveItem(item, idx, -1)" :disabled="idx === 0" :class="['text-[0.6rem] leading-none transition-colors', idx === 0 ? 'text-zinc-800' : 'text-zinc-600 hover:text-zinc-300']">▲</button>
                 <button @click="moveItem(item, idx, 1)" :disabled="idx === sortedHexItems.length - 1" :class="['text-[0.6rem] leading-none transition-colors', idx === sortedHexItems.length - 1 ? 'text-zinc-800' : 'text-zinc-600 hover:text-zinc-300']">▼</button>
               </div>
-              <img :src="item._kind === 'marker' ? (markerTypeIcons[item.type] || getIconPath('other')) : getIconPath(item.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
+              <img :src="getIconUrl(item.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
               <span :class="['text-sm truncate', item._kind === 'location' ? 'text-zinc-200 font-medium' : 'text-zinc-300']">{{ item.name }}</span>
               <span v-if="item._kind === 'marker' && item.isPrivate" class="text-[0.55rem] bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded-full shrink-0">🔒</span>
               <span v-if="item.hidden && (auth.isDm || auth.isAdmin)" class="text-[0.55rem] text-amber-400/70 shrink-0">🚫</span>
@@ -519,7 +518,7 @@ async function unassignPoi(poi: any, kind: 'location' | 'feature') {
                     @click="assignPoiToHex(poi); showMarkerModal = false"
                     class="w-full text-left p-2.5 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-2"
                   >
-                    <img :src="getIconPath(poi.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
+                    <img :src="getIconUrl(poi.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
                     <span class="text-sm text-zinc-300 truncate flex-1">{{ poi.name }}</span>
                     <span class="text-[0.6rem] text-zinc-600 shrink-0">{{ poi.type }}</span>
                     <span v-if="poi._currentHex" class="text-[0.55rem] text-amber-500/60 shrink-0">@ {{ poi._currentHex }}</span>

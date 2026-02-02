@@ -466,6 +466,17 @@ watch([hexData, selectedHex, hexMarkers, mapPaths], () => {
   redraw()
 })
 
+// Reload icons when type config changes (e.g. Firestore data arrives with Storage URLs)
+watch([locationTypes, featureTypes, pinTypes], () => {
+  if (!hexMap) return
+  const markerTypesConfig = {
+    locationTypes: Object.fromEntries(locationTypes.value.map(t => [t.key, { iconUrl: t.iconUrl }])),
+    featureTypes: Object.fromEntries(featureTypes.value.map(t => [t.key, { iconUrl: t.iconUrl }])),
+    hexMarkerTypes: Object.fromEntries(pinTypes.value.map(t => [t.key, { iconUrl: t.iconUrl }]))
+  }
+  hexMap.loadIconImages(markerTypesConfig)
+})
+
 function focusOnHex(x: number, y: number) {
   if (hexMap) {
     selectedHex.value = { x, y }
