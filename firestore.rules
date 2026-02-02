@@ -155,6 +155,12 @@ service cloud.firestore {
       allow write: if isDmOrAdmin();
     }
 
+    // Map Paths (roads, rivers)
+    match /mapPaths/{pathId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isDmOrAdmin();
+    }
+
     // Config (terrain, tags)
     match /config/{configId} {
       allow read: if isAuthenticated();
