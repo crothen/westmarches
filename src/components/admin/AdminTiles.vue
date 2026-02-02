@@ -234,7 +234,7 @@ function startGenerate(name: string) {
   generatingKey.value = name
   const conf = terrainConfig.value[name]
   const color = conf?.color || '#666666'
-  genPrompt.value = `Top-down view of ${name.toLowerCase()} terrain for a dark fantasy world. Primary color tone: ${color}. Abstract and painterly. No borders, no text, no grid lines, no shapes. Fill the entire image with the terrain surface only.`
+  genPrompt.value = `Top-down view of ${name.toLowerCase()} terrain for a fantasy world. Primary color tone: ${color}. Abstract and painterly. Show only the ground surface — no rivers, no flowers, no trees, no objects, no paths. No borders, no text, no grid lines, no shapes. Fill the entire image with uniform terrain texture only.`
 }
 
 async function generateTexture() {

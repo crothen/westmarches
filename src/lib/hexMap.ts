@@ -65,6 +65,7 @@ export class HexMap {
 
   camera: Camera
   loadedPatterns: Record<number, CanvasPattern | null>
+  terrainImages: Record<number, HTMLImageElement>
   tagImages: Record<number, HTMLImageElement>
   /** Preloaded icon images for hex indicators (location/feature/marker types) */
   iconImages: Record<string, HTMLImageElement>
@@ -121,6 +122,7 @@ export class HexMap {
 
     this.camera = { x: 50, y: 50, zoom: 1 }
     this.loadedPatterns = {}
+    this.terrainImages = {}
     this.tagImages = {}
     this.iconImages = {}
     this.imagesLoaded = 0
@@ -260,7 +262,10 @@ export class HexMap {
         const img = new Image()
         img.src = conf.texture.startsWith('http') ? conf.texture : `textures/${conf.texture}`
         img.onload = () => {
-          if (conf.id) this.loadedPatterns[conf.id] = this.ctx.createPattern(img, 'repeat')
+          if (conf.id) {
+            this.loadedPatterns[conf.id] = this.ctx.createPattern(img, 'repeat')
+            this.terrainImages[conf.id] = img
+          }
           onImageLoad()
         }
         img.onerror = () => {
@@ -478,7 +483,6 @@ export class HexMap {
     // Safety: If config still missing, skip
     if (!config) return
 
-    const pattern = this.loadedPatterns[typeId]
     const size = this.CONFIG.hexSize
 
     this.ctx.beginPath()
@@ -489,18 +493,20 @@ export class HexMap {
     }
     this.ctx.closePath()
 
-    if (pattern) {
+    const terrainImg = this.terrainImages[typeId]
+    if (terrainImg) {
+      // Clip to hex shape and draw full image fitted inside
       this.ctx.save()
-      const off = this.randomOffset(col, row)
-      const scale = config.scale || 1.0
-      const matrix = new DOMMatrix()
-      matrix.translateSelf(off.x, off.y)
-      matrix.scaleSelf(scale, scale)
-      pattern.setTransform(matrix)
-      this.ctx.fillStyle = pattern
-      this.ctx.shadowBlur = 0
-      this.ctx.fill()
+      this.ctx.clip()
+      const imgSize = size * 2.1
+      this.ctx.drawImage(terrainImg, center.x - imgSize / 2, center.y - imgSize / 2, imgSize, imgSize)
       this.ctx.restore()
+      // Re-draw hex path for the stroke (clip consumed it)
+      this.ctx.beginPath()
+      for (let i = 0; i < 6; i++) {
+        this.ctx.lineTo(center.x + drawSize * Math.cos(angle * i), center.y + drawSize * Math.sin(angle * i))
+      }
+      this.ctx.closePath()
     } else {
       this.ctx.fillStyle = config.color || '#789'
       this.ctx.fill()
