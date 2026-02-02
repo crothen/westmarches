@@ -238,6 +238,26 @@ async function uploadIcon(key: string, event: Event) {
   try {
     const section = activeCategory.value
     const fileRef = storageRef(storage, `icons/${file.name}`)
+
+    // Check if a file with this name already exists in Storage
+    let existingUrl: string | null = null
+    try {
+      existingUrl = await getDownloadURL(fileRef)
+    } catch { /* doesn't exist — good */ }
+
+    if (existingUrl) {
+      // File already exists — just assign the existing URL, don't re-upload
+      const newSection = { ...config.value[section] }
+      newSection[key] = { ...newSection[key]!, iconUrl: existingUrl }
+      const newConfig = { ...config.value, [section]: newSection }
+      await setDoc(doc(db, 'config', 'markerTypes'), newConfig)
+      config.value = newConfig
+      savedSection.value = key
+      setTimeout(() => savedSection.value = null, 2000)
+      saving.value = false
+      return
+    }
+
     await uploadBytes(fileRef, file, { contentType: file.type })
     const url = await getDownloadURL(fileRef)
 
