@@ -14,18 +14,26 @@ const auth = useAuthStore()
 const { generating: genLoading, error: genError, generateImageRaw, uploadImageData, cropToAspectRatio } = useImageGen()
 const session = ref<SessionLog | null>(null)
 
-// Crop adjuster state
-const showCropAdjuster = ref(false)
+// Art generation modal state (unified generate → crop flow)
+const CROP_RATIO = 3 // width:height ratio for session art banner
+const showArtModal = ref(false)
+const artModalPhase = ref<'generating' | 'cropping'>('generating')
 const rawImageData = ref<{ data: Uint8Array; mimeType: string; objectUrl: string } | null>(null)
 const cropPosition = ref(0.5) // 0=top, 0.5=center, 1=bottom
 const savingCrop = ref(false)
 const rawImageDimensions = ref<{ width: number; height: number }>({ width: 1, height: 1 })
 
-// Compute crop overlay percentages based on raw image dimensions and crop position
+// Drag state for crop
+const isDraggingCrop = ref(false)
+const dragStartY = ref(0)
+const dragStartPosition = ref(0)
+const cropContainerRef = ref<HTMLElement | null>(null)
+
+// Compute crop overlay percentages
 const cropOverlayTop = computed(() => {
   const { width, height } = rawImageDimensions.value
   if (!height) return 0
-  const cropH = width / 6 // 6:1 ratio
+  const cropH = width / CROP_RATIO
   const maxY = height - cropH
   const cropY = cropPosition.value * maxY
   return (cropY / height) * 100
@@ -33,11 +41,33 @@ const cropOverlayTop = computed(() => {
 const cropOverlayBottom = computed(() => {
   const { width, height } = rawImageDimensions.value
   if (!height) return 0
-  const cropH = width / 6
+  const cropH = width / CROP_RATIO
   const maxY = height - cropH
   const cropY = cropPosition.value * maxY
   return ((height - cropY - cropH) / height) * 100
 })
+
+function onCropDragStart(e: MouseEvent | TouchEvent) {
+  isDraggingCrop.value = true
+  dragStartY.value = 'touches' in e ? e.touches[0]!.clientY : e.clientY
+  dragStartPosition.value = cropPosition.value
+  e.preventDefault()
+}
+
+function onCropDragMove(e: MouseEvent | TouchEvent) {
+  if (!isDraggingCrop.value || !cropContainerRef.value) return
+  const clientY = 'touches' in e ? e.touches[0]!.clientY : e.clientY
+  const containerH = cropContainerRef.value.clientHeight
+  const deltaY = clientY - dragStartY.value
+  // Moving mouse down = moving crop down = increasing position
+  const deltaPct = deltaY / containerH
+  const newPos = Math.max(0, Math.min(1, dragStartPosition.value + deltaPct))
+  cropPosition.value = newPos
+}
+
+function onCropDragEnd() {
+  isDraggingCrop.value = false
+}
 const notes = ref<SessionNote[]>([])
 const loading = ref(true)
 const editing = ref(false)
@@ -216,20 +246,28 @@ async function generateSessionArt() {
   const prompt = showPromptEditor.value ? editablePrompt.value : buildSessionPrompt()
   showPromptEditor.value = false
 
-  // Generate raw image, then show crop adjuster
+  // Open modal immediately in generating phase
+  showArtModal.value = true
+  artModalPhase.value = 'generating'
+
+  // Clean up previous preview
+  if (rawImageData.value) URL.revokeObjectURL(rawImageData.value.objectUrl)
+  rawImageData.value = null
+
   const result = await generateImageRaw(prompt)
   if (result) {
-    // Clean up previous preview
-    if (rawImageData.value) URL.revokeObjectURL(rawImageData.value.objectUrl)
     rawImageData.value = result
     cropPosition.value = 0.5
-    // Load dimensions for overlay calculation
+    // Load dimensions then show crop
     const img = new Image()
     img.onload = () => {
       rawImageDimensions.value = { width: img.naturalWidth, height: img.naturalHeight }
-      showCropAdjuster.value = true
+      artModalPhase.value = 'cropping'
     }
     img.src = result.objectUrl
+  } else {
+    // Generation failed — close modal (error shown via genError)
+    showArtModal.value = false
   }
 }
 
@@ -238,11 +276,11 @@ async function confirmCrop() {
   savingCrop.value = true
   try {
     const croppedBlob = await cropToAspectRatio(
-      rawImageData.value.data, rawImageData.value.mimeType, 6, cropPosition.value
+      rawImageData.value.data, rawImageData.value.mimeType, CROP_RATIO, cropPosition.value
     )
     const url = await uploadImageData(croppedBlob, 'image/png', `session-art/${session.value.id}`)
     await updateDoc(doc(db, 'sessions', session.value.id), { imageUrl: url })
-    closeCropAdjuster()
+    closeArtModal()
   } catch (e) {
     console.error('Crop failed:', e)
   } finally {
@@ -250,8 +288,8 @@ async function confirmCrop() {
   }
 }
 
-function closeCropAdjuster() {
-  showCropAdjuster.value = false
+function closeArtModal() {
+  showArtModal.value = false
   if (rawImageData.value) {
     URL.revokeObjectURL(rawImageData.value.objectUrl)
     rawImageData.value = null
@@ -541,7 +579,7 @@ function canDeleteNote(note: SessionNote): boolean {
       </div>
     </div>
 
-    <!-- Crop Adjuster Modal -->
+    <!-- Art Generation & Crop Modal -->
     <Teleport to="body">
       <transition
         enter-active-class="transition-opacity duration-150"
@@ -549,47 +587,67 @@ function canDeleteNote(note: SessionNote): boolean {
         leave-active-class="transition-opacity duration-150"
         leave-from-class="opacity-100" leave-to-class="opacity-0"
       >
-        <div v-if="showCropAdjuster && rawImageData" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" @click="closeCropAdjuster" />
-          <div class="relative w-full max-w-3xl bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-6 z-10 space-y-4">
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-semibold text-white" style="font-family: Manrope, sans-serif">🖼️ Adjust Crop Position</h3>
-              <button @click="closeCropAdjuster" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+        <div v-if="showArtModal" class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          @mousemove="onCropDragMove" @mouseup="onCropDragEnd"
+          @touchmove.prevent="onCropDragMove" @touchend="onCropDragEnd"
+        >
+          <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" @click="artModalPhase === 'cropping' ? closeArtModal() : undefined" />
+          <div class="relative w-full max-w-3xl bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl z-10 overflow-hidden">
+            <!-- Header -->
+            <div class="flex items-center justify-between p-5 pb-3">
+              <h3 class="text-lg font-semibold text-white" style="font-family: Manrope, sans-serif">
+                {{ artModalPhase === 'generating' ? '🎨 Generating Scene Art...' : '🖼️ Adjust Crop' }}
+              </h3>
+              <button @click="closeArtModal" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
             </div>
 
-            <!-- Preview with crop overlay -->
-            <div class="relative overflow-hidden rounded-xl border border-white/10">
-              <img :src="rawImageData.objectUrl" class="w-full" />
-              <!-- Darkened areas above and below crop -->
-              <div class="absolute inset-0 pointer-events-none">
-                <!-- Top dark overlay -->
-                <div class="absolute top-0 left-0 right-0 bg-black/60" :style="{ height: `${cropOverlayTop}%` }" />
-                <!-- Bottom dark overlay -->
-                <div class="absolute bottom-0 left-0 right-0 bg-black/60" :style="{ height: `${cropOverlayBottom}%` }" />
-                <!-- Crop frame borders -->
-                <div class="absolute left-0 right-0 border-y border-[#ef233c]/60" :style="{ top: `${cropOverlayTop}%`, bottom: `${cropOverlayBottom}%` }" />
+            <!-- Generating phase: spinner -->
+            <div v-if="artModalPhase === 'generating'" class="flex flex-col items-center justify-center py-20 px-6">
+              <svg class="animate-spin h-12 w-12 text-[#ef233c] mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <p class="text-zinc-400 text-sm">Generating your scene art with AI...</p>
+              <p class="text-zinc-600 text-xs mt-1">This takes ~10-20 seconds</p>
+            </div>
+
+            <!-- Cropping phase: draggable image -->
+            <template v-if="artModalPhase === 'cropping' && rawImageData">
+              <p class="text-zinc-500 text-xs px-5 mb-2">Drag the image up or down to adjust the crop area</p>
+              <!-- Crop viewport -->
+              <div
+                ref="cropContainerRef"
+                class="relative mx-5 overflow-hidden rounded-xl border border-white/10 select-none"
+                :class="isDraggingCrop ? 'cursor-grabbing' : 'cursor-grab'"
+                @mousedown="onCropDragStart"
+                @touchstart.prevent="onCropDragStart"
+              >
+                <img :src="rawImageData.objectUrl" class="w-full pointer-events-none" draggable="false" />
+                <!-- Darkened areas outside crop -->
+                <div class="absolute inset-0 pointer-events-none">
+                  <div class="absolute top-0 left-0 right-0 bg-black/65 transition-all duration-75" :style="{ height: `${cropOverlayTop}%` }" />
+                  <div class="absolute bottom-0 left-0 right-0 bg-black/65 transition-all duration-75" :style="{ height: `${cropOverlayBottom}%` }" />
+                  <!-- Crop frame -->
+                  <div class="absolute left-0 right-0 border-y-2 border-[#ef233c]/70 transition-all duration-75" :style="{ top: `${cropOverlayTop}%`, bottom: `${cropOverlayBottom}%` }">
+                    <!-- Drag handle lines -->
+                    <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center">
+                      <div class="flex flex-col gap-0.5 opacity-50">
+                        <div class="w-8 h-0.5 bg-white rounded-full" />
+                        <div class="w-8 h-0.5 bg-white rounded-full" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <!-- Slider -->
-            <div class="flex items-center gap-4">
-              <span class="text-xs text-zinc-500 shrink-0">⬆ Top</span>
-              <input
-                v-model.number="cropPosition"
-                type="range"
-                min="0" max="1" step="0.01"
-                class="flex-1 accent-[#ef233c]"
-              />
-              <span class="text-xs text-zinc-500 shrink-0">Bottom ⬇</span>
-            </div>
-
-            <!-- Actions -->
-            <div class="flex justify-end gap-2 pt-2">
-              <button @click="closeCropAdjuster" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
-              <button @click="confirmCrop" :disabled="savingCrop" class="btn text-sm">
-                {{ savingCrop ? '💾 Saving...' : '✅ Confirm Crop' }}
-              </button>
-            </div>
+              <!-- Actions -->
+              <div class="flex justify-end gap-2 p-5 pt-4">
+                <button @click="closeArtModal" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+                <button @click="confirmCrop" :disabled="savingCrop" class="btn text-sm">
+                  {{ savingCrop ? '💾 Saving...' : '✅ Use This Crop' }}
+                </button>
+              </div>
+            </template>
           </div>
         </div>
       </transition>
