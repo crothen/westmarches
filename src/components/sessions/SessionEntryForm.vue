@@ -234,7 +234,7 @@ function handleSubmit() {
     npcIds: selectedNpcIds.value,
     linkedLocationIds: linkedLocationIds.value,
     linkedFeatureIds: linkedFeatureIds.value,
-    imageUrl: imageUrl.value || undefined,
+    ...(imageUrl.value ? { imageUrl: imageUrl.value } : { imageUrl: '' }),
   })
 }
 

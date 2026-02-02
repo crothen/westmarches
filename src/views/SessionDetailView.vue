@@ -178,7 +178,7 @@ function buildSessionPrompt(): string {
     if (npcDescriptions.length) npcStr = ` NPCs present: ${npcDescriptions.join('; ')}.`
   }
 
-  return `Create a dramatic D&D fantasy scene illustration in ultra-wide cinematic aspect ratio (3:1 or wider). Session title: "${session.value.title}". Summary: ${session.value.summary?.substring(0, 500)}. Characters involved: ${participants}.${npcStr} Style: epic fantasy art, dramatic lighting, painterly, ultra-wide panoramic landscape composition, medieval setting. The image MUST be very wide and short — panoramic banner format.`
+  return `Create a dramatic D&D fantasy scene illustration. CRITICAL: The image MUST be an extremely wide panoramic banner with a 6:1 width-to-height ratio (e.g. 2400×400 pixels). It must be much wider than it is tall — like a website header banner. Session title: "${session.value.title}". Summary: ${session.value.summary?.substring(0, 500)}. Characters involved: ${participants}.${npcStr} Style: epic fantasy art, dramatic lighting, painterly, panoramic landscape composition, medieval fantasy setting. Remember: 6:1 aspect ratio, extremely wide and short.`
 }
 
 function openPromptEditor() {
