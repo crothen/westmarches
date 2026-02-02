@@ -95,8 +95,8 @@ async function handleCreate(data: Partial<SessionLog>) {
         :to="`/sessions/${session.id}`"
         class="block card group relative z-10 overflow-hidden"
       >
-        <!-- Hero image -->
-        <div v-if="(session as any).imageUrl" class="w-full h-36 overflow-hidden">
+        <!-- Hero image (3:1 aspect ratio to match generated art) -->
+        <div v-if="(session as any).imageUrl" class="w-full overflow-hidden" style="aspect-ratio: 3 / 1">
           <img :src="(session as any).imageUrl" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         </div>
         <div v-else class="w-full h-20 bg-gradient-to-br from-[#ef233c]/10 to-transparent" />

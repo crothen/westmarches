@@ -408,27 +408,16 @@ function canDeleteNote(note: SessionNote): boolean {
             <label class="text-sm font-semibold text-zinc-400">Image Prompt</label>
             <textarea v-model="editablePrompt" rows="5" class="input w-full text-sm" />
             <div class="flex gap-2">
-              <button @click="generateSessionArt" :disabled="genLoading" class="btn !text-xs !py-1.5">
-                {{ genLoading ? '🎨 Generating...' : '🎨 Generate' }}
+              <button @click="generateSessionArt" :disabled="genLoading" class="btn !text-xs !py-1.5 inline-flex items-center gap-1.5">
+                <svg v-if="genLoading" class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                {{ genLoading ? 'Generating...' : '🎨 Generate' }}
               </button>
               <button @click="showPromptEditor = false" class="btn !bg-white/5 !text-zinc-400 !text-xs !py-1.5">Cancel</button>
             </div>
           </div>
-          <div v-else-if="!(session as any).imageUrl" class="flex gap-2">
-            <button
-              v-if="auth.isAuthenticated"
-              @click="generateSessionArt"
-              :disabled="genLoading"
-              class="btn !text-xs !py-1.5 !px-3"
-            >
-              {{ genLoading ? '🎨 Generating...' : '🎨 Generate Scene Art' }}
-            </button>
-            <button
-              v-if="canEdit"
-              @click="openPromptEditor"
-              class="btn !bg-white/5 !text-zinc-400 !text-xs !py-1.5 !px-3"
-            >
-              ✏️ Edit Prompt
+          <div v-else-if="!(session as any).imageUrl && canEdit">
+            <button @click="openPromptEditor" class="btn !text-xs !py-1.5 !px-3">
+              🎨 Generate Scene Art
             </button>
           </div>
         </div>
