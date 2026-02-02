@@ -301,6 +301,39 @@ export interface LocationFeature {
 
 // --- Markers (Feature 2) ---
 
+// --- Session Timeline Entries ---
+
+export type SessionEntryType = 'interaction' | 'task' | 'encounter' | 'discovery' | 'travel' | 'rest' | 'custom'
+
+export interface SessionEntry {
+  id: string
+  sessionId: string
+  order: number
+  type: SessionEntryType
+  title: string
+  description: string
+  presentParticipants?: SessionParticipant[]
+  allParticipantsPresent?: boolean
+  npcIds?: string[]
+  linkedLocationIds?: string[]
+  linkedFeatureIds?: string[]
+  linkedMarkerIds?: string[]
+  imageUrl?: string
+  attachments?: { name: string; url: string; type: string }[]
+  comments?: EntryComment[]
+  createdBy?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface EntryComment {
+  id: string
+  userId: string
+  authorName: string
+  content: string
+  createdAt: Date
+}
+
 export type MarkerType = 'clue' | 'battle' | 'danger' | 'puzzle' | 'mystery' | 'waypoint' | 'quest' | 'locked' | 'unlocked'
 
 export interface HexMarker {

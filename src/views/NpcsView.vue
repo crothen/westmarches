@@ -199,43 +199,37 @@ async function generatePortrait() {
         :to="'/npcs/' + npc.id"
         :class="['card relative z-10 cursor-pointer hover:border-white/15 transition-colors block no-underline', isDeceased(npc) ? 'opacity-50' : '']"
       >
-        <div class="relative z-10">
-          <div class="p-5">
-            <!-- Header with portrait -->
-            <div class="flex gap-4 mb-2">
-              <!-- Square portrait thumbnail -->
-              <div class="shrink-0 w-20 h-20 rounded-lg overflow-hidden border border-white/10">
-                <img v-if="npc.imageUrl" :src="npc.imageUrl" class="w-full h-full object-cover" />
-                <div v-else class="w-full h-full bg-white/[0.03] flex items-center justify-center text-2xl">👤</div>
+        <div class="relative z-10 flex">
+          <!-- Full-height portrait on the left -->
+          <div v-if="npc.imageUrl" class="shrink-0 w-24 overflow-hidden rounded-l-[inherit]">
+            <img :src="npc.imageUrl" class="w-full h-full object-cover" />
+          </div>
+          <div class="flex-1 min-w-0 p-4">
+            <!-- Header -->
+            <div class="flex items-start justify-between mb-1">
+              <div class="min-w-0">
+                <span
+                  class="text-base font-semibold"
+                  :class="isDeceased(npc) ? 'line-through text-zinc-500' : 'text-white'"
+                  style="font-family: Manrope, sans-serif"
+                >{{ npc.name }}</span>
+                <div class="text-zinc-500 text-sm">{{ npc.race }}</div>
               </div>
-              <!-- Name / Race / Badges -->
-              <div class="flex-1 min-w-0">
-                <div class="flex items-start justify-between">
-                  <div>
-                    <span
-                      class="text-base font-semibold"
-                      :class="isDeceased(npc) ? 'line-through text-zinc-500' : 'text-white'"
-                      style="font-family: Manrope, sans-serif"
-                    >{{ npc.name }}</span>
-                    <div class="text-zinc-500 text-sm">{{ npc.race }}</div>
-                  </div>
-                  <div class="flex items-center gap-1.5 shrink-0">
-                    <span v-if="noteCount(npc.id)" class="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500/80" :title="noteCount(npc.id) + ' note(s)'">📝 {{ noteCount(npc.id) }}</span>
-                    <span v-if="getRoleBadge(npc)" class="badge bg-[#ef233c]/15 text-[#ef233c]">{{ getRoleBadge(npc) }}</span>
-                    <span v-if="getUnitAbbrev(npc)" class="badge bg-white/5 text-zinc-400">{{ getUnitAbbrev(npc) }}</span>
-                    <span v-if="isDeceased(npc)" class="badge bg-zinc-800 text-zinc-500">☠️ Dead</span>
-                    <button
-                      v-if="auth.isDm || auth.isAdmin"
-                      @click.prevent="openEditModal(npc)"
-                      class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors ml-1"
-                      title="Edit NPC"
-                    >✏️</button>
-                  </div>
-                </div>
-                <div class="flex flex-wrap gap-1.5 mt-1">
-                  <span v-for="tag in (npc.tags || []).filter(t => !['commander','leader','subleader','deceased','ZFC','LDU','DDU','GDU','PCU','EFDU','UEU','VIU'].includes(t)).slice(0, 3)" :key="tag" class="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-white/5 text-zinc-600">{{ tag }}</span>
-                </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span v-if="noteCount(npc.id)" class="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500/80" :title="noteCount(npc.id) + ' note(s)'">📝 {{ noteCount(npc.id) }}</span>
+                <span v-if="getRoleBadge(npc)" class="badge bg-[#ef233c]/15 text-[#ef233c]">{{ getRoleBadge(npc) }}</span>
+                <span v-if="getUnitAbbrev(npc)" class="badge bg-white/5 text-zinc-400">{{ getUnitAbbrev(npc) }}</span>
+                <span v-if="isDeceased(npc)" class="badge bg-zinc-800 text-zinc-500">☠️ Dead</span>
+                <button
+                  v-if="auth.isDm || auth.isAdmin"
+                  @click.prevent="openEditModal(npc)"
+                  class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors ml-1"
+                  title="Edit NPC"
+                >✏️</button>
               </div>
+            </div>
+            <div class="flex flex-wrap gap-1.5 mt-1">
+              <span v-for="tag in (npc.tags || []).filter(t => !['commander','leader','subleader','deceased','ZFC','LDU','DDU','GDU','PCU','EFDU','UEU','VIU'].includes(t)).slice(0, 3)" :key="tag" class="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-white/5 text-zinc-600">{{ tag }}</span>
             </div>
 
             <!-- Description preview -->
@@ -245,8 +239,8 @@ async function generatePortrait() {
             <div class="mt-2 flex items-center gap-2">
               <span v-if="npc.locationEncountered" class="text-xs text-zinc-600">📍 {{ npc.locationEncountered }}</span>
             </div>
-          </div>
-        </div>
+          </div><!-- /flex-1 content -->
+        </div><!-- /flex row -->
       </RouterLink>
     </div>
 

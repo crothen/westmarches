@@ -112,6 +112,12 @@ service cloud.firestore {
       allow create, update, delete: if isDmOrAdmin();
     }
 
+    // Session Entries (timeline)
+    match /sessionEntries/{entryId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isDmOrAdmin();
+    }
+
     // Session Notes (privacy filtered client-side)
     match /sessionNotes/{noteId} {
       allow read: if isAuthenticated();

@@ -22,6 +22,9 @@ const newNotePrivate = ref(false)
 // Image generation state
 const showPromptEditor = ref(false)
 const editablePrompt = ref('')
+
+// NPC name lookup
+const npcNames = ref<Record<string, string>>({})
 const editingNoteId = ref<string | null>(null)
 const editContent = ref('')
 const replyingTo = ref<string | null>(null)
@@ -61,6 +64,13 @@ onMounted(async () => {
     notes.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as SessionNote))
   }, (err) => {
     console.warn('Notes query error (index may need creating):', err.message)
+  }))
+
+  // Load NPC names for display
+  _unsubs.push(onSnapshot(collection(db, 'npcs'), (snap) => {
+    const names: Record<string, string> = {}
+    snap.docs.forEach(d => { names[d.id] = d.data().name || d.id })
+    npcNames.value = names
   }))
 })
 
@@ -296,9 +306,27 @@ function canDeleteNote(note: SessionNote): boolean {
         <div v-if="session.participants?.length" class="mb-6">
           <h2 class="text-lg font-semibold text-[#ef233c] mb-2" style="font-family: Manrope, sans-serif">🧙 Adventurers</h2>
           <div class="flex flex-wrap gap-2">
-            <span v-for="p in session.participants" :key="p.characterId" class="bg-white/[0.05] border border-white/[0.06] text-zinc-200 px-3 py-1 rounded-lg text-sm">
+            <RouterLink
+              v-for="p in session.participants" :key="p.characterId"
+              :to="`/characters/${p.characterId}`"
+              class="bg-white/[0.05] border border-white/[0.06] text-zinc-200 px-3 py-1 rounded-lg text-sm hover:border-[#ef233c]/30 hover:text-[#ef233c] transition-colors"
+            >
               {{ p.characterName }}
-            </span>
+            </RouterLink>
+          </div>
+        </div>
+
+        <!-- NPCs Encountered -->
+        <div v-if="session.npcsEncountered?.length" class="mb-6">
+          <h2 class="text-lg font-semibold text-[#ef233c] mb-2" style="font-family: Manrope, sans-serif">👤 NPCs Encountered</h2>
+          <div class="flex flex-wrap gap-2">
+            <RouterLink
+              v-for="npcId in session.npcsEncountered" :key="npcId"
+              :to="`/npcs/${npcId}`"
+              class="bg-white/[0.05] border border-white/[0.06] text-zinc-200 px-3 py-1 rounded-lg text-sm hover:border-[#ef233c]/30 hover:text-[#ef233c] transition-colors"
+            >
+              {{ npcNames[npcId] || npcId }}
+            </RouterLink>
           </div>
         </div>
 
