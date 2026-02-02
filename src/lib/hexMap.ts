@@ -641,52 +641,38 @@ export class HexMap {
   }
 
   /**
-   * Get positions for N icons inside a hex, centered.
-   * 1 icon: center. 2-3: horizontal row. 4-6: two rows. 7: honeycomb.
+   * Get positions for N icons inside a hex.
+   * Layout tiers based on count:
+   *  1: center
+   *  2-3: alternating corners (top, bottom-left, bottom-right)
+   *  4-6: all 6 corners
+   *  7: all 6 corners + center
    */
-  private getIconPositions(cx: number, cy: number, count: number, iconSize: number): { x: number; y: number }[] {
-    const gap = iconSize * 0.15
-    const step = iconSize + gap
+  private getIconPositions(cx: number, cy: number, count: number, hexSize: number): { x: number; y: number }[] {
+    const dist = hexSize * 0.55 // distance from center to icon position (inside hex)
+    const angle = (2 * Math.PI) / 6
+
+    // 6 corner positions (starting from top, going clockwise)
+    const allCorners: { x: number; y: number }[] = []
+    for (let i = 0; i < 6; i++) {
+      const a = angle * i - Math.PI / 2 // start from top
+      allCorners.push({ x: cx + dist * Math.cos(a), y: cy + dist * Math.sin(a) })
+    }
+    // Alternating corners: top(0), bottom-right(2), bottom-left(4)
+    const altCorners = [allCorners[0]!, allCorners[2]!, allCorners[4]!]
 
     if (count === 1) return [{ x: cx, y: cy }]
 
     if (count <= 3) {
-      // Single horizontal row, centered
-      const totalW = (count - 1) * step
-      return Array.from({ length: count }, (_, i) => ({
-        x: cx - totalW / 2 + i * step,
-        y: cy
-      }))
+      return altCorners.slice(0, count)
     }
 
     if (count <= 6) {
-      // Two rows
-      const topCount = Math.ceil(count / 2)
-      const botCount = count - topCount
-      const rowOffset = step * 0.45
-      const positions: { x: number; y: number }[] = []
-
-      const topW = (topCount - 1) * step
-      for (let i = 0; i < topCount; i++) {
-        positions.push({ x: cx - topW / 2 + i * step, y: cy - rowOffset })
-      }
-      const botW = (botCount - 1) * step
-      for (let i = 0; i < botCount; i++) {
-        positions.push({ x: cx - botW / 2 + i * step, y: cy + rowOffset })
-      }
-      return positions
+      return allCorners.slice(0, count)
     }
 
-    // 7: honeycomb — 3 top, 1 center, 3 bottom (or 2-3-2)
-    const rowOffset = step * 0.5
-    const positions: { x: number; y: number }[] = []
-    // Top row: 2
-    for (let i = 0; i < 2; i++) positions.push({ x: cx - step * 0.5 + i * step, y: cy - rowOffset })
-    // Middle row: 3
-    for (let i = 0; i < 3; i++) positions.push({ x: cx - step + i * step, y: cy })
-    // Bottom row: 2
-    for (let i = 0; i < 2; i++) positions.push({ x: cx - step * 0.5 + i * step, y: cy + rowOffset })
-    return positions
+    // 7: center + all 6 corners
+    return [{ x: cx, y: cy }, ...allCorners]
   }
 
   drawHexIndicators(markers: Record<string, HexMarkerData>, userRole: string = 'player'): void {
@@ -696,16 +682,13 @@ export class HexMap {
 
     // Determine how many icons to show based on zoom level
     let maxIcons: number
-    if (zoom >= 3.0) maxIcons = 7       // super close
-    else if (zoom >= 1.5) maxIcons = 6  // pretty close
-    else if (zoom >= 0.6) maxIcons = 3  // medium
-    else maxIcons = 1                   // far out
+    if (zoom >= 5.0) maxIcons = 7       // full zoom: corners + center
+    else if (zoom >= 3.0) maxIcons = 6  // close: all corners
+    else if (zoom >= 1.5) maxIcons = 3  // medium: alternating corners
+    else maxIcons = 1                   // far out: center only
 
-    // Icon size: when single icon, fill most of the hex.
-    // At low zoom, icon should be ~100% of hex; at high zoom, ~80%
+    // Icon size relative to hex
     const singleIconFill = zoom < 1.0 ? 1.0 : 0.8
-    // For multiple icons, scale down to fit
-    const multiIconScale = zoom < 1.0 ? 0.55 : 0.45
 
     for (const [hexKey, data] of Object.entries(markers)) {
       const parts = hexKey.split('_')
@@ -730,9 +713,9 @@ export class HexMap {
       // Determine icon draw size
       const iconDrawSize = iconsToShow.length === 1
         ? size * 2 * singleIconFill   // single icon: fill hex diameter
-        : size * 2 * multiIconScale   // multiple: smaller
+        : size * 0.7                  // multiple: fit inside hex corners
 
-      const positions = this.getIconPositions(center.x, center.y, iconsToShow.length, iconDrawSize)
+      const positions = this.getIconPositions(center.x, center.y, iconsToShow.length, size)
 
       for (let i = 0; i < iconsToShow.length; i++) {
         const icon = iconsToShow[i]!
