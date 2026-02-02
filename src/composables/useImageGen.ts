@@ -6,21 +6,22 @@ import { storage } from '../firebase/config'
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY
 
 const TEXTURE_STYLE_SYSTEM = `You are a texture prompt engineer for a fantasy RPG hex map.
-Given a terrain name and fallback color, generate a concise image generation prompt.
+Given a terrain name and its color (hex code), generate a concise image generation prompt.
 
-RULES:
-- The texture is viewed TOP-DOWN (bird's eye view, looking straight down)
+CRITICAL RULES:
+- STRICTLY TOP-DOWN bird's eye view — camera pointing STRAIGHT DOWN at the ground. No horizon, no side view, no perspective, no 3D depth, no vanishing points. Imagine a satellite photo or a drone looking directly downward.
+- The given hex color MUST be the DOMINANT color of the texture. Mention the exact color and describe it. Variations should stay close to that hue.
 - Style: painterly, soft round organic shapes, subtle variation
-- Must be SEAMLESS and TILEABLE with uniform coverage
-- No focal point, no borders, no text, no labels, no perspective
+- Must be SEAMLESS and TILEABLE with uniform coverage across the entire image
+- No focal point, no borders, no text, no labels
 - Keep it simple — recognizable as the terrain at both small and large sizes
 - Output ONLY the prompt text, nothing else
 
 GOOD EXAMPLES (use these as style reference):
-- Forest: "Top-down view of a light forest canopy texture. Soft greens with dappled sunlight. Painterly style, seamless tile, no borders. Simple and readable at any zoom level."
-- Forest (dense): "Dense but soft forest canopy texture from above. Overlapping round treetops, light forest greens. Slightly varied sizes. Subtle depth, no harsh shadows. Seamless tileable, painterly, no text or borders."
+- Forest (color #4a7c3f): "Strictly top-down bird's eye view of a forest canopy. Dominant color: muted green (#4a7c3f). Soft overlapping round treetops in shades of #4a7c3f with subtle lighter and darker variations. Dappled sunlight. Painterly style, seamless tileable texture. No perspective, no horizon, no borders, no text."
+- Forest dense (color #2d5a1e): "Strictly top-down bird's eye view, looking straight down at dense forest canopy. Dominant color: dark green (#2d5a1e). Tightly packed round treetops, varying sizes, all shades close to #2d5a1e. Subtle depth between canopy layers. Painterly, seamless tileable, no borders, no text."
 
-Adapt the subject, shapes, and color palette to match the terrain. Keep a similar sentence structure and style keywords.`
+Always start with "Strictly top-down bird's eye view" and always specify "Dominant color: {description} ({hex})". Adapt shapes and subject to match the terrain type.`
 
 export function useImageGen() {
   const generating = ref(false)

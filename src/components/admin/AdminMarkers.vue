@@ -312,9 +312,10 @@ async function migrateToStorage() {
       }
       const blob = await response.blob()
       
-      // Upload to storage under icons/ with a flat name
-      const flatName = localPath.replace(/^\/icons\//, '').replace(/\//g, '-')
-      const fileRef = storageRef(storage, `icons/${flatName}`)
+      // Upload to storage under icons/ using just the filename (no subfolder prefix)
+      // so identical files across categories share one URL → duplicate detection works
+      const fileName = localPath.split('/').pop() || localPath
+      const fileRef = storageRef(storage, `icons/${fileName}`)
       const { ref: uploadedRef } = await (await import('firebase/storage')).uploadBytes(fileRef, blob, { contentType: 'image/png' })
       const url = await (await import('firebase/storage')).getDownloadURL(uploadedRef)
       pathToUrl[localPath] = url
