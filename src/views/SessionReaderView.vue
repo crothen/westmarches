@@ -323,10 +323,10 @@ onUnmounted(() => {
           <!-- ==================== COVER PAGE ==================== -->
           <div v-if="currentPage === 0" class="relative h-full flex flex-col overflow-y-auto">
             <!-- Sketch cover image (centered, smaller) -->
-            <div v-if="sketchCache['cover'] || (session as any).imageUrl" class="flex justify-center pt-6 px-4">
+            <div v-if="sketchCache['cover'] || (session as any).imageUrl" class="w-full">
               <img
                 :src="sketchCache['cover'] || (session as any).imageUrl"
-                class="w-[90%] object-contain"
+                class="w-full object-contain"
                 :style="sketchCache['cover'] ? '' : 'filter: grayscale(1) contrast(1.5)'"
               />
             </div>
@@ -377,7 +377,7 @@ onUnmounted(() => {
             <div v-if="sketchCache[currentEntry.id] || currentEntry.imageUrl" class="flex justify-center pt-6 px-4">
               <img
                 :src="sketchCache[currentEntry.id] || currentEntry.imageUrl"
-                class="w-[90%] object-contain"
+                class="w-[90%] object-contain sketch-fade"
                 :style="sketchCache[currentEntry.id] ? '' : 'filter: grayscale(1) contrast(1.5)'"
               />
             </div>
@@ -447,6 +447,11 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.sketch-fade {
+  mask-image: radial-gradient(ellipse 90% 85% at center, black 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 85% at center, black 40%, transparent 100%);
+}
+
 .journal-text {
   font-weight: bold;
   color: #1c0d03;
