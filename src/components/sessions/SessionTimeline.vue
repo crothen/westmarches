@@ -23,6 +23,7 @@ const showEntryModal = ref(false)
 const editingEntry = ref<SessionEntry | null>(null)
 const expandedComments = ref<Set<string>>(new Set())
 const newCommentContent = ref<Record<string, string>>({})
+const lightboxUrl = ref<string | null>(null)
 
 const _unsubs: (() => void)[] = []
 
@@ -223,7 +224,7 @@ function formatCommentDate(date: any): string {
         <div :class="['card-flat border-l-4 overflow-visible', entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700']">
           <div class="flex">
             <!-- Hero image on the left -->
-            <div v-if="entry.imageUrl" class="shrink-0 w-28 sm:w-36 overflow-hidden rounded-l-[inherit]">
+            <div v-if="entry.imageUrl" class="shrink-0 w-28 sm:w-36 overflow-hidden rounded-l-[inherit] cursor-pointer" @click="lightboxUrl = entry.imageUrl!">
               <img :src="entry.imageUrl" class="w-full h-full object-cover" />
             </div>
             <!-- Content -->
@@ -306,6 +307,21 @@ function formatCommentDate(date: any): string {
         + Add another entry
       </button>
     </div>
+
+    <!-- Image Lightbox -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0" enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-150"
+        leave-from-class="opacity-100" leave-to-class="opacity-0"
+      >
+        <div v-if="lightboxUrl" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center" @click="lightboxUrl = null">
+          <img :src="lightboxUrl" class="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" @click.stop />
+          <button @click="lightboxUrl = null" class="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors text-lg">✕</button>
+        </div>
+      </transition>
+    </Teleport>
 
     <!-- Entry Modal -->
     <Teleport to="body">
