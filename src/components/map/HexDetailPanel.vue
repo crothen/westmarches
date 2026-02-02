@@ -9,7 +9,7 @@ import NotesSection from '../common/NotesSection.vue'
 import { getIconPath, markerTypeIcons } from '../../lib/icons'
 import { useTypeConfig } from '../../composables/useTypeConfig'
 import TypeSelect from '../common/TypeSelect.vue'
-import type { HexMarker, MarkerType } from '../../types'
+import type { HexMarker } from '../../types'
 
 const props = defineProps<{
   hex: { x: number; y: number } | null
@@ -33,15 +33,15 @@ const hexLocations = ref<any[]>([])
 const hexFeatures = ref<any[]>([])
 const allLocations = ref<any[]>([])
 const allFeatures = ref<any[]>([])
-const showAddPoi = ref(false)
+const hexMarkersList = ref<HexMarker[]>([])
+
+// Unified "Add Marker" modal state
+const showMarkerModal = ref(false)
+const markerModalTab = ref<'existing' | 'new'>('existing')
 const poiSearch = ref('')
 const poiLocationFilter = ref<string | ''>('')
-const showCreateMarker = ref(false)
-const newMarkerKind = ref<'location' | 'feature' | 'marker'>('location')
-const newMarkerForm = ref({ name: '', type: 'other', description: '' })
-const hexMarkersList = ref<HexMarker[]>([])
-const showCreateHexMarker = ref(false)
-const newHexMarkerForm = ref({ name: '', type: 'clue' as MarkerType, description: '', isPrivate: false })
+const newMarkerKind = ref<'location' | 'feature' | 'pin'>('location')
+const newMarkerForm = ref({ name: '', type: 'other', description: '', isPrivate: false })
 
 const { locationTypes: locationTypeOptions, featureTypes: featureTypeOptions, pinTypes: pinTypeOptions } = useTypeConfig()
 
@@ -138,24 +138,53 @@ const visibleHexMarkers = computed(() => {
   })
 })
 
-async function createHexMarker() {
-  if (!newHexMarkerForm.value.name.trim() || !hexKey.value) return
+function openMarkerModal() {
+  showMarkerModal.value = true
+  markerModalTab.value = 'existing'
+  poiSearch.value = ''
+  poiLocationFilter.value = ''
+  newMarkerKind.value = 'location'
+  newMarkerForm.value = { name: '', type: 'other', description: '', isPrivate: false }
+  loadAllPois()
+}
+
+async function createNewMarker() {
+  if (!newMarkerForm.value.name.trim() || !hexKey.value) return
   try {
-    const data = {
-      name: newHexMarkerForm.value.name.trim(),
-      type: newHexMarkerForm.value.type,
-      description: newHexMarkerForm.value.description.trim(),
-      hexKey: hexKey.value,
-      isPrivate: newHexMarkerForm.value.isPrivate,
-      tags: [],
-      createdBy: auth.firebaseUser?.uid || null,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
+    if (newMarkerKind.value === 'pin') {
+      const data = {
+        name: newMarkerForm.value.name.trim(),
+        type: newMarkerForm.value.type || 'clue',
+        description: newMarkerForm.value.description.trim(),
+        hexKey: hexKey.value,
+        isPrivate: newMarkerForm.value.isPrivate,
+        tags: [],
+        createdBy: auth.firebaseUser?.uid || null,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      }
+      const docRef = await addDoc(collection(db, 'markers'), data)
+      hexMarkersList.value.push({ id: docRef.id, ...data } as unknown as HexMarker)
+    } else {
+      const data = {
+        name: newMarkerForm.value.name.trim(),
+        type: newMarkerForm.value.type,
+        description: newMarkerForm.value.description.trim(),
+        hexKey: hexKey.value,
+        tags: [],
+        discoveredBy: auth.firebaseUser?.uid || null,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      }
+      const collName = newMarkerKind.value === 'location' ? 'locations' : 'features'
+      const docRef = await addDoc(collection(db, collName), data)
+      if (newMarkerKind.value === 'location') {
+        hexLocations.value.push({ id: docRef.id, ...data })
+      } else {
+        hexFeatures.value.push({ id: docRef.id, ...data })
+      }
     }
-    const docRef = await addDoc(collection(db, 'markers'), data)
-    hexMarkersList.value.push({ id: docRef.id, ...data } as unknown as HexMarker)
-    newHexMarkerForm.value = { name: '', type: 'clue', description: '', isPrivate: false }
-    showCreateHexMarker.value = false
+    showMarkerModal.value = false
     emit('markers-changed')
   } catch (e) {
     console.error('Failed to create marker:', e)
@@ -228,12 +257,6 @@ async function loadAllPois() {
   }
 }
 
-function openAddPoi() {
-  showAddPoi.value = true
-  poiSearch.value = ''
-  poiLocationFilter.value = ''
-  loadAllPois()
-}
 
 function poiLocationOptions() {
   // Unique locations that have features (for the filter dropdown)
@@ -306,36 +329,6 @@ async function unassignPoi(poi: any, kind: 'location' | 'feature') {
   }
 }
 
-// Legacy createLocation/createFeature replaced by unified createMarker
-
-async function createMarker() {
-  if (!newMarkerForm.value.name.trim() || !hexKey.value) return
-  try {
-    const data = {
-      name: newMarkerForm.value.name.trim(),
-      type: newMarkerForm.value.type,
-      description: newMarkerForm.value.description.trim(),
-      hexKey: hexKey.value,
-      tags: [],
-      discoveredBy: auth.firebaseUser?.uid || null,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    }
-    const collName = newMarkerKind.value === 'location' ? 'locations' : 'features'
-    const docRef = await addDoc(collection(db, collName), data)
-    if (newMarkerKind.value === 'location') {
-      hexLocations.value.push({ id: docRef.id, ...data })
-    } else {
-      hexFeatures.value.push({ id: docRef.id, ...data })
-    }
-    newMarkerForm.value = { name: '', type: 'other', description: '' }
-    showCreateMarker.value = false
-    emit('markers-changed')
-  } catch (e) {
-    console.error('Failed to create marker:', e)
-    alert('Failed to create marker.')
-  }
-}
 
 </script>
 
@@ -362,15 +355,11 @@ async function createMarker() {
         </div>
       </div>
 
-      <!-- Locations in this hex -->
+      <!-- Markers in this hex -->
       <div v-if="visibleHexLocations.length > 0 || visibleHexFeatures.length > 0 || visibleHexMarkers.length > 0 || auth.isAuthenticated">
         <div class="flex items-center justify-between mb-2">
           <h4 class="label">Markers</h4>
-          <div v-if="auth.isAuthenticated" class="flex gap-2">
-            <button @click="openAddPoi(); showCreateMarker = false; showCreateHexMarker = false" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Existing</button>
-            <button @click="showCreateMarker = !showCreateMarker; showAddPoi = false; showCreateHexMarker = false" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ POI</button>
-            <button @click="showCreateHexMarker = !showCreateHexMarker; showAddPoi = false; showCreateMarker = false" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Pin</button>
-          </div>
+          <button v-if="auth.isAuthenticated" @click="openMarkerModal" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Marker</button>
         </div>
         <div class="space-y-1.5">
           <div v-for="loc in visibleHexLocations" :key="loc.id" :class="['card-flat p-2.5 hover:border-white/20 transition-colors flex items-center justify-between', loc.hidden ? 'opacity-50 !border-dashed' : '']">
@@ -414,64 +403,6 @@ async function createMarker() {
             </div>
           </div>
         </div>
-
-        <!-- Create POI form (location/feature) -->
-        <div v-if="showCreateMarker" class="mt-3 card-flat !rounded-lg p-3 space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-zinc-400 font-medium">📌 New POI</span>
-            <button @click="showCreateMarker = false" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">✕</button>
-          </div>
-          <div class="flex gap-1">
-            <button @click="newMarkerKind = 'location'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', newMarkerKind === 'location' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">Location</button>
-            <button @click="newMarkerKind = 'feature'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', newMarkerKind === 'feature' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">Feature</button>
-          </div>
-          <input v-model="newMarkerForm.name" class="input w-full text-sm" placeholder="Name" @keyup.enter="createMarker" />
-          <TypeSelect v-model="newMarkerForm.type" :options="newMarkerKind === 'location' ? locationTypeOptions : featureTypeOptions" input-class="w-full text-sm" />
-          <MentionTextarea v-model="newMarkerForm.description" input-class="text-sm" :rows="2" placeholder="Description (optional)" />
-          <button @click="createMarker" :disabled="!newMarkerForm.name.trim()" class="btn !text-xs !py-1.5 w-full">Create {{ newMarkerKind === 'location' ? 'Location' : 'Feature' }}</button>
-        </div>
-
-        <!-- Create Hex Marker form (clue, battle, etc.) -->
-        <div v-if="showCreateHexMarker" class="mt-3 card-flat !rounded-lg p-3 space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-zinc-400 font-medium">📍 New Pin</span>
-            <button @click="showCreateHexMarker = false" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">✕</button>
-          </div>
-          <input v-model="newHexMarkerForm.name" class="input w-full text-sm" placeholder="Name" @keyup.enter="createHexMarker" />
-          <TypeSelect v-model="newHexMarkerForm.type" :options="pinTypeOptions" input-class="w-full text-sm" />
-          <MentionTextarea v-model="newHexMarkerForm.description" input-class="text-sm" :rows="2" placeholder="Description (optional)" />
-          <label class="flex items-center gap-1.5 text-xs text-zinc-500">
-            <input v-model="newHexMarkerForm.isPrivate" type="checkbox" class="accent-purple-500" />
-            🔒 Private (only you & admins)
-          </label>
-          <button @click="createHexMarker" :disabled="!newHexMarkerForm.name.trim()" class="btn !text-xs !py-1.5 w-full">Create Pin</button>
-        </div>
-
-        <!-- Add POI picker -->
-        <div v-if="showAddPoi" class="mt-3 card-flat !rounded-lg p-3 space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-zinc-400 font-medium">Add existing marker</span>
-            <button @click="showAddPoi = false" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">✕</button>
-          </div>
-          <input v-model="poiSearch" type="text" placeholder="Search locations & features..." class="input w-full text-sm" />
-          <select v-model="poiLocationFilter" class="input w-full text-sm">
-            <option value="">All locations</option>
-            <option v-for="loc in poiLocationOptions()" :key="loc.id" :value="loc.id">{{ loc.name }}</option>
-          </select>
-          <div class="max-h-48 overflow-y-auto space-y-1">
-            <div v-if="filteredPois().length === 0" class="text-zinc-600 text-xs py-2 text-center">No matches</div>
-            <button
-              v-for="poi in filteredPois().slice(0, 20)" :key="poi.id"
-              @click="assignPoiToHex(poi)"
-              class="w-full text-left p-2 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-2"
-            >
-              <img :src="getIconPath(poi.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
-              <span class="text-sm text-zinc-300 truncate flex-1">{{ poi.name }}</span>
-              <span class="text-[0.6rem] text-zinc-600 shrink-0">{{ poi.type }}</span>
-              <span v-if="poi._currentHex" class="text-[0.55rem] text-amber-500/60 shrink-0">@ {{ poi._currentHex }}</span>
-            </button>
-          </div>
-        </div>
       </div>
 
       <!-- DM/Admin Edit Section -->
@@ -513,5 +444,79 @@ async function createMarker() {
       :hex-label="`Hex ${hex.x}, ${hex.y}`"
       @close="showDetailMapViewer = false"
     />
+
+    <!-- Unified Add Marker Modal -->
+    <Teleport to="body">
+      <transition enter-active-class="transition-opacity duration-150" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0">
+        <div v-if="showMarkerModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showMarkerModal = false" />
+          <div class="relative w-full max-w-md bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl z-10 overflow-hidden">
+            <!-- Modal header -->
+            <div class="flex items-center justify-between p-4 pb-3 border-b border-white/[0.06]">
+              <h3 class="text-sm font-semibold text-white" style="font-family: Manrope, sans-serif">📌 Add Marker — Hex {{ hex?.x }}, {{ hex?.y }}</h3>
+              <button @click="showMarkerModal = false" class="text-zinc-500 hover:text-white transition-colors">✕</button>
+            </div>
+
+            <!-- Tabs: Existing / New -->
+            <div class="flex border-b border-white/[0.06]">
+              <button @click="markerModalTab = 'existing'" :class="['flex-1 text-xs py-2.5 transition-colors', markerModalTab === 'existing' ? 'text-[#ef233c] border-b-2 border-[#ef233c]' : 'text-zinc-500 hover:text-zinc-300']">Existing</button>
+              <button @click="markerModalTab = 'new'" :class="['flex-1 text-xs py-2.5 transition-colors', markerModalTab === 'new' ? 'text-[#ef233c] border-b-2 border-[#ef233c]' : 'text-zinc-500 hover:text-zinc-300']">New</button>
+            </div>
+
+            <div class="p-4 space-y-3">
+              <!-- EXISTING TAB -->
+              <template v-if="markerModalTab === 'existing'">
+                <input v-model="poiSearch" type="text" placeholder="Search locations & features..." class="input w-full text-sm" />
+                <select v-model="poiLocationFilter" class="input w-full text-sm">
+                  <option value="">All locations</option>
+                  <option v-for="loc in poiLocationOptions()" :key="loc.id" :value="loc.id">{{ loc.name }}</option>
+                </select>
+                <div class="max-h-64 overflow-y-auto space-y-1">
+                  <div v-if="filteredPois().length === 0" class="text-zinc-600 text-xs py-4 text-center">No matches</div>
+                  <button
+                    v-for="poi in filteredPois().slice(0, 30)" :key="poi.id"
+                    @click="assignPoiToHex(poi); showMarkerModal = false"
+                    class="w-full text-left p-2.5 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-2"
+                  >
+                    <img :src="getIconPath(poi.type || 'other')" class="w-5 h-5 object-contain shrink-0" />
+                    <span class="text-sm text-zinc-300 truncate flex-1">{{ poi.name }}</span>
+                    <span class="text-[0.6rem] text-zinc-600 shrink-0">{{ poi.type }}</span>
+                    <span v-if="poi._currentHex" class="text-[0.55rem] text-amber-500/60 shrink-0">@ {{ poi._currentHex }}</span>
+                  </button>
+                </div>
+              </template>
+
+              <!-- NEW TAB -->
+              <template v-if="markerModalTab === 'new'">
+                <!-- Kind selector -->
+                <div class="flex gap-1">
+                  <button @click="newMarkerKind = 'location'; newMarkerForm.type = 'other'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', newMarkerKind === 'location' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">Location</button>
+                  <button @click="newMarkerKind = 'feature'; newMarkerForm.type = 'other'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', newMarkerKind === 'feature' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">Feature</button>
+                  <button @click="newMarkerKind = 'pin'; newMarkerForm.type = 'clue'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', newMarkerKind === 'pin' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">Pin</button>
+                </div>
+
+                <input v-model="newMarkerForm.name" class="input w-full text-sm" placeholder="Name" @keyup.enter="createNewMarker" />
+                <TypeSelect
+                  v-model="newMarkerForm.type"
+                  :options="newMarkerKind === 'location' ? locationTypeOptions : newMarkerKind === 'feature' ? featureTypeOptions : pinTypeOptions"
+                  input-class="w-full text-sm"
+                />
+                <MentionTextarea v-model="newMarkerForm.description" input-class="text-sm" :rows="2" placeholder="Description (optional)" />
+
+                <!-- Private checkbox (pins only) -->
+                <label v-if="newMarkerKind === 'pin'" class="flex items-center gap-1.5 text-xs text-zinc-500">
+                  <input v-model="newMarkerForm.isPrivate" type="checkbox" class="accent-purple-500" />
+                  🔒 Private (only you & admins)
+                </label>
+
+                <button @click="createNewMarker" :disabled="!newMarkerForm.name.trim()" class="btn !text-xs !py-1.5 w-full">
+                  Create {{ newMarkerKind === 'location' ? 'Location' : newMarkerKind === 'feature' ? 'Feature' : 'Pin' }}
+                </button>
+              </template>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
