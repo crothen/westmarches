@@ -66,7 +66,7 @@ function getVoterNames(mission: Mission): string {
 }
 
 async function toggleVote(mission: Mission) {
-  if (!auth.firebaseUser || !auth.isAuthenticated) return
+  if (!auth.firebaseUser || !auth.isAuthenticated || auth.isGuest) return
   const votes = mission.votes || []
   const already = votes.some(v => v.userId === auth.firebaseUser!.uid)
   let newVotes
@@ -143,7 +143,7 @@ function formatDuration(m: Mission): string {
           <div v-for="mission in unitMissions" :key="mission.id" class="card p-4 relative z-10 flex flex-col">
             <div class="relative z-10 flex items-start gap-3 flex-1">
               <!-- Vote button (left) -->
-              <div v-if="auth.isAuthenticated" class="shrink-0 flex flex-col items-center gap-1.5 pt-1">
+              <div v-if="auth.isAuthenticated && !auth.isGuest" class="shrink-0 flex flex-col items-center gap-1.5 pt-1">
                 <button
                   @click="toggleVote(mission)"
                   :class="['w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all', hasVoted(mission) ? 'bg-[#ef233c] text-white shadow-lg shadow-[#ef233c]/25' : 'bg-white/5 text-zinc-600 hover:bg-white/10 hover:text-zinc-300']"
@@ -175,7 +175,7 @@ function formatDuration(m: Mission): string {
       <div v-for="mission in sortedByVotes" :key="mission.id" class="card p-4 relative z-10 flex flex-col">
         <div class="relative z-10 flex items-start gap-3 flex-1">
           <!-- Vote button (left) -->
-          <div v-if="auth.isAuthenticated" class="shrink-0 flex flex-col items-center gap-1.5 pt-1">
+          <div v-if="auth.isAuthenticated && !auth.isGuest" class="shrink-0 flex flex-col items-center gap-1.5 pt-1">
             <button
               @click="toggleVote(mission)"
               :class="['w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all', hasVoted(mission) ? 'bg-[#ef233c] text-white shadow-lg shadow-[#ef233c]/25' : 'bg-white/5 text-zinc-600 hover:bg-white/10 hover:text-zinc-300']"

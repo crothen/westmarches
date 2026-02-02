@@ -175,7 +175,7 @@ async function deletePortrait() {
               <span class="text-zinc-500 text-lg">{{ npc.race }}</span>
             </div>
             <button
-              v-if="auth.isAuthenticated"
+              v-if="auth.isAuthenticated && !auth.isGuest"
               @click="openEditModal"
               class="btn !text-xs !py-1.5"
             >✏️ Edit</button>

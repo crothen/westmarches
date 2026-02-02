@@ -329,7 +329,7 @@ function formatCommentDate(date: any): string {
                     </div>
                     <p class="text-[0.65rem] text-zinc-500 mt-0.5">{{ comment.content }}</p>
                   </div>
-                  <div v-if="auth.isAuthenticated" class="flex gap-1.5 mt-1">
+                  <div v-if="auth.isAuthenticated && !auth.isGuest" class="flex gap-1.5 mt-1">
                     <input v-model="newCommentContent[entry.id]" type="text" placeholder="Comment..." class="input flex-1 !text-[0.65rem] !py-1 !px-2" @keydown.enter="addComment(entry.id)" />
                     <button @click="addComment(entry.id)" :disabled="!newCommentContent[entry.id]?.trim()" class="btn-action !py-1 !text-[0.6rem]">Send</button>
                   </div>

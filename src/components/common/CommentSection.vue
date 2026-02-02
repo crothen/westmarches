@@ -44,7 +44,7 @@ function submitComment() {
       <p class="text-zinc-300 text-sm">{{ comment.content }}</p>
     </div>
 
-    <div v-if="auth.isAuthenticated" class="mt-4">
+    <div v-if="auth.isAuthenticated && !auth.isGuest" class="mt-4">
       <textarea v-model="newComment" rows="2" placeholder="Add a comment..." class="input w-full text-sm" />
       <div class="flex items-center justify-between mt-2">
         <label class="flex items-center gap-2 text-sm text-zinc-500">

@@ -266,7 +266,7 @@ function formatDate(date: any): string {
     </div>
 
     <!-- Add Note Form -->
-    <div v-if="auth.isAuthenticated" :class="variant === 'full' ? 'card p-4 mt-4 relative z-10' : 'mt-3'">
+    <div v-if="auth.isAuthenticated && !auth.isGuest" :class="variant === 'full' ? 'card p-4 mt-4 relative z-10' : 'mt-3'">
       <div :class="variant === 'full' ? 'relative z-10' : ''">
         <MentionTextarea v-model="newNoteContent" :rows="2" placeholder="Add a note..." input-class="text-sm !p-2" />
         <div class="flex items-center justify-between mt-2">

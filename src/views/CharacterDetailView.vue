@@ -24,7 +24,7 @@ const users = ref<{ uid: string; displayName: string }[]>([])
 const assigningUser = ref(false)
 
 const canEdit = computed(() => {
-  if (!character.value || !auth.firebaseUser) return false
+  if (!character.value || !auth.firebaseUser || auth.isGuest) return false
   return character.value.userId === auth.firebaseUser.uid || auth.isDm || auth.isAdmin
 })
 

@@ -542,7 +542,7 @@ function canDeleteNote(note: SessionNote): boolean {
               </div>
 
               <!-- Reply button / form -->
-              <div v-if="auth.isAuthenticated" class="mt-2">
+              <div v-if="auth.isAuthenticated && !auth.isGuest" class="mt-2">
                 <button v-if="replyingTo !== note.id" @click="replyingTo = note.id" class="text-zinc-600 hover:text-[#ef233c] text-xs transition-colors">Reply</button>
                 <div v-else class="mt-1.5">
                   <textarea v-model="replyContent" rows="2" placeholder="Write a reply..." class="input w-full text-sm" />
@@ -557,7 +557,7 @@ function canDeleteNote(note: SessionNote): boolean {
         </div>
 
         <!-- Add Comment Form -->
-        <div v-if="auth.isAuthenticated" class="card p-4 mt-4 relative z-10">
+        <div v-if="auth.isAuthenticated && !auth.isGuest" class="card p-4 mt-4 relative z-10">
           <div class="relative z-10">
             <textarea v-model="newNoteContent" rows="3" placeholder="Share your thoughts about this session..." class="input w-full text-sm mb-3" />
             <div class="flex items-center justify-end">

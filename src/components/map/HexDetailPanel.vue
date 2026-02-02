@@ -412,7 +412,7 @@ async function unassignPoi(poi: any, kind: 'location' | 'feature') {
       <div v-if="sortedHexItems.length > 0 || auth.isAuthenticated">
         <div class="flex items-center justify-between mb-2">
           <h4 class="label">Markers</h4>
-          <button v-if="auth.isAuthenticated" @click="openMarkerModal" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Marker</button>
+          <button v-if="auth.isAuthenticated && !auth.isGuest" @click="openMarkerModal" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">+ Marker</button>
         </div>
         <div class="space-y-1.5">
           <div

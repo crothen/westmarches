@@ -655,7 +655,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
       <div>
         <div class="flex items-center gap-3 mb-3">
           <h2 class="label">Features & Points of Interest ({{ visibleFeatures.length }})</h2>
-          <button v-if="auth.isAuthenticated" @click="showAddFeature = !showAddFeature" class="btn !text-xs !py-1">
+          <button v-if="auth.isAuthenticated && !auth.isGuest" @click="showAddFeature = !showAddFeature" class="btn !text-xs !py-1">
             {{ showAddFeature ? 'Cancel' : '+ Add Feature' }}
           </button>
         </div>
@@ -700,7 +700,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
                   <button v-if="feat.mapPosition" @click.stop="removeFeatureFromMap(feat)" class="text-zinc-600 hover:text-zinc-400 text-[0.6rem] transition-colors" title="Remove from map">📍✕</button>
                   <span class="flex-1"></span>
                   <button v-if="auth.isDm || auth.isAdmin" @click.stop="toggleFeatureHidden(feat)" :class="['text-sm transition-colors', feat.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-amber-400']" :title="feat.hidden ? 'Show to players' : 'Hide from players'">{{ feat.hidden ? '🚫' : '👁️' }}</button>
-                  <button v-if="auth.isAuthenticated" @click.stop="startEditFeature(feat)" class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors">✏️</button>
+                  <button v-if="auth.isAuthenticated && !auth.isGuest" @click.stop="startEditFeature(feat)" class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors">✏️</button>
                   <button v-if="auth.isDm || auth.isAdmin" @click.stop="deleteFeature(feat)" class="text-zinc-600 hover:text-red-400 text-sm transition-colors">🗑️</button>
                 </div>
               </div>

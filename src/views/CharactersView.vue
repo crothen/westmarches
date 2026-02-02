@@ -76,7 +76,7 @@ async function createCharacter() {
   <div>
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">🧙 Characters</h1>
-      <button v-if="auth.isAuthenticated" @click="showCreate = !showCreate" class="btn text-sm">
+      <button v-if="auth.isAuthenticated && !auth.isGuest" @click="showCreate = !showCreate" class="btn text-sm">
         {{ showCreate ? 'Cancel' : '+ New Character' }}
       </button>
     </div>
