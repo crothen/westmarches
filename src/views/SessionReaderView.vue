@@ -382,7 +382,7 @@ onUnmounted(() => {
             <div v-if="sketchCache[currentEntry.id] || currentEntry.imageUrl" class="flex justify-center pt-6 px-4">
               <img
                 :src="sketchCache[currentEntry.id] || currentEntry.imageUrl"
-                class="w-[90%] object-contain sketch-fade"
+                class="w-[65%] object-contain sketch-fade"
                 :style="sketchCache[currentEntry.id] ? '' : 'filter: grayscale(1) contrast(1.5)'"
               />
             </div>
