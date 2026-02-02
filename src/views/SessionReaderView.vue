@@ -318,7 +318,7 @@ onUnmounted(() => {
           <div v-if="currentPage === 0" class="relative h-full flex flex-col overflow-y-auto">
             <!-- Title at top -->
             <div class="px-10 sm:px-14 pt-8 pb-2" :style="{ fontFamily: currentFontFamily }">
-              <h1 class="text-5xl sm:text-6xl text-amber-950 leading-tight" :style="{ fontFamily: currentFontFamily }">
+              <h1 class="text-7xl sm:text-8xl font-bold text-amber-950 leading-tight" :style="{ fontFamily: currentFontFamily }">
                 {{ session.title }}
               </h1>
             </div>
