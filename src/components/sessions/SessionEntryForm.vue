@@ -458,8 +458,9 @@ function getFeatureName(id: string): string {
             📁 Upload
             <input type="file" accept="image/*" class="hidden" @change="handleImageUpload" />
           </label>
-          <button type="button" @click="suggestPrompt" class="btn-action" :disabled="suggestingPrompt || genLoading">
-            {{ suggestingPrompt ? '✨ Thinking...' : '✨ Suggest Prompt' }}
+          <button type="button" @click="suggestPrompt" class="btn-action inline-flex items-center gap-1.5" :disabled="suggestingPrompt || genLoading">
+            <svg v-if="suggestingPrompt" class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            {{ suggestingPrompt ? 'Suggesting...' : '✨ Suggest Prompt' }}
           </button>
           <button type="button" @click="showImagePrompt = !showImagePrompt" class="btn-action" :disabled="genLoading">
             ✏️ Custom Prompt
@@ -469,11 +470,13 @@ function getFeatureName(id: string): string {
         <div v-if="showImagePrompt" class="space-y-2">
           <textarea v-model="imagePrompt" rows="4" class="input w-full text-sm" :placeholder="`Fantasy illustration: ${title}...`" />
           <div class="flex gap-2">
-            <button type="button" @click="generateEntryImage" :disabled="genLoading || !imagePrompt.trim()" class="btn !text-xs !py-1.5">
-              {{ genLoading ? '🎨 Generating...' : '🎨 Generate Image' }}
+            <button type="button" @click="generateEntryImage" :disabled="genLoading || !imagePrompt.trim()" class="btn !text-xs !py-1.5 inline-flex items-center gap-1.5">
+              <svg v-if="genLoading" class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              {{ genLoading ? 'Generating...' : '🎨 Generate Image' }}
             </button>
-            <button type="button" @click="suggestPrompt" :disabled="suggestingPrompt" class="btn-action">
-              {{ suggestingPrompt ? '✨ Thinking...' : '✨ Re-suggest' }}
+            <button type="button" @click="suggestPrompt" :disabled="suggestingPrompt" class="btn-action inline-flex items-center gap-1.5">
+              <svg v-if="suggestingPrompt" class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              {{ suggestingPrompt ? 'Suggesting...' : '✨ Re-suggest' }}
             </button>
             <button type="button" @click="showImagePrompt = false; imagePrompt = ''" class="btn-action">Cancel</button>
           </div>
