@@ -51,12 +51,8 @@ const locations = ref<CampaignLocation[]>([])
 const features = ref<LocationFeature[]>([])
 const characters = ref<Character[]>([])
 
-// Collapsible sections
-const showOptional = ref(false)
+// Participant custom selection toggle
 const showParticipants = ref(false)
-const showNpcs = ref(false)
-const showLinks = ref(false)
-const showImage = ref(false)
 
 // Search
 const npcSearch = ref('')
@@ -78,13 +74,6 @@ watch(() => props.entry, (e) => {
     linkedLocationIds.value = [...(e.linkedLocationIds || [])]
     linkedFeatureIds.value = [...(e.linkedFeatureIds || [])]
     imageUrl.value = e.imageUrl || null
-    // Open optional sections if they have data
-    if (e.npcIds?.length || e.linkedLocationIds?.length || e.linkedFeatureIds?.length || e.imageUrl) {
-      showOptional.value = true
-    }
-    if (e.npcIds?.length) showNpcs.value = true
-    if (e.linkedLocationIds?.length || e.linkedFeatureIds?.length) showLinks.value = true
-    if (e.imageUrl) showImage.value = true
     if (!e.allParticipantsPresent && e.presentParticipants?.length) showParticipants.value = true
   }
 }, { immediate: true })
@@ -320,152 +309,134 @@ function getFeatureName(id: string): string {
       </div>
     </div>
 
-    <!-- Optional sections toggle -->
-    <button
-      type="button"
-      @click="showOptional = !showOptional"
-      class="text-xs text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1.5"
-    >
-      <span>{{ showOptional ? '▾' : '▸' }}</span>
-      <span>{{ showOptional ? 'Hide' : 'Show' }} optional fields</span>
-      <span class="text-zinc-600">(NPCs, locations, image)</span>
-    </button>
-
-    <template v-if="showOptional">
-      <!-- NPCs -->
-      <div>
-        <button type="button" @click="showNpcs = !showNpcs" class="flex items-center gap-2 w-full text-left">
-          <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">👤 NPCs involved</span>
-          <span class="text-xs text-zinc-600">({{ selectedNpcIds.length }})</span>
-          <span class="text-zinc-600 text-xs ml-auto">{{ showNpcs ? '▾' : '▸' }}</span>
+    <!-- NPCs -->
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">👤 NPCs involved</span>
+        <span class="text-xs text-zinc-600">({{ selectedNpcIds.length }})</span>
+      </div>
+      <!-- Selected chips -->
+      <div v-if="selectedNpcIds.length" class="flex flex-wrap gap-1.5 mb-2">
+        <span v-for="id in selectedNpcIds" :key="id" class="inline-flex items-center gap-1 text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/20">
+          {{ getNpcName(id) }}
+          <button type="button" @click="toggleNpc(id)" class="hover:text-red-400 ml-0.5">✕</button>
+        </span>
+      </div>
+      <input v-model="npcSearch" type="text" placeholder="Search NPCs..." class="input w-full text-sm mb-2" />
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1 max-h-32 overflow-y-auto">
+        <button
+          v-for="npc in filteredNpcs" :key="npc.id"
+          @click="toggleNpc(npc.id)"
+          type="button"
+          :class="[
+            'flex items-center gap-1.5 px-2 py-1 rounded text-xs text-left transition-all border',
+            isNpcSelected(npc.id)
+              ? 'bg-[#ef233c]/10 border-[#ef233c]/30 text-zinc-100'
+              : 'bg-white/[0.02] border-white/[0.06] text-zinc-400 hover:border-white/10'
+          ]"
+        >
+          <span :class="isNpcSelected(npc.id) ? 'text-[#ef233c]' : 'text-zinc-600'">{{ isNpcSelected(npc.id) ? '✓' : '○' }}</span>
+          <span class="truncate">{{ npc.name }}</span>
         </button>
-        <div v-if="showNpcs" class="mt-2">
-          <!-- Selected chips -->
-          <div v-if="selectedNpcIds.length" class="flex flex-wrap gap-1.5 mb-2">
-            <span v-for="id in selectedNpcIds" :key="id" class="inline-flex items-center gap-1 text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/20">
-              {{ getNpcName(id) }}
-              <button type="button" @click="toggleNpc(id)" class="hover:text-red-400 ml-0.5">✕</button>
-            </span>
-          </div>
-          <input v-model="npcSearch" type="text" placeholder="Search NPCs..." class="input w-full text-sm mb-2" />
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1 max-h-32 overflow-y-auto">
+      </div>
+    </div>
+
+    <!-- Linked locations / features -->
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">📍 Linked locations & features</span>
+        <span class="text-xs text-zinc-600">({{ linkedLocationIds.length + linkedFeatureIds.length }})</span>
+      </div>
+      <div class="space-y-3">
+        <!-- Selected chips -->
+        <div v-if="linkedLocationIds.length || linkedFeatureIds.length" class="flex flex-wrap gap-1.5 mb-2">
+          <span v-for="id in linkedLocationIds" :key="'loc-'+id" class="inline-flex items-center gap-1 text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-md border border-blue-500/20">
+            🏰 {{ getLocationName(id) }}
+            <button type="button" @click="toggleLocation(id)" class="hover:text-red-400 ml-0.5">✕</button>
+          </span>
+          <span v-for="id in linkedFeatureIds" :key="'feat-'+id" class="inline-flex items-center gap-1 text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-md border border-green-500/20">
+            📌 {{ getFeatureName(id) }}
+            <button type="button" @click="toggleFeature(id)" class="hover:text-red-400 ml-0.5">✕</button>
+          </span>
+        </div>
+        <!-- Locations -->
+        <div>
+          <label class="text-xs text-zinc-600 mb-1 block">Locations</label>
+          <input v-model="locationSearch" type="text" placeholder="Search locations..." class="input w-full text-sm mb-1.5" />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-28 overflow-y-auto">
             <button
-              v-for="npc in filteredNpcs" :key="npc.id"
-              @click="toggleNpc(npc.id)"
+              v-for="loc in filteredLocations" :key="loc.id"
+              @click="toggleLocation(loc.id)"
               type="button"
               :class="[
                 'flex items-center gap-1.5 px-2 py-1 rounded text-xs text-left transition-all border',
-                isNpcSelected(npc.id)
-                  ? 'bg-[#ef233c]/10 border-[#ef233c]/30 text-zinc-100'
+                isLocationSelected(loc.id)
+                  ? 'bg-blue-500/10 border-blue-500/30 text-zinc-100'
                   : 'bg-white/[0.02] border-white/[0.06] text-zinc-400 hover:border-white/10'
               ]"
             >
-              <span :class="isNpcSelected(npc.id) ? 'text-[#ef233c]' : 'text-zinc-600'">{{ isNpcSelected(npc.id) ? '✓' : '○' }}</span>
-              <span class="truncate">{{ npc.name }}</span>
+              <span>{{ isLocationSelected(loc.id) ? '✓' : '○' }}</span>
+              <span class="truncate">{{ loc.name }}</span>
+            </button>
+          </div>
+        </div>
+        <!-- Features -->
+        <div>
+          <label class="text-xs text-zinc-600 mb-1 block">Features / POIs</label>
+          <input v-model="featureSearch" type="text" placeholder="Search features..." class="input w-full text-sm mb-1.5" />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-28 overflow-y-auto">
+            <button
+              v-for="feat in filteredFeatures" :key="feat.id"
+              @click="toggleFeature(feat.id)"
+              type="button"
+              :class="[
+                'flex items-center gap-1.5 px-2 py-1 rounded text-xs text-left transition-all border',
+                isFeatureSelected(feat.id)
+                  ? 'bg-green-500/10 border-green-500/30 text-zinc-100'
+                  : 'bg-white/[0.02] border-white/[0.06] text-zinc-400 hover:border-white/10'
+              ]"
+            >
+              <span>{{ isFeatureSelected(feat.id) ? '✓' : '○' }}</span>
+              <span class="truncate">{{ feat.name }}</span>
             </button>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Linked locations / features -->
-      <div>
-        <button type="button" @click="showLinks = !showLinks" class="flex items-center gap-2 w-full text-left">
-          <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">📍 Linked locations & features</span>
-          <span class="text-xs text-zinc-600">({{ linkedLocationIds.length + linkedFeatureIds.length }})</span>
-          <span class="text-zinc-600 text-xs ml-auto">{{ showLinks ? '▾' : '▸' }}</span>
-        </button>
-        <div v-if="showLinks" class="mt-2 space-y-3">
-          <!-- Selected chips -->
-          <div v-if="linkedLocationIds.length || linkedFeatureIds.length" class="flex flex-wrap gap-1.5 mb-2">
-            <span v-for="id in linkedLocationIds" :key="'loc-'+id" class="inline-flex items-center gap-1 text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-md border border-blue-500/20">
-              🏰 {{ getLocationName(id) }}
-              <button type="button" @click="toggleLocation(id)" class="hover:text-red-400 ml-0.5">✕</button>
-            </span>
-            <span v-for="id in linkedFeatureIds" :key="'feat-'+id" class="inline-flex items-center gap-1 text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-md border border-green-500/20">
-              📌 {{ getFeatureName(id) }}
-              <button type="button" @click="toggleFeature(id)" class="hover:text-red-400 ml-0.5">✕</button>
-            </span>
-          </div>
-          <!-- Locations -->
-          <div>
-            <label class="text-xs text-zinc-600 mb-1 block">Locations</label>
-            <input v-model="locationSearch" type="text" placeholder="Search locations..." class="input w-full text-sm mb-1.5" />
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-28 overflow-y-auto">
-              <button
-                v-for="loc in filteredLocations" :key="loc.id"
-                @click="toggleLocation(loc.id)"
-                type="button"
-                :class="[
-                  'flex items-center gap-1.5 px-2 py-1 rounded text-xs text-left transition-all border',
-                  isLocationSelected(loc.id)
-                    ? 'bg-blue-500/10 border-blue-500/30 text-zinc-100'
-                    : 'bg-white/[0.02] border-white/[0.06] text-zinc-400 hover:border-white/10'
-                ]"
-              >
-                <span>{{ isLocationSelected(loc.id) ? '✓' : '○' }}</span>
-                <span class="truncate">{{ loc.name }}</span>
-              </button>
-            </div>
-          </div>
-          <!-- Features -->
-          <div>
-            <label class="text-xs text-zinc-600 mb-1 block">Features / POIs</label>
-            <input v-model="featureSearch" type="text" placeholder="Search features..." class="input w-full text-sm mb-1.5" />
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-28 overflow-y-auto">
-              <button
-                v-for="feat in filteredFeatures" :key="feat.id"
-                @click="toggleFeature(feat.id)"
-                type="button"
-                :class="[
-                  'flex items-center gap-1.5 px-2 py-1 rounded text-xs text-left transition-all border',
-                  isFeatureSelected(feat.id)
-                    ? 'bg-green-500/10 border-green-500/30 text-zinc-100'
-                    : 'bg-white/[0.02] border-white/[0.06] text-zinc-400 hover:border-white/10'
-                ]"
-              >
-                <span>{{ isFeatureSelected(feat.id) ? '✓' : '○' }}</span>
-                <span class="truncate">{{ feat.name }}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+    <!-- Image -->
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">🎨 Image</span>
+        <span v-if="imageUrl" class="text-xs text-green-400">✓ Added</span>
       </div>
-
-      <!-- Image -->
-      <div>
-        <button type="button" @click="showImage = !showImage" class="flex items-center gap-2 w-full text-left">
-          <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">🎨 Image</span>
-          <span v-if="imageUrl" class="text-xs text-green-400">✓ Added</span>
-          <span class="text-zinc-600 text-xs ml-auto">{{ showImage ? '▾' : '▸' }}</span>
-        </button>
-        <div v-if="showImage" class="mt-2 space-y-2">
-          <div v-if="imageUrl" class="relative group">
-            <img :src="imageUrl" class="w-full max-h-48 object-cover rounded-lg border border-white/10" />
-            <button type="button" @click="removeImage" class="absolute top-2 right-2 bg-black/70 text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded-lg border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">✕ Remove</button>
-          </div>
-          <div class="flex gap-2 flex-wrap">
-            <label class="btn-action cursor-pointer">
-              📁 Upload
-              <input type="file" accept="image/*" class="hidden" @change="handleImageUpload" />
-            </label>
-            <button type="button" @click="showImagePrompt = !showImagePrompt" class="btn-action" :disabled="genLoading">
-              {{ genLoading ? '🎨 Generating...' : '🎨 Generate' }}
+      <div class="space-y-2">
+        <div v-if="imageUrl" class="relative group">
+          <img :src="imageUrl" class="w-full max-h-48 object-cover rounded-lg border border-white/10" />
+          <button type="button" @click="removeImage" class="absolute top-2 right-2 bg-black/70 text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded-lg border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">✕ Remove</button>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <label class="btn-action cursor-pointer">
+            📁 Upload
+            <input type="file" accept="image/*" class="hidden" @change="handleImageUpload" />
+          </label>
+          <button type="button" @click="showImagePrompt = !showImagePrompt" class="btn-action" :disabled="genLoading">
+            {{ genLoading ? '🎨 Generating...' : '🎨 Generate' }}
+          </button>
+        </div>
+        <div v-if="uploadingImage" class="text-xs text-zinc-500 animate-pulse">Uploading...</div>
+        <div v-if="showImagePrompt" class="space-y-2">
+          <textarea v-model="imagePrompt" rows="3" class="input w-full text-sm" :placeholder="`Fantasy illustration: ${title}...`" />
+          <div class="flex gap-2">
+            <button type="button" @click="generateEntryImage" :disabled="genLoading" class="btn !text-xs !py-1.5">
+              {{ genLoading ? 'Generating...' : 'Generate' }}
             </button>
+            <button type="button" @click="showImagePrompt = false" class="btn-action">Cancel</button>
           </div>
-          <div v-if="uploadingImage" class="text-xs text-zinc-500 animate-pulse">Uploading...</div>
-          <div v-if="showImagePrompt" class="space-y-2">
-            <textarea v-model="imagePrompt" rows="3" class="input w-full text-sm" :placeholder="`Fantasy illustration: ${title}...`" />
-            <div class="flex gap-2">
-              <button type="button" @click="generateEntryImage" :disabled="genLoading" class="btn !text-xs !py-1.5">
-                {{ genLoading ? 'Generating...' : 'Generate' }}
-              </button>
-              <button type="button" @click="showImagePrompt = false" class="btn-action">Cancel</button>
-            </div>
-          </div>
-          <div v-if="genError" class="text-red-400 text-xs">{{ genError }}</div>
         </div>
+        <div v-if="genError" class="text-red-400 text-xs">{{ genError }}</div>
       </div>
-    </template>
+    </div>
 
     <!-- Actions -->
     <div class="flex items-center justify-end gap-3 pt-3 border-t border-white/[0.06]">

@@ -19,8 +19,8 @@ const locations = ref<CampaignLocation[]>([])
 const features = ref<LocationFeature[]>([])
 
 // UI state
-const showAddForm = ref(false)
-const editingEntryId = ref<string | null>(null)
+const showEntryModal = ref(false)
+const editingEntry = ref<SessionEntry | null>(null)
 const expandedComments = ref<Set<string>>(new Set())
 const newCommentContent = ref<Record<string, string>>({})
 
@@ -73,26 +73,42 @@ function getNpcName(id: string): string { return npcs.value.find(n => n.id === i
 function getLocationName(id: string): string { return locations.value.find(l => l.id === id)?.name || id }
 function getFeatureName(id: string): string { return features.value.find(f => f.id === id)?.name || id }
 
-async function addEntry(data: Partial<SessionEntry>) {
-  const maxOrder = entries.value.length > 0 ? Math.max(...entries.value.map(e => e.order)) : 0
-  await addDoc(collection(db, 'sessionEntries'), {
-    ...data,
-    sessionId: props.sessionId,
-    order: maxOrder + 1,
-    comments: [],
-    createdBy: auth.firebaseUser?.uid,
-    createdAt: Timestamp.now(),
-    updatedAt: Timestamp.now(),
-  })
-  showAddForm.value = false
+function openAddModal() {
+  editingEntry.value = null
+  showEntryModal.value = true
 }
 
-async function updateEntry(entryId: string, data: Partial<SessionEntry>) {
-  await updateDoc(doc(db, 'sessionEntries', entryId), {
-    ...data,
-    updatedAt: Timestamp.now(),
-  })
-  editingEntryId.value = null
+function openEditModal(entry: SessionEntry) {
+  editingEntry.value = entry
+  showEntryModal.value = true
+}
+
+function closeModal() {
+  showEntryModal.value = false
+  editingEntry.value = null
+}
+
+async function handleModalSubmit(data: Partial<SessionEntry>) {
+  if (editingEntry.value) {
+    // Update existing
+    await updateDoc(doc(db, 'sessionEntries', editingEntry.value.id), {
+      ...data,
+      updatedAt: Timestamp.now(),
+    })
+  } else {
+    // Add new
+    const maxOrder = entries.value.length > 0 ? Math.max(...entries.value.map(e => e.order)) : 0
+    await addDoc(collection(db, 'sessionEntries'), {
+      ...data,
+      sessionId: props.sessionId,
+      order: maxOrder + 1,
+      comments: [],
+      createdBy: auth.firebaseUser?.uid,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    })
+  }
+  closeModal()
 }
 
 async function deleteEntry(entryId: string) {
@@ -172,19 +188,19 @@ function formatCommentDate(date: any): string {
   <div class="mt-8 border-t border-white/[0.06] pt-6">
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">⏳ Session Timeline</h2>
-      <button v-if="canEdit && !showAddForm" @click="showAddForm = true" class="btn !text-xs !py-1.5 !px-3">
+      <button v-if="canEdit" @click="openAddModal" class="btn !text-xs !py-1.5 !px-3">
         + Add Entry
       </button>
     </div>
 
     <!-- Empty state -->
-    <div v-if="entries.length === 0 && !showAddForm" class="text-zinc-600 text-sm py-8 text-center">
+    <div v-if="entries.length === 0" class="text-zinc-600 text-sm py-8 text-center">
       No timeline entries yet.
       <span v-if="canEdit"> Click "Add Entry" to begin documenting this session.</span>
     </div>
 
     <!-- Timeline -->
-    <div v-if="entries.length > 0 || showAddForm" class="relative pl-6 ml-2">
+    <div v-if="entries.length > 0" class="relative pl-6 ml-2">
       <!-- Vertical line -->
       <div class="absolute left-0 top-0 bottom-0 w-px bg-zinc-800" />
 
@@ -203,18 +219,8 @@ function formatCommentDate(date: any): string {
           }"
         />
 
-        <!-- Edit form -->
-        <SessionEntryForm
-          v-if="editingEntryId === entry.id"
-          :entry="entry"
-          :session-participants="sessionParticipants"
-          :entry-id="entry.id"
-          @submit="(data) => updateEntry(entry.id, data)"
-          @cancel="editingEntryId = null"
-        />
-
         <!-- Entry card -->
-        <div v-else :class="['card-flat border-l-4 overflow-visible', entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700']">
+        <div :class="['card-flat border-l-4 overflow-visible', entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700']">
           <!-- Header -->
           <div class="px-4 pt-3 pb-2 flex items-start justify-between gap-2">
             <div class="flex items-center gap-2 flex-wrap min-w-0">
@@ -237,7 +243,7 @@ function formatCommentDate(date: any): string {
                 title="Move down"
               >↓</button>
               <button
-                @click="editingEntryId = entry.id"
+                @click="openEditModal(entry)"
                 class="text-zinc-600 hover:text-[#ef233c] text-xs p-1 transition-colors"
                 title="Edit"
               >✏️</button>
@@ -333,24 +339,42 @@ function formatCommentDate(date: any): string {
         </div>
       </div>
 
-      <!-- Add Entry form at end -->
-      <div v-if="showAddForm" class="relative mb-5">
-        <!-- Timeline dot -->
-        <div class="absolute -left-6 top-4 w-3 h-3 rounded-full border-2 border-[#ef233c] bg-[#ef233c]/20 z-10" />
-
-        <SessionEntryForm
-          :session-participants="sessionParticipants"
-          @submit="addEntry"
-          @cancel="showAddForm = false"
-        />
-      </div>
     </div>
 
     <!-- Add button at bottom if entries exist -->
-    <div v-if="canEdit && entries.length > 0 && !showAddForm" class="mt-2 ml-8">
-      <button @click="showAddForm = true" class="btn-action">
+    <div v-if="canEdit && entries.length > 0" class="mt-2 ml-8">
+      <button @click="openAddModal" class="btn-action">
         + Add another entry
       </button>
     </div>
+
+    <!-- Entry Modal -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0" enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-150"
+        leave-from-class="opacity-100" leave-to-class="opacity-0"
+      >
+        <div v-if="showEntryModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="closeModal" />
+          <div class="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-6 z-10">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold text-white" style="font-family: Manrope, sans-serif">
+                {{ editingEntry ? '✏️ Edit Entry' : '➕ New Timeline Entry' }}
+              </h3>
+              <button @click="closeModal" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+            </div>
+            <SessionEntryForm
+              :entry="editingEntry"
+              :session-participants="sessionParticipants"
+              :entry-id="editingEntry?.id"
+              @submit="handleModalSubmit"
+              @cancel="closeModal"
+            />
+          </div>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
