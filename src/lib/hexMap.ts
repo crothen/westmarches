@@ -165,51 +165,50 @@ export class HexMap {
 
   /**
    * Preload PNG icon images for hex map indicators.
+   * Accepts optional markerTypesConfig from Firestore with Storage URLs.
    */
-  loadIconImages(): void {
-    const iconPaths: Record<string, string> = {
-      // Location types
-      city: '/icons/locations/city.png',
-      town: '/icons/locations/town.png',
-      village: '/icons/locations/village.png',
-      castle: '/icons/locations/castle.png',
-      fortress: '/icons/locations/fortress.png',
-      monastery: '/icons/locations/monastery.png',
-      camp: '/icons/locations/camp.png',
-      ruins: '/icons/locations/ruins.png',
-      other: '/icons/locations/other.png',
-      // Marker types
-      clue: '/icons/markers/clue.png',
-      battle: '/icons/markers/battle.png',
-      danger: '/icons/markers/danger.png',
-      puzzle: '/icons/markers/puzzle.png',
-      mystery: '/icons/markers/mystery.png',
-      waypoint: '/icons/markers/waypoint.png',
-      quest: '/icons/markers/quest.png',
-      locked: '/icons/markers/locked.png',
-      unlocked: '/icons/markers/unlocked.png',
-      // Feature types (prefixed with f: to avoid collision with location types)
-      'f:barracks': '/icons/features/barracks.png',
-      'f:blacksmith': '/icons/features/blacksmith.png',
-      'f:cave': '/icons/features/cave.png',
-      'f:dock': '/icons/features/dock.png',
-      'f:gate': '/icons/features/gate.png',
-      'f:guild': '/icons/features/guild.png',
-      'f:inn': '/icons/features/inn.png',
-      'f:library': '/icons/features/library.png',
-      'f:market': '/icons/features/market.png',
-      'f:shop': '/icons/features/shop.png',
-      'f:shrine': '/icons/features/shrine.png',
-      'f:tavern': '/icons/features/tavern.png',
-      'f:temple': '/icons/features/temple.png',
-      'f:tower': '/icons/features/tower.png',
-      'f:warehouse': '/icons/features/warehouse.png',
-      'f:other': '/icons/features/other.png',
-      feature: '/icons/features/other.png',
+  loadIconImages(markerTypesConfig?: {
+    locationTypes?: Record<string, { iconUrl: string }>
+    featureTypes?: Record<string, { iconUrl: string }>
+    hexMarkerTypes?: Record<string, { iconUrl: string }>
+  }): void {
+    const iconPaths: Record<string, string> = {}
+
+    if (markerTypesConfig) {
+      // Use Firestore config (Storage URLs)
+      for (const [key, entry] of Object.entries(markerTypesConfig.locationTypes || {})) {
+        if (entry.iconUrl) iconPaths[key] = entry.iconUrl
+      }
+      for (const [key, entry] of Object.entries(markerTypesConfig.featureTypes || {})) {
+        if (entry.iconUrl) iconPaths[`f:${key}`] = entry.iconUrl
+      }
+      // Also keep un-prefixed feature key as fallback
+      if (markerTypesConfig.featureTypes?.['other']?.iconUrl) {
+        iconPaths['feature'] = markerTypesConfig.featureTypes['other'].iconUrl
+      }
+      for (const [key, entry] of Object.entries(markerTypesConfig.hexMarkerTypes || {})) {
+        if (entry.iconUrl) iconPaths[key] = entry.iconUrl
+      }
+    } else {
+      // Fallback to hardcoded local paths
+      Object.assign(iconPaths, {
+        city: '/icons/locations/city.png', town: '/icons/locations/town.png',
+        village: '/icons/locations/village.png', castle: '/icons/locations/castle.png',
+        fortress: '/icons/locations/fortress.png', monastery: '/icons/locations/monastery.png',
+        camp: '/icons/locations/camp.png', ruins: '/icons/locations/ruins.png',
+        other: '/icons/locations/other.png',
+        clue: '/icons/markers/clue.png', battle: '/icons/markers/battle.png',
+        danger: '/icons/markers/danger.png', puzzle: '/icons/markers/puzzle.png',
+        mystery: '/icons/markers/mystery.png', waypoint: '/icons/markers/waypoint.png',
+        quest: '/icons/markers/quest.png', locked: '/icons/markers/locked.png',
+        unlocked: '/icons/markers/unlocked.png',
+        feature: '/icons/features/other.png',
+      })
     }
 
     for (const [key, path] of Object.entries(iconPaths)) {
       const img = new Image()
+      img.crossOrigin = 'anonymous'
       img.src = path
       img.onload = () => {
         this.iconImages[key] = img

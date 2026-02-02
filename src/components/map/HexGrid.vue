@@ -6,6 +6,7 @@ import { HexMap } from '../../lib/hexMap'
 import type { HexMarkerData } from '../../lib/hexMap'
 import { MAP_CONFIG } from '../../lib/mapData'
 import { useMapData } from '../../composables/useMapData'
+import { useTypeConfig } from '../../composables/useTypeConfig'
 import { useAuthStore } from '../../stores/auth'
 
 const props = defineProps<{
@@ -19,6 +20,7 @@ const emit = defineEmits<{
 const containerRef = ref<HTMLDivElement>()
 const canvasRef = ref<HTMLCanvasElement>()
 const { hexData, terrainConfig, tagsConfig, loading } = useMapData()
+const { locationTypes, featureTypes, pinTypes } = useTypeConfig()
 const auth = useAuthStore()
 let hexMap: HexMap | null = null
 
@@ -133,6 +135,15 @@ onMounted(() => {
         tc,
         tg
       )
+      // Load icons from Firestore config (Storage URLs) if available
+      const markerTypesConfig = {
+        locationTypes: Object.fromEntries(locationTypes.value.map(t => [t.key, { iconUrl: t.iconUrl }])),
+        featureTypes: Object.fromEntries(featureTypes.value.map(t => [t.key, { iconUrl: t.iconUrl }])),
+        hexMarkerTypes: Object.fromEntries(pinTypes.value.map(t => [t.key, { iconUrl: t.iconUrl }]))
+      }
+      if (Object.keys(markerTypesConfig.locationTypes).length > 0) {
+        hexMap.loadIconImages(markerTypesConfig)
+      }
       hexMap.onHexClick = (hex: any, _x: number, _y: number, type: string) => {
         if (type === 'click' && hex) {
           selectedHex.value = hex
