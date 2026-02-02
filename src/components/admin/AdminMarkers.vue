@@ -237,9 +237,8 @@ async function uploadIcon(key: string, event: Event) {
   saving.value = true
   try {
     const section = activeCategory.value
-    const folder = section === 'locationTypes' ? 'locations' : section === 'featureTypes' ? 'features' : 'markers'
     const ext = file.name.split('.').pop() || 'png'
-    const fileRef = storageRef(storage, `icons/${folder}/${key}.${ext}`)
+    const fileRef = storageRef(storage, `icons/${key}.${ext}`)
     await uploadBytes(fileRef, file, { contentType: file.type })
     const url = await getDownloadURL(fileRef)
 
