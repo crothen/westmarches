@@ -245,9 +245,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 bg-[#1a1410] flex flex-col items-center justify-center select-none">
+  <div class="fixed inset-0 z-50 bg-[#1a1410] flex flex-col items-center justify-center select-none pt-[env(safe-area-inset-top,0px)]">
     <!-- Top bar controls -->
-    <div class="absolute top-4 right-4 z-20 flex items-center gap-2">
+    <div class="absolute top-4 right-4 z-20 flex items-center gap-2 mt-[env(safe-area-inset-top,0px)]">
       <!-- Font picker -->
       <div class="relative">
         <button
