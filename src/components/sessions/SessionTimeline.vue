@@ -352,11 +352,11 @@ function formatCommentDate(date: any): string {
           </template>
         </div>
 
-        <!-- Mobile: single column with vertical line -->
-        <div class="sm:hidden space-y-2">
+        <!-- Mobile: single column, hero image left + text right -->
+        <div class="sm:hidden space-y-1">
           <template v-for="(entry, colIdx) in row.entries" :key="entry.id">
-            <div v-if="colIdx > 0 || rowIdx > 0" class="flex justify-center py-1">
-              <div class="h-4 w-px bg-zinc-700" />
+            <div v-if="colIdx > 0 || rowIdx > 0" class="flex justify-center">
+              <div class="h-3 w-0.5 bg-zinc-700" />
             </div>
             <div
               :class="[
@@ -364,22 +364,26 @@ function formatCommentDate(date: any): string {
                 entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700',
               ]"
             >
-              <div v-if="entry.imageUrl" class="w-full overflow-hidden rounded-t-[inherit] cursor-pointer" style="aspect-ratio: 3 / 1" @click="lightboxUrl = entry.imageUrl!">
-                <img :src="entry.imageUrl" class="w-full h-full object-cover" />
-              </div>
-              <div class="px-3 pt-2.5 pb-2">
-                <div class="flex items-start justify-between gap-1 mb-1">
-                  <span :class="['text-[0.65rem] px-1.5 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
-                    {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
-                  </span>
-                  <div v-if="canEdit" class="flex items-center gap-0.5 shrink-0 -mt-0.5">
-                    <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-[0.65rem] p-0.5 transition-colors">✏️</button>
-                    <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-[0.65rem] p-0.5 transition-colors">🗑️</button>
-                  </div>
+              <div class="flex">
+                <!-- Hero image on the left -->
+                <div v-if="entry.imageUrl" class="shrink-0 w-24 overflow-hidden rounded-l-[inherit] cursor-pointer" @click="lightboxUrl = entry.imageUrl!">
+                  <img :src="entry.imageUrl" class="w-full h-full object-cover" />
                 </div>
-                <h3 class="text-sm font-semibold text-zinc-100 leading-tight mb-1" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
-                <div v-if="entry.description" class="text-xs text-zinc-400 leading-relaxed line-clamp-4 mb-2">
-                  <MentionText :text="entry.description" />
+                <!-- Content on the right -->
+                <div class="flex-1 min-w-0 px-3 pt-2 pb-2">
+                  <div class="flex items-start justify-between gap-1 mb-1">
+                    <span :class="['text-[0.6rem] px-1 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
+                      {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
+                    </span>
+                    <div v-if="canEdit" class="flex items-center gap-0.5 shrink-0">
+                      <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-[0.6rem] p-0.5 transition-colors">✏️</button>
+                      <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-[0.6rem] p-0.5 transition-colors">🗑️</button>
+                    </div>
+                  </div>
+                  <h3 class="text-sm font-semibold text-zinc-100 leading-tight mb-1" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
+                  <div v-if="entry.description" class="text-xs text-zinc-400 leading-relaxed line-clamp-3">
+                    <MentionText :text="entry.description" />
+                  </div>
                 </div>
               </div>
             </div>
