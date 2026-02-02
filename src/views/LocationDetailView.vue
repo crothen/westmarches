@@ -300,6 +300,7 @@ async function addFeature() {
 // --- Feature edit/delete ---
 const editingFeature = ref<LocationFeature | null>(null)
 const editFeatForm = ref({ name: '', type: 'other' as any, description: '' })
+const savingFeature = ref(false)
 
 function startEditFeature(feat: LocationFeature) {
   editingFeature.value = feat
@@ -308,6 +309,7 @@ function startEditFeature(feat: LocationFeature) {
 
 async function saveEditFeature() {
   if (!editingFeature.value || !editFeatForm.value.name.trim()) return
+  savingFeature.value = true
   const id = editingFeature.value.id
   const updates = {
     name: editFeatForm.value.name.trim(),
@@ -325,6 +327,8 @@ async function saveEditFeature() {
   } catch (e) {
     console.error('Failed to update feature:', e)
     alert('Failed to save.')
+  } finally {
+    savingFeature.value = false
   }
 }
 
@@ -616,19 +620,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
             @mouseenter="highlightedFeature = feat.id"
             @mouseleave="highlightedFeature = null"
           >
-            <!-- Edit mode -->
-            <div v-if="editingFeature?.id === feat.id" class="space-y-2" @click.stop>
-              <input v-model="editFeatForm.name" class="input w-full !text-xs" placeholder="Name" />
-              <TypeSelect v-model="editFeatForm.type" :options="featureTypeOptions" input-class="w-full !text-xs" />
-              <MentionTextarea v-model="editFeatForm.description" input-class="!text-xs" :rows="2" placeholder="Description..." />
-              <div class="flex justify-end gap-1">
-                <button @click="editingFeature = null" class="text-zinc-600 text-[0.6rem] hover:text-zinc-400">Cancel</button>
-                <button @click="saveEditFeature" :disabled="!editFeatForm.name.trim()" class="btn !text-[0.6rem] !py-0.5 !px-2">Save</button>
-              </div>
-            </div>
-
-            <!-- View mode -->
-            <div v-else>
+            <div>
               <!-- Hidden banner -->
               <div v-if="feat.hidden" class="absolute top-0 left-0 right-0 bg-amber-500/20 text-amber-400 text-[0.5rem] font-bold uppercase tracking-widest text-center py-0.5 z-10" style="font-family: Manrope, sans-serif">🚫 Hidden</div>
               <div :class="feat.hidden ? 'mt-3' : ''">
@@ -657,6 +649,47 @@ async function toggleFeatureHidden(feat: LocationFeature) {
         </div>
       </div>
     </div>
+
+    <!-- Edit Feature Modal -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0" enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-150"
+        leave-from-class="opacity-100" leave-to-class="opacity-0"
+      >
+        <div v-if="editingFeature" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="editingFeature = null" />
+          <div class="relative bg-zinc-900 border border-white/10 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">✏️ Edit Feature</h2>
+              <button @click="editingFeature = null" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+            </div>
+            <div class="space-y-3">
+              <div>
+                <label class="label text-xs block mb-1">Name</label>
+                <input v-model="editFeatForm.name" class="input w-full" placeholder="Name" />
+              </div>
+              <div>
+                <label class="label text-xs block mb-1">Type</label>
+                <TypeSelect v-model="editFeatForm.type" :options="featureTypeOptions" input-class="w-full" />
+              </div>
+              <div>
+                <label class="label text-xs block mb-1">Description</label>
+                <MentionTextarea v-model="editFeatForm.description" :rows="3" placeholder="Description..." />
+              </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+              <button @click="editingFeature = null" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+              <button @click="saveEditFeature" :disabled="!editFeatForm.name.trim() || savingFeature" class="btn text-sm inline-flex items-center gap-1.5">
+                <svg v-if="savingFeature" class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                {{ savingFeature ? 'Saving...' : '💾 Save' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
 
     <!-- Mini map hover popup -->
     <Teleport to="body">

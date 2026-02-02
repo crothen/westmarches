@@ -15,6 +15,7 @@ const character = ref<Character | null>(null)
 const loading = ref(true)
 const editing = ref(false)
 const editForm = ref({ name: '', race: '', class: '', level: 1, description: '', appearance: '' })
+const savingEdit = ref(false)
 const uploadingImage = ref(false)
 const uploadProgress = ref(0)
 
@@ -70,6 +71,7 @@ function startEdit() {
 
 async function saveEdit() {
   if (!character.value || !editForm.value.name.trim()) return
+  savingEdit.value = true
   const updates = {
     name: editForm.value.name.trim(),
     race: editForm.value.race.trim(),
@@ -86,6 +88,8 @@ async function saveEdit() {
   } catch (e) {
     console.error('Failed to save:', e)
     alert('Failed to save changes.')
+  } finally {
+    savingEdit.value = false
   }
 }
 
@@ -270,88 +274,51 @@ async function deleteCharacter() {
 
         <!-- Info -->
         <div class="flex-1 min-w-0">
-          <!-- View mode -->
-          <div v-if="!editing">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <h1 class="text-3xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">{{ character.name }}</h1>
-                <div class="flex items-center gap-3 mt-2 flex-wrap">
-                  <span v-if="character.race" class="text-zinc-400">{{ character.race }}</span>
-                  <span v-if="character.class" class="text-zinc-300 font-medium">{{ character.class }}</span>
-                  <span class="badge bg-[#ef233c]/15 text-[#ef233c] text-sm">Level {{ character.level }}</span>
-                  <span v-if="!character.isActive" class="badge bg-zinc-800 text-zinc-500">Inactive</span>
-                </div>
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <button v-if="canEdit" @click="startEdit" class="btn !text-xs">✏️ Edit</button>
-                <button v-if="canEdit" @click="toggleActive" :class="['btn !text-xs', character.isActive ? '!bg-amber-500/15 !text-amber-400' : '!bg-green-500/15 !text-green-400']">
-                  {{ character.isActive ? '💤 Retire' : '⚡ Activate' }}
-                </button>
-                <button v-if="auth.isDm || auth.isAdmin" @click="deleteCharacter" class="btn !text-xs !bg-red-500/15 !text-red-400">🗑️</button>
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h1 class="text-3xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">{{ character.name }}</h1>
+              <div class="flex items-center gap-3 mt-2 flex-wrap">
+                <span v-if="character.race" class="text-zinc-400">{{ character.race }}</span>
+                <span v-if="character.class" class="text-zinc-300 font-medium">{{ character.class }}</span>
+                <span class="badge bg-[#ef233c]/15 text-[#ef233c] text-sm">Level {{ character.level }}</span>
+                <span v-if="!character.isActive" class="badge bg-zinc-800 text-zinc-500">Inactive</span>
               </div>
             </div>
-
-            <!-- Owner info -->
-            <div class="mt-4 flex items-center gap-2">
-              <span class="text-xs text-zinc-600">🎮 Player:</span>
-              <template v-if="assigningUser && (auth.isDm || auth.isAdmin)">
-                <select @change="(e: any) => assignUser(e.target.value || null)" class="input !text-xs !py-1">
-                  <option value="">Unassigned</option>
-                  <option v-for="u in users" :key="u.uid" :value="u.uid" :selected="character.userId === u.uid">{{ u.displayName }}</option>
-                </select>
-                <button @click="assigningUser = false" class="text-zinc-600 text-xs">✕</button>
-              </template>
-              <template v-else>
-                <span class="text-sm text-zinc-400">{{ getOwnerName(character.userId) }}</span>
-                <button v-if="auth.isDm || auth.isAdmin" @click="assigningUser = true" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">✏️</button>
-              </template>
-            </div>
-
-            <!-- Appearance -->
-            <div v-if="character.appearance" class="mt-4">
-              <h2 class="label mb-1">Appearance <span class="text-zinc-600 font-normal text-[0.65rem]">🎨 used for AI art</span></h2>
-              <p class="text-zinc-500 text-sm italic">{{ character.appearance }}</p>
-            </div>
-
-            <!-- Description -->
-            <div v-if="character.description" class="mt-6">
-              <h2 class="label mb-2">Description</h2>
-              <p class="text-zinc-400 whitespace-pre-wrap">{{ character.description }}</p>
+            <div class="flex items-center gap-2 shrink-0">
+              <button v-if="canEdit" @click="startEdit" class="btn !text-xs">✏️ Edit</button>
+              <button v-if="canEdit" @click="toggleActive" :class="['btn !text-xs', character.isActive ? '!bg-amber-500/15 !text-amber-400' : '!bg-green-500/15 !text-green-400']">
+                {{ character.isActive ? '💤 Retire' : '⚡ Activate' }}
+              </button>
+              <button v-if="auth.isDm || auth.isAdmin" @click="deleteCharacter" class="btn !text-xs !bg-red-500/15 !text-red-400">🗑️</button>
             </div>
           </div>
 
-          <!-- Edit mode -->
-          <div v-else class="space-y-4">
-            <div>
-              <label class="label text-xs block mb-1">Name *</label>
-              <input v-model="editForm.name" class="input w-full" />
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label class="label text-xs block mb-1">Race</label>
-                <input v-model="editForm.race" class="input w-full" placeholder="e.g. Human, Elf, Dwarf" />
-              </div>
-              <div>
-                <label class="label text-xs block mb-1">Class</label>
-                <input v-model="editForm.class" class="input w-full" placeholder="e.g. Fighter, Wizard" />
-              </div>
-            </div>
-            <div>
-              <label class="label text-xs block mb-1">Level</label>
-              <input v-model.number="editForm.level" type="number" min="1" max="20" class="input w-24" />
-            </div>
-            <div>
-              <label class="label text-xs block mb-1">Appearance <span class="text-zinc-600 font-normal">({{ editForm.appearance.length }}/200 — used for AI art)</span></label>
-              <input v-model="editForm.appearance" class="input w-full" maxlength="200" placeholder="e.g. Tall half-elf with silver hair, blue eyes, wears leather armor and a tattered red cloak" />
-            </div>
-            <div>
-              <label class="label text-xs block mb-1">Description</label>
-              <textarea v-model="editForm.description" class="input w-full" rows="5" placeholder="Backstory, personality, notable traits..." />
-            </div>
-            <div class="flex gap-2">
-              <button @click="saveEdit" :disabled="!editForm.name.trim()" class="btn">💾 Save</button>
-              <button @click="editing = false" class="btn !bg-white/5 !text-zinc-400">Cancel</button>
-            </div>
+          <!-- Owner info -->
+          <div class="mt-4 flex items-center gap-2">
+            <span class="text-xs text-zinc-600">🎮 Player:</span>
+            <template v-if="assigningUser && (auth.isDm || auth.isAdmin)">
+              <select @change="(e: any) => assignUser(e.target.value || null)" class="input !text-xs !py-1">
+                <option value="">Unassigned</option>
+                <option v-for="u in users" :key="u.uid" :value="u.uid" :selected="character.userId === u.uid">{{ u.displayName }}</option>
+              </select>
+              <button @click="assigningUser = false" class="text-zinc-600 text-xs">✕</button>
+            </template>
+            <template v-else>
+              <span class="text-sm text-zinc-400">{{ getOwnerName(character.userId) }}</span>
+              <button v-if="auth.isDm || auth.isAdmin" @click="assigningUser = true" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">✏️</button>
+            </template>
+          </div>
+
+          <!-- Appearance -->
+          <div v-if="character.appearance" class="mt-4">
+            <h2 class="label mb-1">Appearance <span class="text-zinc-600 font-normal text-[0.65rem]">🎨 used for AI art</span></h2>
+            <p class="text-zinc-500 text-sm italic">{{ character.appearance }}</p>
+          </div>
+
+          <!-- Description -->
+          <div v-if="character.description" class="mt-6">
+            <h2 class="label mb-2">Description</h2>
+            <p class="text-zinc-400 whitespace-pre-wrap">{{ character.description }}</p>
           </div>
         </div>
       </div>
@@ -380,6 +347,61 @@ async function deleteCharacter() {
         </div>
       </div>
     </div>
+
+    <!-- Edit Character Modal -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0" enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-150"
+        leave-from-class="opacity-100" leave-to-class="opacity-0"
+      >
+        <div v-if="editing && character" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="editing = false" />
+          <div class="relative bg-zinc-900 border border-white/10 rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">✏️ Edit {{ character.name }}</h2>
+              <button @click="editing = false" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+            </div>
+            <div class="space-y-4">
+              <div>
+                <label class="label text-xs block mb-1">Name *</label>
+                <input v-model="editForm.name" class="input w-full" />
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="label text-xs block mb-1">Race</label>
+                  <input v-model="editForm.race" class="input w-full" placeholder="e.g. Human, Elf, Dwarf" />
+                </div>
+                <div>
+                  <label class="label text-xs block mb-1">Class</label>
+                  <input v-model="editForm.class" class="input w-full" placeholder="e.g. Fighter, Wizard" />
+                </div>
+              </div>
+              <div>
+                <label class="label text-xs block mb-1">Level</label>
+                <input v-model.number="editForm.level" type="number" min="1" max="20" class="input w-24" />
+              </div>
+              <div>
+                <label class="label text-xs block mb-1">Appearance <span class="text-zinc-600 font-normal">({{ editForm.appearance.length }}/200 — used for AI art)</span></label>
+                <input v-model="editForm.appearance" class="input w-full" maxlength="200" placeholder="e.g. Tall half-elf with silver hair, blue eyes, wears leather armor and a tattered red cloak" />
+              </div>
+              <div>
+                <label class="label text-xs block mb-1">Description</label>
+                <textarea v-model="editForm.description" class="input w-full" rows="5" placeholder="Backstory, personality, notable traits..." />
+              </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+              <button @click="editing = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+              <button @click="saveEdit" :disabled="!editForm.name.trim() || savingEdit" class="btn text-sm inline-flex items-center gap-1.5">
+                <svg v-if="savingEdit" class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                {{ savingEdit ? 'Saving...' : '💾 Save' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
 
     <!-- Lightbox -->
     <Teleport to="body">

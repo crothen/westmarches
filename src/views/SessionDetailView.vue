@@ -367,18 +367,7 @@ function canDeleteNote(note: SessionNote): boolean {
     </div>
 
     <div v-else>
-      <!-- Edit mode -->
-      <div v-if="editing" class="card-flat p-5 mb-6">
-        <h2 class="text-lg font-semibold text-[#ef233c] mb-4" style="font-family: Manrope, sans-serif">✏️ Edit Session</h2>
-        <SessionForm
-          :session="session"
-          @submit="handleEdit"
-          @cancel="editing = false"
-        />
-      </div>
-
       <!-- View mode -->
-      <template v-else>
         <div class="flex items-center gap-3 mb-2">
           <span class="text-[#ef233c] font-bold text-2xl" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
           <span class="text-zinc-600">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
@@ -483,7 +472,6 @@ function canDeleteNote(note: SessionNote): boolean {
         <div v-if="session.tags?.length" class="mb-6 flex gap-2 flex-wrap">
           <span v-for="tag in session.tags" :key="tag" class="text-xs bg-white/[0.05] text-zinc-500 px-2 py-0.5 rounded-md border border-white/[0.06]">{{ tag }}</span>
         </div>
-      </template>
 
       <!-- Session Timeline -->
       <SessionTimeline
@@ -572,6 +560,31 @@ function canDeleteNote(note: SessionNote): boolean {
         </div>
       </div>
     </div>
+
+    <!-- Edit Session Modal -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0" enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-150"
+        leave-from-class="opacity-100" leave-to-class="opacity-0"
+      >
+        <div v-if="editing && session" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="editing = false" />
+          <div class="relative bg-zinc-900 border border-white/10 rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">✏️ Edit Session</h2>
+              <button @click="editing = false" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+            </div>
+            <SessionForm
+              :session="session"
+              @submit="handleEdit"
+              @cancel="editing = false"
+            />
+          </div>
+        </div>
+      </transition>
+    </Teleport>
 
     <!-- Art Generation & Crop Modal -->
     <Teleport to="body">
