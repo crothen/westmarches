@@ -115,10 +115,7 @@ function drawHexPreview() {
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
-      const pattern = ctx.createPattern(img, 'repeat')
-      if (pattern) {
-        drawHexes(ctx, hexes, hexSize, editForm.value.color, pattern)
-      }
+      drawHexes(ctx, hexes, hexSize, editForm.value.color, img)
     }
     img.onerror = () => {
       drawHexes(ctx, hexes, hexSize, editForm.value.color, null)
@@ -129,18 +126,30 @@ function drawHexPreview() {
   }
 }
 
-function drawHexes(ctx: CanvasRenderingContext2D, hexes: { x: number; y: number }[], size: number, color: string, pattern: CanvasPattern | null) {
+function drawHexes(ctx: CanvasRenderingContext2D, hexes: { x: number; y: number }[], size: number, color: string, img: HTMLImageElement | null) {
   const angle = (2 * Math.PI) / 6
   for (const hex of hexes) {
+    // Define hex path
     ctx.beginPath()
     for (let i = 0; i < 6; i++) {
       ctx.lineTo(hex.x + size * Math.cos(angle * i), hex.y + size * Math.sin(angle * i))
     }
     ctx.closePath()
 
-    if (pattern) {
-      ctx.fillStyle = pattern
-      ctx.fill()
+    if (img) {
+      // Clip to hex shape and draw full image fitted inside
+      ctx.save()
+      ctx.clip()
+      // Draw image to cover the hex bounding box
+      const drawSize = size * 2
+      ctx.drawImage(img, hex.x - drawSize / 2, hex.y - drawSize / 2, drawSize, drawSize)
+      ctx.restore()
+      // Re-draw hex border (clip consumed the path)
+      ctx.beginPath()
+      for (let i = 0; i < 6; i++) {
+        ctx.lineTo(hex.x + size * Math.cos(angle * i), hex.y + size * Math.sin(angle * i))
+      }
+      ctx.closePath()
     } else {
       ctx.fillStyle = color
       ctx.fill()
@@ -223,7 +232,9 @@ async function deleteTerrain(name: string) {
 
 function startGenerate(name: string) {
   generatingKey.value = name
-  genPrompt.value = `Top-down view of ${name.toLowerCase()} terrain for a dark fantasy world. Abstract and painterly. Muted earthy tones, no borders, no text, no grid lines, no shapes. Fill the entire image with the terrain surface only.`
+  const conf = terrainConfig.value[name]
+  const color = conf?.color || '#666666'
+  genPrompt.value = `Top-down view of ${name.toLowerCase()} terrain for a dark fantasy world. Primary color tone: ${color}. Abstract and painterly. No borders, no text, no grid lines, no shapes. Fill the entire image with the terrain surface only.`
 }
 
 async function generateTexture() {
