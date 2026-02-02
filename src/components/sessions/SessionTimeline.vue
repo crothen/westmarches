@@ -21,9 +21,14 @@ const features = ref<LocationFeature[]>([])
 // UI state
 const showEntryModal = ref(false)
 const editingEntry = ref<SessionEntry | null>(null)
+const insertAfterOrder = ref<number | null>(null) // for inserting between entries
 const expandedComments = ref<Set<string>>(new Set())
 const newCommentContent = ref<Record<string, string>>({})
 const lightboxUrl = ref<string | null>(null)
+
+// Drag state
+const dragEntryId = ref<string | null>(null)
+const dragOverEntryId = ref<string | null>(null)
 
 const _unsubs: (() => void)[] = []
 
@@ -39,8 +44,18 @@ const entryTypeConfig: Record<SessionEntryType, { icon: string; label: string; c
   custom: { icon: '📝', label: 'Custom', color: 'bg-zinc-500/15 text-zinc-400', borderColor: 'border-l-zinc-500/50' },
 }
 
+// Serpentine layout: group entries into rows of 3, alternating direction
+const serpentineRows = computed(() => {
+  const rows: { entries: SessionEntry[]; reversed: boolean }[] = []
+  for (let i = 0; i < entries.value.length; i += 3) {
+    const chunk = entries.value.slice(i, i + 3)
+    const rowIndex = Math.floor(i / 3)
+    rows.push({ entries: chunk, reversed: rowIndex % 2 === 1 })
+  }
+  return rows
+})
+
 onMounted(() => {
-  // Load entries real-time
   const entriesQuery = query(
     collection(db, 'sessionEntries'),
     where('sessionId', '==', props.sessionId),
@@ -52,17 +67,12 @@ onMounted(() => {
     console.warn('Session entries query error:', err.message)
   }))
 
-  // Load NPCs for display
   _unsubs.push(onSnapshot(query(collection(db, 'npcs'), orderBy('name')), (snap) => {
     npcs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
   }))
-
-  // Load locations for display
   _unsubs.push(onSnapshot(query(collection(db, 'locations'), orderBy('name')), (snap) => {
     locations.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
   }))
-
-  // Load features for display
   _unsubs.push(onSnapshot(query(collection(db, 'features'), orderBy('name')), (snap) => {
     features.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
   }))
@@ -76,28 +86,52 @@ function getFeatureName(id: string): string { return features.value.find(f => f.
 
 function openAddModal() {
   editingEntry.value = null
+  insertAfterOrder.value = null
+  showEntryModal.value = true
+}
+
+function openInsertModal(afterEntryId: string) {
+  editingEntry.value = null
+  const afterEntry = entries.value.find(e => e.id === afterEntryId)
+  insertAfterOrder.value = afterEntry ? afterEntry.order : null
   showEntryModal.value = true
 }
 
 function openEditModal(entry: SessionEntry) {
   editingEntry.value = entry
+  insertAfterOrder.value = null
   showEntryModal.value = true
 }
 
 function closeModal() {
   showEntryModal.value = false
   editingEntry.value = null
+  insertAfterOrder.value = null
 }
 
 async function handleModalSubmit(data: Partial<SessionEntry>) {
   if (editingEntry.value) {
-    // Update existing
     await updateDoc(doc(db, 'sessionEntries', editingEntry.value.id), {
       ...data,
       updatedAt: Timestamp.now(),
     })
+  } else if (insertAfterOrder.value !== null) {
+    // Insert between: shift all entries after insertAfterOrder up by 1
+    const afterOrder = insertAfterOrder.value
+    const toShift = entries.value.filter(e => e.order > afterOrder)
+    await Promise.all(toShift.map(e =>
+      updateDoc(doc(db, 'sessionEntries', e.id), { order: e.order + 1 })
+    ))
+    await addDoc(collection(db, 'sessionEntries'), {
+      ...data,
+      sessionId: props.sessionId,
+      order: afterOrder + 1,
+      comments: [],
+      createdBy: auth.firebaseUser?.uid,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    })
   } else {
-    // Add new
     const maxOrder = entries.value.length > 0 ? Math.max(...entries.value.map(e => e.order)) : 0
     await addDoc(collection(db, 'sessionEntries'), {
       ...data,
@@ -117,20 +151,50 @@ async function deleteEntry(entryId: string) {
   await deleteDoc(doc(db, 'sessionEntries', entryId))
 }
 
-async function moveEntry(entryId: string, direction: 'up' | 'down') {
-  const idx = entries.value.findIndex(e => e.id === entryId)
-  if (idx < 0) return
-  const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-  if (swapIdx < 0 || swapIdx >= entries.value.length) return
+// Drag and drop reorder
+function onDragStart(e: DragEvent, entryId: string) {
+  dragEntryId.value = entryId
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', entryId)
+  }
+}
 
-  const current = entries.value[idx]!
-  const swap = entries.value[swapIdx]!
+function onDragOver(e: DragEvent, entryId: string) {
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dragOverEntryId.value = entryId
+}
 
-  // Swap order values
-  await Promise.all([
-    updateDoc(doc(db, 'sessionEntries', current.id), { order: swap.order }),
-    updateDoc(doc(db, 'sessionEntries', swap.id), { order: current.order }),
-  ])
+function onDragLeave() {
+  dragOverEntryId.value = null
+}
+
+async function onDrop(e: DragEvent, targetEntryId: string) {
+  e.preventDefault()
+  dragOverEntryId.value = null
+  const srcId = dragEntryId.value
+  dragEntryId.value = null
+  if (!srcId || srcId === targetEntryId) return
+
+  const srcIdx = entries.value.findIndex(e => e.id === srcId)
+  const tgtIdx = entries.value.findIndex(e => e.id === targetEntryId)
+  if (srcIdx < 0 || tgtIdx < 0) return
+
+  // Build new order: remove src, insert at tgt position
+  const reordered = [...entries.value]
+  const [moved] = reordered.splice(srcIdx, 1)
+  reordered.splice(tgtIdx, 0, moved!)
+
+  // Write new order values
+  await Promise.all(reordered.map((entry, i) =>
+    updateDoc(doc(db, 'sessionEntries', entry.id), { order: i + 1 })
+  ))
+}
+
+function onDragEnd() {
+  dragEntryId.value = null
+  dragOverEntryId.value = null
 }
 
 function toggleComments(entryId: string) {
@@ -144,10 +208,8 @@ function toggleComments(entryId: string) {
 async function addComment(entryId: string) {
   const content = newCommentContent.value[entryId]?.trim()
   if (!content || !auth.firebaseUser) return
-
   const entry = entries.value.find(e => e.id === entryId)
   if (!entry) return
-
   const newComment: EntryComment = {
     id: crypto.randomUUID(),
     userId: auth.firebaseUser.uid,
@@ -155,10 +217,8 @@ async function addComment(entryId: string) {
     content,
     createdAt: Timestamp.now() as any,
   }
-
-  const currentComments = entry.comments || []
   await updateDoc(doc(db, 'sessionEntries', entryId), {
-    comments: [...currentComments, newComment],
+    comments: [...(entry.comments || []), newComment],
     updatedAt: Timestamp.now(),
   })
   newCommentContent.value[entryId] = ''
@@ -168,10 +228,7 @@ async function deleteComment(entryId: string, commentId: string) {
   const entry = entries.value.find(e => e.id === entryId)
   if (!entry) return
   const updated = (entry.comments || []).filter(c => c.id !== commentId)
-  await updateDoc(doc(db, 'sessionEntries', entryId), {
-    comments: updated,
-    updatedAt: Timestamp.now(),
-  })
+  await updateDoc(doc(db, 'sessionEntries', entryId), { comments: updated, updatedAt: Timestamp.now() })
 }
 
 function canDeleteComment(comment: EntryComment): boolean {
@@ -189,9 +246,7 @@ function formatCommentDate(date: any): string {
   <div class="mt-8 border-t border-white/[0.06] pt-6">
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">⏳ Session Timeline</h2>
-      <button v-if="canEdit" @click="openAddModal" class="btn !text-xs !py-1.5 !px-3">
-        + Add Entry
-      </button>
+      <button v-if="canEdit" @click="openAddModal" class="btn !text-xs !py-1.5 !px-3">+ Add Entry</button>
     </div>
 
     <!-- Empty state -->
@@ -200,122 +255,131 @@ function formatCommentDate(date: any): string {
       <span v-if="canEdit"> Click "Add Entry" to begin documenting this session.</span>
     </div>
 
-    <!-- Timeline -->
-    <div v-if="entries.length > 0" class="relative pl-6 ml-2">
-      <!-- Vertical line -->
-      <div class="absolute left-0 top-0 bottom-0 w-px bg-zinc-800" />
+    <!-- Serpentine 3-column grid (desktop), single column (mobile) -->
+    <div v-if="entries.length > 0" class="space-y-2">
+      <template v-for="(row, rowIdx) in serpentineRows" :key="rowIdx">
+        <!-- Row of up to 3 entries -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <template v-for="entry in (row.reversed ? [...row.entries].reverse() : row.entries)" :key="entry.id">
+            <!-- Entry card -->
+            <div
+              :class="[
+                'card-flat border-l-4 overflow-visible transition-all duration-150',
+                entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700',
+                canEdit ? 'cursor-grab active:cursor-grabbing' : '',
+                dragEntryId === entry.id ? 'opacity-40 scale-95' : '',
+                dragOverEntryId === entry.id && dragEntryId !== entry.id ? 'ring-2 ring-[#ef233c]/50 scale-[1.02]' : '',
+              ]"
+              :draggable="canEdit ? 'true' : 'false'"
+              @dragstart="canEdit && onDragStart($event, entry.id)"
+              @dragover="canEdit && onDragOver($event, entry.id)"
+              @dragleave="canEdit && onDragLeave()"
+              @drop="canEdit && onDrop($event, entry.id)"
+              @dragend="canEdit && onDragEnd()"
+            >
+              <!-- Hero image top -->
+              <div v-if="entry.imageUrl" class="w-full overflow-hidden rounded-t-[inherit] cursor-pointer" style="aspect-ratio: 3 / 1" @click="lightboxUrl = entry.imageUrl!">
+                <img :src="entry.imageUrl" class="w-full h-full object-cover" draggable="false" />
+              </div>
 
-      <!-- Entries -->
-      <div v-for="(entry, idx) in entries" :key="entry.id" class="relative mb-5">
-        <!-- Timeline dot -->
-        <div class="absolute -left-6 top-4 w-3 h-3 rounded-full border-2 border-zinc-700 bg-zinc-900 z-10"
-          :class="{
-            '!border-purple-500 !bg-purple-500/20': entry.type === 'interaction',
-            '!border-green-500 !bg-green-500/20': entry.type === 'task',
-            '!border-red-500 !bg-red-500/20': entry.type === 'encounter',
-            '!border-blue-500 !bg-blue-500/20': entry.type === 'discovery',
-            '!border-amber-500 !bg-amber-500/20': entry.type === 'travel',
-            '!border-teal-500 !bg-teal-500/20': entry.type === 'rest',
-            '!border-zinc-500 !bg-zinc-500/20': entry.type === 'custom',
-          }"
-        />
-
-        <!-- Entry card -->
-        <div :class="['card-flat border-l-4 overflow-visible', entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700']">
-          <div class="flex">
-            <!-- Hero image on the left -->
-            <div v-if="entry.imageUrl" class="shrink-0 w-28 sm:w-36 overflow-hidden rounded-l-[inherit] cursor-pointer" @click="lightboxUrl = entry.imageUrl!">
-              <img :src="entry.imageUrl" class="w-full h-full object-cover" />
-            </div>
-            <!-- Content -->
-            <div class="flex-1 min-w-0">
-              <!-- Header -->
-              <div class="px-4 pt-3 pb-2 flex items-start justify-between gap-2">
-                <div class="flex items-center gap-2 flex-wrap min-w-0">
-                  <span :class="['text-xs px-2 py-0.5 rounded-md font-semibold', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
+              <!-- Content -->
+              <div class="px-3 pt-2.5 pb-2">
+                <!-- Header: type badge + admin actions -->
+                <div class="flex items-start justify-between gap-1 mb-1">
+                  <span :class="['text-[0.65rem] px-1.5 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
                     {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
                   </span>
-                  <h3 class="text-sm font-semibold text-zinc-100" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
+                  <div v-if="canEdit" class="flex items-center gap-0.5 shrink-0 -mt-0.5">
+                    <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-[0.65rem] p-0.5 transition-colors" title="Edit">✏️</button>
+                    <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-[0.65rem] p-0.5 transition-colors" title="Delete">🗑️</button>
+                  </div>
                 </div>
-                <div v-if="canEdit" class="flex items-center gap-1 shrink-0">
-                  <button v-if="idx > 0" @click="moveEntry(entry.id, 'up')" class="text-zinc-600 hover:text-zinc-300 text-xs p-1 transition-colors" title="Move up">↑</button>
-                  <button v-if="idx < entries.length - 1" @click="moveEntry(entry.id, 'down')" class="text-zinc-600 hover:text-zinc-300 text-xs p-1 transition-colors" title="Move down">↓</button>
-                  <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-xs p-1 transition-colors" title="Edit">✏️</button>
-                  <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-xs p-1 transition-colors" title="Delete">🗑️</button>
+
+                <!-- Title -->
+                <h3 class="text-sm font-semibold text-zinc-100 leading-tight mb-1" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
+
+                <!-- Participants (if subset) -->
+                <div v-if="entry.allParticipantsPresent === false && entry.presentParticipants?.length" class="mb-1">
+                  <div class="flex items-center gap-1 flex-wrap">
+                    <span class="text-[0.6rem] text-zinc-600 uppercase tracking-wider">Present:</span>
+                    <span v-for="p in entry.presentParticipants" :key="p.characterId" class="text-[0.65rem] bg-white/5 text-zinc-500 px-1 py-0.5 rounded">{{ p.characterName }}</span>
+                  </div>
                 </div>
-              </div>
-              <!-- Participants (if not everyone) -->
-              <div v-if="entry.allParticipantsPresent === false && entry.presentParticipants?.length" class="px-4 pb-1">
-                <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="text-[0.65rem] text-zinc-600 uppercase tracking-wider">Present:</span>
-                  <span v-for="p in entry.presentParticipants" :key="p.characterId" class="text-xs bg-white/5 text-zinc-400 px-1.5 py-0.5 rounded">{{ p.characterName }}</span>
-                </div>
-              </div>
-              <!-- Description -->
-              <div v-if="entry.description" class="px-4 py-2">
-                <div class="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">
+
+                <!-- Description (truncated in grid, full on hover/click) -->
+                <div v-if="entry.description" class="text-xs text-zinc-400 leading-relaxed line-clamp-4 mb-2">
                   <MentionText :text="entry.description" />
                 </div>
-              </div>
-              <!-- Tags: NPCs, locations, features -->
-              <div v-if="(entry.npcIds?.length || entry.linkedLocationIds?.length || entry.linkedFeatureIds?.length)" class="px-4 pb-3">
-                <div class="flex flex-wrap gap-1.5">
-                  <span v-for="id in entry.npcIds" :key="'npc-'+id" class="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/20">👤 {{ getNpcName(id) }}</span>
-                  <span v-for="id in entry.linkedLocationIds" :key="'loc-'+id" class="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-md border border-blue-500/20">🏰 {{ getLocationName(id) }}</span>
-                  <span v-for="id in entry.linkedFeatureIds" :key="'feat-'+id" class="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-md border border-green-500/20">📌 {{ getFeatureName(id) }}</span>
+
+                <!-- Tags -->
+                <div v-if="(entry.npcIds?.length || entry.linkedLocationIds?.length || entry.linkedFeatureIds?.length)" class="flex flex-wrap gap-1 mb-2">
+                  <span v-for="id in entry.npcIds" :key="'npc-'+id" class="text-[0.6rem] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">👤 {{ getNpcName(id) }}</span>
+                  <span v-for="id in entry.linkedLocationIds" :key="'loc-'+id" class="text-[0.6rem] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">🏰 {{ getLocationName(id) }}</span>
+                  <span v-for="id in entry.linkedFeatureIds" :key="'feat-'+id" class="text-[0.6rem] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded border border-green-500/20">📌 {{ getFeatureName(id) }}</span>
+                </div>
+
+                <!-- Attachments -->
+                <div v-if="entry.attachments?.length" class="flex flex-wrap gap-1 mb-2">
+                  <a v-for="att in entry.attachments" :key="att.url" :href="att.url" target="_blank" class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/[0.06] transition-colors">📎 {{ att.name }}</a>
                 </div>
               </div>
-              <!-- Attachments -->
-              <div v-if="entry.attachments?.length" class="px-4 pb-3">
-                <div class="flex flex-wrap gap-2">
-                  <a v-for="att in entry.attachments" :key="att.url" :href="att.url" target="_blank" class="text-xs text-zinc-400 hover:text-zinc-200 bg-white/5 px-2 py-1 rounded border border-white/[0.06] transition-colors">📎 {{ att.name }}</a>
-                </div>
-              </div>
-              <!-- Comments section -->
-              <div class="border-t border-white/[0.04] px-4 py-2">
-                <button @click="toggleComments(entry.id)" class="text-xs text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1">
+
+              <!-- Comments -->
+              <div class="border-t border-white/[0.04] px-3 py-1.5">
+                <button @click="toggleComments(entry.id)" class="text-[0.65rem] text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1">
                   <span>{{ expandedComments.has(entry.id) ? '▾' : '▸' }}</span>
-                  <span>💬 {{ entry.comments?.length || 0 }} comment{{ (entry.comments?.length || 0) !== 1 ? 's' : '' }}</span>
+                  <span>💬 {{ entry.comments?.length || 0 }}</span>
                 </button>
-                <div v-if="expandedComments.has(entry.id)" class="mt-2 space-y-2">
-                  <div v-for="comment in (entry.comments || [])" :key="comment.id" class="pl-3 border-l border-white/[0.06]">
+                <div v-if="expandedComments.has(entry.id)" class="mt-1.5 space-y-1.5">
+                  <div v-for="comment in (entry.comments || [])" :key="comment.id" class="pl-2 border-l border-white/[0.06]">
                     <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-1.5">
-                        <span class="text-xs text-[#ef233c]/80 font-medium">{{ comment.authorName }}</span>
-                        <span class="text-[0.65rem] text-zinc-600">{{ formatCommentDate(comment.createdAt) }}</span>
+                      <div class="flex items-center gap-1">
+                        <span class="text-[0.65rem] text-[#ef233c]/80 font-medium">{{ comment.authorName }}</span>
+                        <span class="text-[0.6rem] text-zinc-600">{{ formatCommentDate(comment.createdAt) }}</span>
                       </div>
-                      <button v-if="canDeleteComment(comment)" @click="deleteComment(entry.id, comment.id)" class="text-zinc-600 hover:text-red-400 text-xs transition-colors">✕</button>
+                      <button v-if="canDeleteComment(comment)" @click="deleteComment(entry.id, comment.id)" class="text-zinc-600 hover:text-red-400 text-[0.6rem] transition-colors">✕</button>
                     </div>
-                    <p class="text-xs text-zinc-400 mt-0.5">{{ comment.content }}</p>
+                    <p class="text-[0.65rem] text-zinc-500 mt-0.5">{{ comment.content }}</p>
                   </div>
-                  <div v-if="auth.isAuthenticated" class="flex gap-2 mt-2">
-                    <input v-model="newCommentContent[entry.id]" type="text" placeholder="Add a comment..." class="input flex-1 !text-xs !py-1.5" @keydown.enter="addComment(entry.id)" />
-                    <button @click="addComment(entry.id)" :disabled="!newCommentContent[entry.id]?.trim()" class="btn-action !py-1.5">Send</button>
+                  <div v-if="auth.isAuthenticated" class="flex gap-1.5 mt-1">
+                    <input v-model="newCommentContent[entry.id]" type="text" placeholder="Comment..." class="input flex-1 !text-[0.65rem] !py-1 !px-2" @keydown.enter="addComment(entry.id)" />
+                    <button @click="addComment(entry.id)" :disabled="!newCommentContent[entry.id]?.trim()" class="btn-action !py-1 !text-[0.6rem]">Send</button>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
+          </template>
 
+          <!-- Fill empty slots in last row with insert button -->
+          <template v-if="canEdit && row.entries.length < 3 && rowIdx === serpentineRows.length - 1">
+            <div
+              class="border border-dashed border-white/[0.08] rounded-xl flex items-center justify-center min-h-[100px] hover:border-[#ef233c]/30 hover:bg-[#ef233c]/[0.02] transition-all cursor-pointer group"
+              @click="openAddModal"
+            >
+              <span class="text-zinc-700 group-hover:text-[#ef233c]/50 text-sm transition-colors">+ Add Entry</span>
+            </div>
+          </template>
+        </div>
+
+        <!-- Insert between rows button -->
+        <div v-if="canEdit && rowIdx < serpentineRows.length - 1" class="flex justify-center py-0.5">
+          <button
+            @click="openInsertModal(row.entries[row.entries.length - 1]!.id)"
+            class="text-zinc-800 hover:text-[#ef233c]/50 text-lg transition-colors leading-none"
+            title="Insert entry here"
+          >+</button>
+        </div>
+      </template>
     </div>
 
-    <!-- Add button at bottom if entries exist -->
-    <div v-if="canEdit && entries.length > 0" class="mt-2 ml-8">
-      <button @click="openAddModal" class="btn-action">
-        + Add another entry
-      </button>
+    <!-- Add at end -->
+    <div v-if="canEdit && entries.length > 0" class="mt-3 flex justify-center">
+      <button @click="openAddModal" class="btn-action">+ Add entry</button>
     </div>
 
     <!-- Image Lightbox -->
     <Teleport to="body">
-      <transition
-        enter-active-class="transition-opacity duration-150"
-        enter-from-class="opacity-0" enter-to-class="opacity-100"
-        leave-active-class="transition-opacity duration-150"
-        leave-from-class="opacity-100" leave-to-class="opacity-0"
-      >
+      <transition enter-active-class="transition-opacity duration-150" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition-opacity duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0">
         <div v-if="lightboxUrl" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center" @click="lightboxUrl = null">
           <img :src="lightboxUrl" class="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" @click.stop />
           <button @click="lightboxUrl = null" class="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors text-lg">✕</button>
@@ -325,18 +389,13 @@ function formatCommentDate(date: any): string {
 
     <!-- Entry Modal -->
     <Teleport to="body">
-      <transition
-        enter-active-class="transition-opacity duration-150"
-        enter-from-class="opacity-0" enter-to-class="opacity-100"
-        leave-active-class="transition-opacity duration-150"
-        leave-from-class="opacity-100" leave-to-class="opacity-0"
-      >
+      <transition enter-active-class="transition-opacity duration-150" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition-opacity duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0">
         <div v-if="showEntryModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="closeModal" />
           <div class="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-6 z-10">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-semibold text-white" style="font-family: Manrope, sans-serif">
-                {{ editingEntry ? '✏️ Edit Entry' : '➕ New Timeline Entry' }}
+                {{ editingEntry ? '✏️ Edit Entry' : insertAfterOrder !== null ? '➕ Insert Entry' : '➕ New Timeline Entry' }}
               </h3>
               <button @click="closeModal" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
             </div>
