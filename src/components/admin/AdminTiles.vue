@@ -25,7 +25,8 @@ const editForm = ref({ name: '', color: '#666666' })
 // AI generation state
 const generatingKey = ref<string | null>(null)
 const genPrompt = ref('')
-const { generating: genBusy, error: genError, generateImage } = useImageGen()
+const { generating: genBusy, error: genError, generateImage, generateTexturePrompt } = useImageGen()
+const generatingPrompt = ref(false)
 
 // Hex preview canvas
 const hexPreviewRef = ref<HTMLCanvasElement | null>(null)
@@ -230,11 +231,36 @@ async function deleteTerrain(name: string) {
   }
 }
 
-function startGenerate(name: string) {
+async function startGenerate(name: string) {
   generatingKey.value = name
   const conf = terrainConfig.value[name]
   const color = conf?.color || '#666666'
-  genPrompt.value = `Flat seamless ${name.toLowerCase()} surface texture. Color: ${color}. Subtle variation, uniform coverage, no focal point, no center composition. Painterly style, simple, minimal detail. No objects, no features, no borders, no text. The texture should look the same in every corner.`
+
+  // Auto-generate a smart prompt
+  generatingPrompt.value = true
+  genPrompt.value = 'Generating prompt...'
+  const smartPrompt = await generateTexturePrompt(name, color)
+  generatingPrompt.value = false
+
+  if (smartPrompt) {
+    genPrompt.value = smartPrompt
+  } else {
+    // Fallback to template
+    genPrompt.value = `Top-down view of ${name.toLowerCase()} terrain texture. Color palette around ${color}. Painterly style, soft round shapes, seamless tileable. No focal point, no borders, no text.`
+  }
+}
+
+async function regeneratePrompt() {
+  if (!generatingKey.value) return
+  const name = generatingKey.value
+  const conf = terrainConfig.value[name]
+  const color = conf?.color || '#666666'
+  generatingPrompt.value = true
+  const smartPrompt = await generateTexturePrompt(name, color)
+  generatingPrompt.value = false
+  if (smartPrompt) {
+    genPrompt.value = smartPrompt
+  }
 }
 
 async function generateTexture() {
@@ -412,8 +438,18 @@ async function removeTexture(name: string) {
             </div>
 
             <div>
-              <label class="block text-xs text-zinc-500 mb-1">Prompt</label>
-              <textarea v-model="genPrompt" class="input w-full text-sm" rows="4" :disabled="genBusy" />
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs text-zinc-500">Prompt</label>
+                <button
+                  v-if="!generatingPrompt && !genBusy"
+                  @click="regeneratePrompt"
+                  class="text-[0.65rem] text-purple-400 hover:text-purple-300 transition-colors"
+                >🔄 Re-generate prompt</button>
+              </div>
+              <div v-if="generatingPrompt" class="flex items-center gap-2 text-purple-400 text-sm py-3">
+                <span class="animate-spin">✨</span> AI is crafting a prompt...
+              </div>
+              <textarea v-else v-model="genPrompt" class="input w-full text-sm" rows="4" :disabled="genBusy" />
             </div>
 
             <div v-if="genError" class="text-red-400 text-xs">{{ genError }}</div>
@@ -423,8 +459,8 @@ async function removeTexture(name: string) {
             </div>
 
             <div class="flex justify-end gap-2">
-              <button v-if="!genBusy" @click="generatingKey = null" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
-              <button @click="generateTexture" :disabled="genBusy || !genPrompt.trim()" class="btn text-sm">
+              <button v-if="!genBusy && !generatingPrompt" @click="generatingKey = null" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+              <button @click="generateTexture" :disabled="genBusy || generatingPrompt || !genPrompt.trim()" class="btn text-sm">
                 {{ genBusy ? 'Generating...' : '🎨 Generate' }}
               </button>
             </div>

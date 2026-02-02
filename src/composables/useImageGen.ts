@@ -5,9 +5,56 @@ import { storage } from '../firebase/config'
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY
 
+const TEXTURE_STYLE_SYSTEM = `You are a texture prompt engineer for a fantasy RPG hex map.
+Given a terrain name and fallback color, generate a concise image generation prompt.
+
+RULES:
+- The texture is viewed TOP-DOWN (bird's eye view, looking straight down)
+- Style: painterly, soft round organic shapes, subtle variation
+- Must be SEAMLESS and TILEABLE with uniform coverage
+- No focal point, no borders, no text, no labels, no perspective
+- Keep it simple — recognizable as the terrain at both small and large sizes
+- Output ONLY the prompt text, nothing else
+
+GOOD EXAMPLES (use these as style reference):
+- Forest: "Top-down view of a light forest canopy texture. Soft greens with dappled sunlight. Painterly style, seamless tile, no borders. Simple and readable at any zoom level."
+- Forest (dense): "Dense but soft forest canopy texture from above. Overlapping round treetops, light forest greens. Slightly varied sizes. Subtle depth, no harsh shadows. Seamless tileable, painterly, no text or borders."
+
+Adapt the subject, shapes, and color palette to match the terrain. Keep a similar sentence structure and style keywords.`
+
 export function useImageGen() {
   const generating = ref(false)
   const error = ref<string | null>(null)
+
+  /**
+   * Auto-generate a texture prompt for a terrain type using the text model.
+   */
+  async function generateTexturePrompt(terrainName: string, fallbackColor: string): Promise<string | null> {
+    if (!apiKey) {
+      error.value = 'Gemini API key not configured'
+      return null
+    }
+
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+      const result = await model.generateContent({
+        contents: [{
+          role: 'user',
+          parts: [{ text: `Terrain: "${terrainName}"\nFallback color: ${fallbackColor}\n\nGenerate the texture prompt.` }]
+        }],
+        systemInstruction: { role: 'system', parts: [{ text: TEXTURE_STYLE_SYSTEM }] },
+      })
+
+      const text = result.response.text()?.trim()
+      return text || null
+    } catch (e: any) {
+      console.error('Prompt generation failed:', e)
+      error.value = e.message || 'Prompt generation failed'
+      return null
+    }
+  }
 
   async function generateImage(prompt: string, storagePath: string): Promise<string | null> {
     if (!apiKey) {
@@ -74,5 +121,5 @@ export function useImageGen() {
     }
   }
 
-  return { generating, error, generateImage }
+  return { generating, error, generateImage, generateTexturePrompt }
 }

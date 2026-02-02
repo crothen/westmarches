@@ -258,6 +258,91 @@ async function uploadIcon(key: string, event: Event) {
   }
 }
 
+const migrating = ref(false)
+const migrateProgress = ref('')
+
+async function migrateToStorage() {
+  if (!confirm('Upload all local icons to Firebase Storage and update config? This is a one-time migration.')) return
+  migrating.value = true
+  migrateProgress.value = 'Starting...'
+  
+  try {
+    // Collect all local icon paths from all categories
+    const allPaths: { category: string; key: string; localPath: string }[] = []
+    
+    const categories = [
+      { name: 'locationTypes', icons: locationTypeIcons, folder: 'locations' },
+      { name: 'featureTypes', icons: featureTypeIcons, folder: 'features' },
+      { name: 'hexMarkerTypes', icons: markerTypeIcons, folder: 'markers' }
+    ] as const
+
+    for (const cat of categories) {
+      for (const [key, path] of Object.entries(cat.icons)) {
+        // Only migrate local paths (not already storage URLs)
+        if (path.startsWith('http')) continue
+        allPaths.push({ category: cat.name, key, localPath: path })
+      }
+    }
+
+    // Also check current Firestore config for any remaining local paths
+    for (const cat of categories) {
+      const section = config.value[cat.name as keyof MarkerTypesConfig] || {}
+      for (const [key, entry] of Object.entries(section)) {
+        if (entry.iconUrl && !entry.iconUrl.startsWith('http')) {
+          if (!allPaths.find(p => p.category === cat.name && p.key === key)) {
+            allPaths.push({ category: cat.name, key, localPath: entry.iconUrl })
+          }
+        }
+      }
+    }
+
+    // Deduplicate by local path (same file should produce same storage URL)
+    const pathToUrl: Record<string, string> = {}
+    const uniquePaths = [...new Set(allPaths.map(p => p.localPath))]
+    
+    let uploaded = 0
+    for (const localPath of uniquePaths) {
+      migrateProgress.value = `Uploading ${++uploaded}/${uniquePaths.length}: ${localPath}`
+      
+      // Fetch the local file
+      const response = await fetch(localPath)
+      if (!response.ok) {
+        console.warn(`Failed to fetch ${localPath}`)
+        continue
+      }
+      const blob = await response.blob()
+      
+      // Upload to storage under icons/ with a flat name
+      const flatName = localPath.replace(/^\/icons\//, '').replace(/\//g, '-')
+      const fileRef = storageRef(storage, `icons/${flatName}`)
+      const { ref: uploadedRef } = await (await import('firebase/storage')).uploadBytes(fileRef, blob, { contentType: 'image/png' })
+      const url = await (await import('firebase/storage')).getDownloadURL(uploadedRef)
+      pathToUrl[localPath] = url
+    }
+
+    // Update config with storage URLs
+    migrateProgress.value = 'Updating Firestore config...'
+    const newConfig = { ...config.value }
+    
+    for (const item of allPaths) {
+      const section = newConfig[item.category as keyof MarkerTypesConfig]
+      if (section && section[item.key] && pathToUrl[item.localPath]) {
+        section[item.key] = { ...section[item.key]!, iconUrl: pathToUrl[item.localPath]! }
+      }
+    }
+
+    await setDoc(doc(db, 'config', 'markerTypes'), newConfig)
+    config.value = newConfig
+    migrateProgress.value = `Done! Migrated ${uploaded} icons.`
+    setTimeout(() => { migrateProgress.value = '' }, 5000)
+  } catch (e) {
+    console.error('Migration failed:', e)
+    migrateProgress.value = `Error: ${e}`
+  } finally {
+    migrating.value = false
+  }
+}
+
 async function seedDefaults() {
   if (!confirm('This will reset all marker types to their defaults. Custom labels and icons will be lost. Continue?')) return
   saving.value = true
@@ -278,7 +363,13 @@ async function seedDefaults() {
   <div>
     <div class="flex items-center justify-between mb-4">
       <p class="text-zinc-500 text-sm">Manage marker types — edit labels, upload custom icons, add or remove types.</p>
-      <button @click="seedDefaults" class="text-[0.6rem] text-zinc-600 hover:text-amber-400 transition-colors">🔄 Reset to defaults</button>
+      <div class="flex items-center gap-3">
+        <button @click="migrateToStorage" :disabled="migrating" class="text-[0.6rem] text-zinc-600 hover:text-[#ef233c] transition-colors">📤 Migrate to Storage</button>
+        <button @click="seedDefaults" class="text-[0.6rem] text-zinc-600 hover:text-amber-400 transition-colors">🔄 Reset to defaults</button>
+      </div>
+    </div>
+    <div v-if="migrateProgress" class="mb-3 text-xs text-zinc-400 bg-white/[0.03] rounded-lg p-2 border border-white/[0.06]">
+      <span v-if="migrating" class="animate-pulse">⏳</span> {{ migrateProgress }}
     </div>
 
     <!-- Category Tabs -->
