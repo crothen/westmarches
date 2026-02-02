@@ -79,30 +79,41 @@ function toSketch(imageUrl: string, cacheKey: string) {
       gray[i] = 0.299 * r + 0.587 * g + 0.114 * b
     }
 
-    // 2. Gaussian blur (5x5 approximation)
+    // 2. Gaussian blur (5x5) to reduce noise
     const blurred = gaussianBlur(gray, w, h)
 
-    // 3. Sobel gradient magnitude + direction
-    const { magnitude, direction } = sobelGradient(blurred, w, h)
+    // 3. Sobel gradient magnitude (no Canny — pure Sobel filter)
+    const magnitude = new Float32Array(w * h)
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const gx =
+          -blurred[(y-1)*w+(x-1)]! - 2*blurred[y*w+(x-1)]! - blurred[(y+1)*w+(x-1)]! +
+           blurred[(y-1)*w+(x+1)]! + 2*blurred[y*w+(x+1)]! + blurred[(y+1)*w+(x+1)]!
+        const gy =
+          -blurred[(y-1)*w+(x-1)]! - 2*blurred[(y-1)*w+x]! - blurred[(y-1)*w+(x+1)]! +
+           blurred[(y+1)*w+(x-1)]! + 2*blurred[(y+1)*w+x]! + blurred[(y+1)*w+(x+1)]!
+        magnitude[y * w + x] = Math.sqrt(gx * gx + gy * gy)
+      }
+    }
 
-    // 4. Non-maximum suppression
-    const suppressed = nonMaxSuppression(magnitude, direction, w, h)
+    // 4. Render: variable-weight ink lines based on gradient strength
+    //    Normalize magnitude, then map to alpha with a threshold
+    let maxMag = 0
+    for (let i = 0; i < w * h; i++) { if (magnitude[i]! > maxMag) maxMag = magnitude[i]! }
+    if (maxMag < 1) maxMag = 1
 
-    // 5. Double threshold + hysteresis
-    const edges = hysteresis(suppressed, w, h, 8, 25)
-
-    // 6. Render: variable-weight lines based on gradient magnitude
-    //    Stronger edges (bigger color difference) = darker/bolder lines
-    const maxMag = Math.max(1, ...Array.from(magnitude).filter((_, i) => edges[i]))
     const output = ctx.createImageData(w, h)
+    const threshold = 0.04 // ignore very faint gradients
     for (let i = 0; i < w * h; i++) {
-      if (!edges[i]) {
+      const norm = magnitude[i]! / maxMag
+      if (norm < threshold) {
         output.data[i * 4 + 3] = 0
         continue
       }
-      // Map magnitude to alpha: weak edges ~80, strong edges 255
-      const strength = Math.min(1, magnitude[i]! / (maxMag * 0.4))
-      const alpha = Math.round(80 + strength * 175)
+      // Remap: threshold..1 → 0..1, then apply gamma for bolder lines
+      const t = (norm - threshold) / (1 - threshold)
+      const gamma = Math.pow(t, 0.5) // sqrt gamma = bolder mid-range
+      const alpha = Math.round(gamma * 255)
       output.data[i * 4] = 15
       output.data[i * 4 + 1] = 10
       output.data[i * 4 + 2] = 5
@@ -144,65 +155,6 @@ function gaussianBlur(src: Float32Array, w: number, h: number): Float32Array {
         sum += tmp[yy * w + x]! * kernel[k + 2]!
       }
       out[y * w + x] = sum / kSum
-    }
-  }
-  return out
-}
-
-function sobelGradient(src: Float32Array, w: number, h: number) {
-  const magnitude = new Float32Array(w * h)
-  const direction = new Float32Array(w * h)
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const gx =
-        -src[(y-1)*w+(x-1)]! - 2*src[y*w+(x-1)]! - src[(y+1)*w+(x-1)]! +
-         src[(y-1)*w+(x+1)]! + 2*src[y*w+(x+1)]! + src[(y+1)*w+(x+1)]!
-      const gy =
-        -src[(y-1)*w+(x-1)]! - 2*src[(y-1)*w+x]! - src[(y-1)*w+(x+1)]! +
-         src[(y+1)*w+(x-1)]! + 2*src[(y+1)*w+x]! + src[(y+1)*w+(x+1)]!
-      magnitude[y * w + x] = Math.sqrt(gx * gx + gy * gy)
-      direction[y * w + x] = Math.atan2(gy, gx)
-    }
-  }
-  return { magnitude, direction }
-}
-
-function nonMaxSuppression(mag: Float32Array, dir: Float32Array, w: number, h: number): Float32Array {
-  const out = new Float32Array(w * h)
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const idx = y * w + x
-      const angle = ((dir[idx]! * 180 / Math.PI) + 180) % 180
-      let n1 = 0, n2 = 0
-      if (angle < 22.5 || angle >= 157.5) { n1 = mag[idx + 1]!; n2 = mag[idx - 1]! }
-      else if (angle < 67.5) { n1 = mag[(y-1)*w+(x+1)]!; n2 = mag[(y+1)*w+(x-1)]! }
-      else if (angle < 112.5) { n1 = mag[(y-1)*w+x]!; n2 = mag[(y+1)*w+x]! }
-      else { n1 = mag[(y-1)*w+(x-1)]!; n2 = mag[(y+1)*w+(x+1)]! }
-      out[idx] = (mag[idx]! >= n1 && mag[idx]! >= n2) ? mag[idx]! : 0
-    }
-  }
-  return out
-}
-
-function hysteresis(sup: Float32Array, w: number, h: number, lo: number, hi: number): Uint8Array {
-  const out = new Uint8Array(w * h) // 0 or 1
-  const stack: number[] = []
-  // Mark strong edges
-  for (let i = 0; i < w * h; i++) {
-    if (sup[i]! >= hi) { out[i] = 1; stack.push(i) }
-  }
-  // Grow from strong edges to weak edges
-  while (stack.length) {
-    const idx = stack.pop()!
-    const x = idx % w, y = (idx - x) / w
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx, ny = y + dy
-        if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-          const ni = ny * w + nx
-          if (!out[ni] && sup[ni]! >= lo) { out[ni] = 1; stack.push(ni) }
-        }
-      }
     }
   }
   return out
