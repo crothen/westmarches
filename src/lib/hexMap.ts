@@ -740,9 +740,10 @@ export class HexMap {
         const icon = iconsToShow[i]!
         const pos = positions[i]!
         const drawSize = iconDrawSize
+        const isIconHidden = icon.hidden && isDmOrAdmin
 
         this.ctx.save()
-        if (icon.hidden && isDmOrAdmin) this.ctx.globalAlpha = 0.3
+        if (isIconHidden) this.ctx.globalAlpha = 0.45
         this.ctx.shadowColor = 'rgba(0,0,0,0.6)'
         this.ctx.shadowBlur = 3
 
@@ -766,6 +767,29 @@ export class HexMap {
         }
 
         this.ctx.restore()
+
+        // Hidden overlay: red outline circle + diagonal strike-through
+        if (isIconHidden) {
+          this.ctx.save()
+          this.ctx.globalAlpha = 0.85
+          const r = drawSize * 0.55
+          const lw = Math.max(1.5, drawSize * 0.06)
+
+          // Red circle outline
+          this.ctx.strokeStyle = '#ef233c'
+          this.ctx.lineWidth = lw
+          this.ctx.beginPath()
+          this.ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2)
+          this.ctx.stroke()
+
+          // Diagonal strike-through (bottom-left to top-right)
+          this.ctx.beginPath()
+          this.ctx.moveTo(pos.x - r * 0.7, pos.y + r * 0.7)
+          this.ctx.lineTo(pos.x + r * 0.7, pos.y - r * 0.7)
+          this.ctx.stroke()
+
+          this.ctx.restore()
+        }
       }
     }
   }
