@@ -231,7 +231,7 @@ async function deleteNpc() {
             <span class="text-zinc-600 text-sm">🏛️ Organizations: </span>
             <RouterLink
               v-for="(org, i) in npcOrgs" :key="org.id"
-              :to="'/organizations#' + org.id"
+              :to="'/organizations/' + org.id"
               class="text-sm text-zinc-400 hover:text-[#ef233c] transition-colors"
             >{{ org.name }}<span v-if="i < npcOrgs.length - 1">, </span></RouterLink>
           </div>

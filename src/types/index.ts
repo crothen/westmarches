@@ -108,7 +108,7 @@ export interface Npc {
   updatedAt: Date
 }
 
-export type OrgRank = 'leader' | 'subleader' | 'officer' | 'underofficer' | 'member'
+export type OrgRank = 'leader' | 'subleader' | 'officer' | 'underofficer' | 'member' | 'initiate'
 
 export interface OrgMember {
   entityType: 'player' | 'npc'
@@ -121,6 +121,7 @@ export interface Organization {
   id: string
   name: string
   description: string
+  imageUrl?: string
   members: OrgMember[]
   createdAt: Date
   updatedAt: Date
