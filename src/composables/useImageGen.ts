@@ -58,50 +58,111 @@ export function useImageGen() {
   }
 
   /**
-   * Center-crop image bytes to a target aspect ratio using an offscreen canvas.
-   * Returns new image bytes (PNG).
+   * Load a Uint8Array image into an HTMLImageElement.
    */
-  async function cropToAspectRatio(imageData: Uint8Array, mimeType: string, targetRatio: number): Promise<Blob> {
-    // Load image into an HTMLImageElement
+  function loadImage(imageData: Uint8Array, mimeType: string): Promise<HTMLImageElement> {
     const blob = new Blob([imageData as BlobPart], { type: mimeType })
     const url = URL.createObjectURL(blob)
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image()
-      el.onload = () => resolve(el)
-      el.onerror = reject
+      el.onload = () => { URL.revokeObjectURL(url); resolve(el) }
+      el.onerror = (e) => { URL.revokeObjectURL(url); reject(e) }
       el.src = url
     })
-    URL.revokeObjectURL(url)
+  }
 
+  /**
+   * Crop image to a target aspect ratio at a given vertical position (0-1).
+   * yPosition 0 = top, 0.5 = center, 1 = bottom.
+   */
+  async function cropToAspectRatio(
+    imageData: Uint8Array, mimeType: string, targetRatio: number, yPosition = 0.5
+  ): Promise<Blob> {
+    const img = await loadImage(imageData, mimeType)
     const srcW = img.naturalWidth
     const srcH = img.naturalHeight
-    const srcRatio = srcW / srcH
 
-    let cropW: number, cropH: number, cropX: number, cropY: number
-
-    if (srcRatio > targetRatio) {
-      // Source is wider than target — crop width
-      cropH = srcH
-      cropW = Math.round(srcH * targetRatio)
-      cropX = Math.round((srcW - cropW) / 2)
-      cropY = 0
-    } else {
-      // Source is taller than target — crop height (center slice)
-      cropW = srcW
-      cropH = Math.round(srcW / targetRatio)
-      cropX = 0
-      cropY = Math.round((srcH - cropH) / 2)
-    }
+    // Always use full width, crop height
+    const cropW = srcW
+    const cropH = Math.round(srcW / targetRatio)
+    const maxY = srcH - cropH
+    const cropY = Math.round(Math.max(0, Math.min(maxY, yPosition * maxY)))
 
     const canvas = document.createElement('canvas')
     canvas.width = cropW
     canvas.height = cropH
     const ctx = canvas.getContext('2d')!
-    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
+    ctx.drawImage(img, 0, cropY, cropW, cropH, 0, 0, cropW, cropH)
 
-    // Export as PNG bytes
-    const outBlob: Blob = await new Promise<Blob>((resolve) => canvas.toBlob(b => resolve(b!), 'image/png'))
-    return outBlob
+    return new Promise<Blob>((resolve) => canvas.toBlob(b => resolve(b!), 'image/png'))
+  }
+
+  /**
+   * Generate an image and return the raw data (no upload).
+   * Use for preview/crop workflows.
+   */
+  async function generateImageRaw(prompt: string): Promise<{ data: Uint8Array; mimeType: string; objectUrl: string } | null> {
+    if (!apiKey) {
+      error.value = 'Gemini API key not configured'
+      return null
+    }
+
+    generating.value = true
+    error.value = null
+
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash-image',
+        generationConfig: {
+          // @ts-ignore
+          responseModalities: ['TEXT', 'IMAGE'],
+        },
+      })
+
+      const result = await model.generateContent(prompt)
+      let imageData: Uint8Array | null = null
+      let mimeType = 'image/png'
+
+      for (const candidate of result.response.candidates || []) {
+        for (const part of candidate.content?.parts || []) {
+          if (part.inlineData) {
+            const binaryString = atob(part.inlineData.data!)
+            mimeType = part.inlineData.mimeType || 'image/png'
+            const bytes = new Uint8Array(binaryString.length)
+            for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
+            imageData = bytes
+            break
+          }
+        }
+        if (imageData) break
+      }
+
+      if (!imageData) {
+        error.value = 'No image was generated. Try a different prompt.'
+        return null
+      }
+
+      const blob = new Blob([imageData as BlobPart], { type: mimeType })
+      const objectUrl = URL.createObjectURL(blob)
+      return { data: imageData, mimeType, objectUrl }
+    } catch (e: any) {
+      console.error('Image generation failed:', e)
+      error.value = e.message || 'Image generation failed'
+      return null
+    } finally {
+      generating.value = false
+    }
+  }
+
+  /**
+   * Upload image data (Uint8Array or Blob) to Firebase Storage and return the URL.
+   */
+  async function uploadImageData(data: Uint8Array | Blob, mimeType: string, storagePath: string): Promise<string> {
+    const ext = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : 'png'
+    const fileRef = storageRef(storage, `${storagePath}.${ext}`)
+    await uploadBytes(fileRef, data, { contentType: mimeType })
+    return getDownloadURL(fileRef)
   }
 
   async function generateImage(prompt: string, storagePath: string, options?: { cropAspectRatio?: number }): Promise<string | null> {
@@ -243,5 +304,9 @@ Generate the image prompt.`
     }
   }
 
-  return { generating, error, generateImage, generateTexturePrompt, generateEntryImagePrompt }
+  return {
+    generating, error,
+    generateImage, generateImageRaw, uploadImageData, cropToAspectRatio,
+    generateTexturePrompt, generateEntryImagePrompt,
+  }
 }
