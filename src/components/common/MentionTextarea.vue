@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase/config'
+import { useAuth } from '../../composables/useAuth'
+import type { MentionKind } from '../../lib/mentionRenderer'
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -21,41 +23,44 @@ const emit = defineEmits<{
 interface MentionCandidate {
   id: string
   name: string
-  kind: 'char' | 'npc' | 'location' | 'feature' | 'org'
+  kind: MentionKind
   detail?: string
 }
 
-type TriggerChar = '@' | '#' | '¦'
+type TriggerChar = '@' | '#' | '\u00A6'
+const TRIGGER_CHARS = new Set<string>(['@', '#', '\u00A6'])
+
+const auth = useAuth()
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const showDropdown = ref(false)
 const mentionSearch = ref('')
 const mentionStartIndex = ref(-1)
+const mentionTrigger = ref<TriggerChar | null>(null)
 const selectedIndex = ref(0)
-const activeTrigger = ref<TriggerChar | null>(null)
 const dropdownPos = ref({ top: 0, left: 0 })
-
-// Separate loaded flags per trigger type
-const loadedAt = ref(false)
-const loadedHash = ref(false)
-const loadedPipe = ref(false)
+const loaded = ref(false)
 
 const _mentionUnsubs: (() => void)[] = []
-
-// @ trigger candidates
 const charCandidates = ref<MentionCandidate[]>([])
 const npcCandidates = ref<MentionCandidate[]>([])
-
-// # trigger candidates
 const locationCandidates = ref<MentionCandidate[]>([])
 const featureCandidates = ref<MentionCandidate[]>([])
-
-// ¦ trigger candidates
+const pinCandidates = ref<MentionCandidate[]>([])
 const orgCandidates = ref<MentionCandidate[]>([])
 
-function loadAtCandidates() {
-  if (loadedAt.value) return
-  loadedAt.value = true
+const allCandidates = computed<MentionCandidate[]>(() => [
+  ...charCandidates.value,
+  ...npcCandidates.value,
+  ...locationCandidates.value,
+  ...featureCandidates.value,
+  ...pinCandidates.value,
+  ...orgCandidates.value,
+])
+
+function loadCandidates() {
+  if (loaded.value) return
+  loaded.value = true
 
   _mentionUnsubs.push(onSnapshot(query(collection(db, 'characters'), orderBy('name', 'asc')), (snap) => {
     charCandidates.value = snap.docs.map(d => {
@@ -70,11 +75,6 @@ function loadAtCandidates() {
       return { id: d.id, name: data.name, kind: 'npc' as const, detail: data.race || '' }
     })
   }, (e) => console.warn('Failed to load NPC candidates:', e)))
-}
-
-function loadHashCandidates() {
-  if (loadedHash.value) return
-  loadedHash.value = true
 
   _mentionUnsubs.push(onSnapshot(query(collection(db, 'locations'), orderBy('name', 'asc')), (snap) => {
     locationCandidates.value = snap.docs.map(d => {
@@ -89,43 +89,114 @@ function loadHashCandidates() {
       return { id: d.id, name: data.name, kind: 'feature' as const, detail: data.type || '' }
     })
   }, (e) => console.warn('Failed to load feature candidates:', e)))
-}
 
-function loadPipeCandidates() {
-  if (loadedPipe.value) return
-  loadedPipe.value = true
+  _mentionUnsubs.push(onSnapshot(query(collection(db, 'markers'), orderBy('name', 'asc')), (snap) => {
+    const currentUid = auth.firebaseUser?.uid
+    const isAdmin = auth.isAdmin
+    pinCandidates.value = snap.docs
+      .filter(d => {
+        const data = d.data()
+        // Don't show private markers that don't belong to the current user (unless admin)
+        if (data.isPrivate && data.createdBy !== currentUid && !isAdmin) return false
+        return true
+      })
+      .map(d => {
+        const data = d.data()
+        return { id: d.id, name: data.name, kind: 'pin' as const, detail: data.type || '' }
+      })
+  }, (e) => console.warn('Failed to load marker candidates:', e)))
 
   _mentionUnsubs.push(onSnapshot(query(collection(db, 'organizations'), orderBy('name', 'asc')), (snap) => {
     orgCandidates.value = snap.docs.map(d => {
       const data = d.data()
-      return { id: d.id, name: data.name, kind: 'org' as const, detail: '' }
+      const memberCount = Array.isArray(data.members) ? data.members.length : 0
+      return { id: d.id, name: data.name, kind: 'org' as const, detail: memberCount > 0 ? `${memberCount} members` : '' }
     })
   }, (e) => console.warn('Failed to load organization candidates:', e)))
 }
 
-const activeCandidates = computed<MentionCandidate[]>(() => {
-  if (activeTrigger.value === '@') {
-    return [...charCandidates.value, ...npcCandidates.value]
+/** Group label for a kind */
+function kindGroupLabel(kind: MentionKind): string {
+  switch (kind) {
+    case 'char': return 'Characters'
+    case 'npc': return 'NPCs'
+    case 'location': return 'Locations'
+    case 'feature': return 'Features'
+    case 'pin': return 'Pins'
+    case 'org': return 'Organizations'
   }
-  if (activeTrigger.value === '#') {
-    return [...locationCandidates.value, ...featureCandidates.value]
+}
+
+/** Emoji icon for a kind */
+function kindIcon(kind: MentionKind): string {
+  switch (kind) {
+    case 'char': return '🧙'
+    case 'npc': return '👤'
+    case 'location': return '📍'
+    case 'feature': return '📌'
+    case 'pin': return '🏷️'
+    case 'org': return '🏛️'
   }
-  if (activeTrigger.value === '¦') {
-    return [...orgCandidates.value]
+}
+
+/** CSS classes for a kind badge */
+function kindBadgeClass(kind: MentionKind): string {
+  switch (kind) {
+    case 'char': return 'bg-blue-500/20 text-blue-400'
+    case 'npc': return 'bg-amber-500/20 text-amber-400'
+    case 'location': return 'bg-green-500/20 text-green-400'
+    case 'feature': return 'bg-teal-500/20 text-teal-400'
+    case 'pin': return 'bg-purple-500/20 text-purple-400'
+    case 'org': return 'bg-rose-500/20 text-rose-400'
   }
-  return []
-})
+}
+
+/** Trigger character for a given kind */
+function kindTriggerChar(kind: MentionKind): string {
+  switch (kind) {
+    case 'char':
+    case 'npc':
+      return '@'
+    case 'location':
+    case 'feature':
+    case 'pin':
+      return '#'
+    case 'org':
+      return '\u00A6'
+  }
+}
 
 const filteredCandidates = computed(() => {
   const q = mentionSearch.value.toLowerCase()
-  const candidates = activeCandidates.value
+  let candidates = allCandidates.value
+  if (mentionTrigger.value === '@') {
+    candidates = candidates.filter(c => c.kind === 'char' || c.kind === 'npc')
+  } else if (mentionTrigger.value === '#') {
+    candidates = candidates.filter(c => c.kind === 'location' || c.kind === 'feature' || c.kind === 'pin')
+  } else if (mentionTrigger.value === '\u00A6') {
+    candidates = candidates.filter(c => c.kind === 'org')
+  }
   if (!q) return candidates.slice(0, 10)
-  return candidates
-    .filter(c => c.name.toLowerCase().includes(q))
-    .slice(0, 10)
+  return candidates.filter(c => c.name.toLowerCase().includes(q)).slice(0, 10)
 })
 
-const TRIGGER_CHARS = new Set<string>(['@', '#', '¦'])
+/**
+ * Group filtered candidates by kind, preserving order, for sectioned display.
+ * Returns an array of { kind, label, candidates } groups.
+ */
+const groupedCandidates = computed(() => {
+  const list = filteredCandidates.value
+  const groups: { kind: MentionKind; label: string; candidates: MentionCandidate[] }[] = []
+  const seen = new Set<MentionKind>()
+  for (const c of list) {
+    if (!seen.has(c.kind)) {
+      seen.add(c.kind)
+      groups.push({ kind: c.kind, label: kindGroupLabel(c.kind), candidates: [] })
+    }
+    groups.find(g => g.kind === c.kind)!.candidates.push(c)
+  }
+  return groups
+})
 
 function onInput(e: Event) {
   const textarea = e.target as HTMLTextAreaElement
@@ -136,7 +207,7 @@ function onInput(e: Event) {
 function checkForMention(textarea: HTMLTextAreaElement) {
   const cursorPos = textarea.selectionStart
   const text = textarea.value
-  // Look backwards from cursor for a trigger char that starts a mention
+  // Look backwards from cursor for a trigger character that starts a mention
   let triggerIndex = -1
   let triggerChar: TriggerChar | null = null
   for (let i = cursorPos - 1; i >= 0; i--) {
@@ -154,20 +225,15 @@ function checkForMention(textarea: HTMLTextAreaElement) {
 
   if (triggerIndex >= 0 && triggerChar) {
     mentionStartIndex.value = triggerIndex
+    mentionTrigger.value = triggerChar
     mentionSearch.value = text.substring(triggerIndex + 1, cursorPos)
-    activeTrigger.value = triggerChar
     showDropdown.value = true
     selectedIndex.value = 0
-
-    // Lazy-load candidates per trigger
-    if (triggerChar === '@') loadAtCandidates()
-    else if (triggerChar === '#') loadHashCandidates()
-    else if (triggerChar === '¦') loadPipeCandidates()
-
+    loadCandidates()
     positionDropdown(textarea, triggerIndex)
   } else {
     showDropdown.value = false
-    activeTrigger.value = null
+    mentionTrigger.value = null
   }
 }
 
@@ -180,14 +246,6 @@ function positionDropdown(textarea: HTMLTextAreaElement, _atIndex: number) {
   }
 }
 
-const TOKEN_PREFIX: Record<MentionCandidate['kind'], string> = {
-  char: '@',
-  npc: '@',
-  location: '#',
-  feature: '#',
-  org: '¦',
-}
-
 function selectCandidate(candidate: MentionCandidate) {
   const textarea = textareaRef.value
   if (!textarea) return
@@ -196,13 +254,13 @@ function selectCandidate(candidate: MentionCandidate) {
   const cursorPos = textarea.selectionStart
   const before = text.substring(0, mentionStartIndex.value)
   const after = text.substring(cursorPos)
-  const prefix = TOKEN_PREFIX[candidate.kind]
+  const prefix = kindTriggerChar(candidate.kind)
   const token = `${prefix}[${candidate.name}](${candidate.kind}:${candidate.id})`
   const newText = before + token + ' ' + after
 
   emit('update:modelValue', newText)
   showDropdown.value = false
-  activeTrigger.value = null
+  mentionTrigger.value = null
 
   nextTick(() => {
     if (textareaRef.value) {
@@ -230,40 +288,23 @@ function onKeydown(e: KeyboardEvent) {
     }
   } else if (e.key === 'Escape') {
     showDropdown.value = false
+    mentionTrigger.value = null
   }
 }
 
 function onBlur() {
   // Delay to allow click on dropdown item
-  setTimeout(() => { showDropdown.value = false }, 200)
+  setTimeout(() => {
+    showDropdown.value = false
+    mentionTrigger.value = null
+  }, 200)
 }
 
 function onClickOutside(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (!target.closest('.mention-dropdown') && target !== textareaRef.value) {
     showDropdown.value = false
-  }
-}
-
-function getBadgeClass(kind: MentionCandidate['kind']): string {
-  switch (kind) {
-    case 'char': return 'bg-blue-500/20 text-blue-400'
-    case 'npc': return 'bg-amber-500/20 text-amber-400'
-    case 'location': return 'bg-green-500/20 text-green-400'
-    case 'feature': return 'bg-purple-500/20 text-purple-400'
-    case 'org': return 'bg-rose-500/20 text-rose-400'
-    default: return 'bg-white/10 text-zinc-400'
-  }
-}
-
-function getBadgeEmoji(kind: MentionCandidate['kind']): string {
-  switch (kind) {
-    case 'char': return '🧙'
-    case 'npc': return '👤'
-    case 'location': return '📍'
-    case 'feature': return '📌'
-    case 'org': return '🏛️'
-    default: return '❓'
+    mentionTrigger.value = null
   }
 }
 
@@ -300,22 +341,31 @@ onUnmounted(() => {
           class="mention-dropdown fixed z-[200] bg-zinc-900 border border-white/10 rounded-lg shadow-2xl max-h-48 overflow-y-auto min-w-[200px] max-w-[300px]"
           :style="{ top: dropdownPos.top + 'px', left: dropdownPos.left + 'px' }"
         >
-          <button
-            v-for="(c, i) in filteredCandidates"
-            :key="c.kind + ':' + c.id"
-            :class="[
-              'w-full text-left px-3 py-2 flex items-center gap-2 transition-colors text-sm',
-              i === selectedIndex ? 'bg-[#ef233c]/15 text-white' : 'text-zinc-300 hover:bg-white/5'
-            ]"
-            @mousedown.prevent="selectCandidate(c)"
-            @mouseenter="selectedIndex = i"
-          >
-            <span :class="['text-xs shrink-0 rounded-full px-1.5 py-0.5', getBadgeClass(c.kind)]">
-              {{ getBadgeEmoji(c.kind) }}
-            </span>
-            <span class="truncate font-medium">{{ c.name }}</span>
-            <span v-if="c.detail" class="text-zinc-600 text-xs truncate">{{ c.detail }}</span>
-          </button>
+          <template v-for="group in groupedCandidates" :key="group.kind">
+            <!-- Section header (only when there's more than one group) -->
+            <div
+              v-if="groupedCandidates.length > 1"
+              class="px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-500 font-semibold select-none"
+            >
+              {{ group.label }}
+            </div>
+            <button
+              v-for="c in group.candidates"
+              :key="c.id"
+              :class="[
+                'w-full text-left px-3 py-2 flex items-center gap-2 transition-colors text-sm',
+                filteredCandidates.indexOf(c) === selectedIndex ? 'bg-[#ef233c]/15 text-white' : 'text-zinc-300 hover:bg-white/5'
+              ]"
+              @mousedown.prevent="selectCandidate(c)"
+              @mouseenter="selectedIndex = filteredCandidates.indexOf(c)"
+            >
+              <span :class="['text-xs shrink-0 rounded-full px-1.5 py-0.5', kindBadgeClass(c.kind)]">
+                {{ kindIcon(c.kind) }}
+              </span>
+              <span class="truncate font-medium">{{ c.name }}</span>
+              <span v-if="c.detail" class="text-zinc-600 text-xs truncate">{{ c.detail }}</span>
+            </button>
+          </template>
         </div>
       </transition>
     </Teleport>

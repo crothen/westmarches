@@ -9,7 +9,7 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
-const { characterIds, npcIds } = useEntityExists()
+const { characterIds, npcIds, locationIds, featureIds, organizationIds } = useEntityExists()
 
 const containsMentions = computed(() => hasMentions(props.text))
 
@@ -22,9 +22,14 @@ const deletedIds = computed(() => {
       deleted.add(token.id)
     } else if (token.kind === 'npc' && npcIds.value.size > 0 && !npcIds.value.has(token.id)) {
       deleted.add(token.id)
+    } else if (token.kind === 'location' && locationIds.value.size > 0 && !locationIds.value.has(token.id)) {
+      deleted.add(token.id)
+    } else if (token.kind === 'feature' && featureIds.value.size > 0 && !featureIds.value.has(token.id)) {
+      deleted.add(token.id)
+    } else if (token.kind === 'org' && organizationIds.value.size > 0 && !organizationIds.value.has(token.id)) {
+      deleted.add(token.id)
     }
-    // For location, feature, org — we don't track deleted state (too many collections),
-    // so they always render as clickable links
+    // pin — no existence check (markers don't have a stable route, skip)
   }
   return deleted.size > 0 ? deleted : undefined
 })
