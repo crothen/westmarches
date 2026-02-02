@@ -139,9 +139,9 @@ function formatDuration(m: Mission): string {
           🛡️ {{ unitName }}
           <span class="text-zinc-600 text-sm font-normal">({{ unitMissions.length }} missions)</span>
         </h2>
-        <div class="space-y-2">
-          <div v-for="mission in unitMissions" :key="mission.id" class="card p-4 relative z-10">
-            <div class="relative z-10 flex items-start gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div v-for="mission in unitMissions" :key="mission.id" class="card p-4 relative z-10 flex flex-col">
+            <div class="relative z-10 flex items-start gap-3 flex-1">
               <!-- Vote button (left) -->
               <div v-if="auth.isAuthenticated" class="shrink-0 flex flex-col items-center gap-1.5 pt-1">
                 <button
@@ -171,9 +171,9 @@ function formatDuration(m: Mission): string {
     </div>
 
     <!-- Sorted by votes -->
-    <div v-else class="space-y-2">
-      <div v-for="mission in sortedByVotes" :key="mission.id" class="card p-4 relative z-10">
-        <div class="relative z-10 flex items-start gap-3">
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div v-for="mission in sortedByVotes" :key="mission.id" class="card p-4 relative z-10 flex flex-col">
+        <div class="relative z-10 flex items-start gap-3 flex-1">
           <!-- Vote button (left) -->
           <div v-if="auth.isAuthenticated" class="shrink-0 flex flex-col items-center gap-1.5 pt-1">
             <button
