@@ -95,7 +95,7 @@ function onBlur() {
 
       <!-- Suggestions dropdown -->
       <div
-        v-if="showSuggestions && suggestions.length > 0"
+        v-if="showSuggestions && (suggestions.length > 0 || (newTag.trim() && !allKnownTags.includes(newTag.trim())))"
         class="absolute z-20 mt-1 w-full bg-zinc-900 border border-white/10 rounded-lg shadow-xl max-h-40 overflow-y-auto"
       >
         <button
@@ -107,7 +107,7 @@ function onBlur() {
           {{ tag }}
         </button>
         <button
-          v-if="newTag.trim() && !allKnownTags.includes(newTag.trim())"
+          v-if="newTag.trim() && !allKnownTags.includes(newTag.trim()) && !modelValue.includes(newTag.trim())"
           @mousedown.prevent="addTag(newTag)"
           class="w-full text-left px-3 py-1.5 text-sm text-[#ef233c] hover:bg-[#ef233c]/10 transition-colors border-t border-white/[0.06]"
           type="button"
