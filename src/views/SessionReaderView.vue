@@ -395,7 +395,7 @@ onUnmounted(() => {
                 <div class="w-24 border-t border-amber-900/20" />
 
                 <!-- Meta as plain text lines -->
-                <div class="text-lg text-amber-950 space-y-1" :style="{ fontFamily: currentFontFamily }">
+                <div class="journal-text space-y-1" :style="{ fontFamily: currentFontFamily }">
                   <div v-if="session.date">{{ formatDate(session.date) }}</div>
                   <div v-if="session.sessionLocationName">{{ session.sessionLocationName }}</div>
                   <div v-if="session.dmName">Dungeon Master: {{ session.dmName }}</div>
@@ -404,7 +404,7 @@ onUnmounted(() => {
                 <!-- Adventurers as tilde-separated list -->
                 <div v-if="session.participants?.length" :style="{ fontFamily: currentFontFamily }">
                   <div class="text-amber-950 text-base italic mb-1">Adventurers</div>
-                  <div class="text-lg text-amber-950/95">
+                  <div class="journal-text">
                     <template v-for="(p, i) in session.participants" :key="p.characterId">
                       {{ p.characterName }}<template v-if="i < session.participants.length - 1"> ~ </template>
                     </template>
@@ -412,7 +412,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Summary as italic block -->
-                <div v-if="session.summary" class="text-lg text-amber-950 leading-relaxed italic border-l-2 border-amber-900/15 pl-4 mt-4" :style="{ fontFamily: currentFontFamily }">
+                <div v-if="session.summary" class="journal-text italic border-l-2 border-amber-900/15 pl-4 mt-4 !leading-relaxed" :style="{ fontFamily: currentFontFamily }">
                   {{ session.summary }}
                 </div>
               </div>
@@ -445,19 +445,19 @@ onUnmounted(() => {
               <div class="w-16 border-t border-amber-900/15 mb-4" />
 
               <!-- Participants (if subset) -->
-              <div v-if="currentEntry.allParticipantsPresent === false && currentEntry.presentParticipants?.length" class="text-lg text-amber-950 mb-4 italic">
+              <div v-if="currentEntry.allParticipantsPresent === false && currentEntry.presentParticipants?.length" class="journal-text mb-4 italic">
                 Present: <template v-for="(p, i) in currentEntry.presentParticipants" :key="p.characterId">{{ p.characterName }}<template v-if="i < currentEntry.presentParticipants.length - 1">, </template></template>
               </div>
 
               <!-- Description -->
-              <div v-if="currentEntry.description" class="text-xl text-amber-950 whitespace-pre-wrap leading-relaxed mb-6">
+              <div v-if="currentEntry.description" class="journal-text whitespace-pre-wrap !leading-relaxed mb-6">
                 {{ currentEntry.description }}
               </div>
 
               <!-- People of Interest -->
               <div v-if="currentEntry.npcIds?.length" class="mt-auto pt-4 border-t border-amber-900/10">
                 <div class="text-amber-950 text-base italic mb-1">People of Interest</div>
-                <div class="text-lg text-amber-950">
+                <div class="journal-text">
                   <template v-for="(id, i) in currentEntry.npcIds" :key="id">
                     {{ getNpcName(id) }}<template v-if="i < currentEntry.npcIds.length - 1"> ~ </template>
                   </template>
@@ -493,3 +493,13 @@ onUnmounted(() => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.journal-text {
+  font-weight: bold;
+  color: #1c0d03;
+  opacity: 0.9;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+</style>
