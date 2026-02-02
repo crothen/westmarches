@@ -296,7 +296,7 @@ function canDeleteNote(note: SessionNote): boolean {
 
         <!-- Session Art -->
         <div v-if="(session as any).imageUrl" class="mb-6 -mx-1 relative group">
-          <img :src="(session as any).imageUrl" class="w-full max-h-80 object-cover rounded-xl border border-white/10" />
+          <img :src="(session as any).imageUrl" class="w-full max-h-80 object-contain rounded-xl border border-white/10 mx-auto" />
           <div v-if="canEdit" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
             <button @click="openPromptEditor" class="bg-black/70 backdrop-blur text-zinc-300 hover:text-white text-xs px-2.5 py-1.5 rounded-lg border border-white/10 transition-colors">🎨 Regenerate</button>
             <button @click="removeSessionArt" class="bg-black/70 backdrop-blur text-red-400 hover:text-red-300 text-xs px-2.5 py-1.5 rounded-lg border border-white/10 transition-colors">✕ Remove</button>
