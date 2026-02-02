@@ -618,17 +618,17 @@ export class HexMap {
       icons.push({ img })
     }
 
-    // Feature icon (only if no location — avoid double-showing the same hex)
-    if (!data.locationType && data.featureCount > 0) {
+    // Feature icon (always show if features exist, even alongside a location)
+    if (data.featureCount > 0) {
       const img = this.iconImages['feature'] || null
       icons.push({ img })
     }
 
-    // Marker type icons
+    // Marker type icons (each unique type gets an icon)
     if (data.markerTypes) {
       for (const mt of data.markerTypes) {
         const img = this.iconImages[mt] || null
-        if (img) icons.push({ img })
+        icons.push({ img })
       }
     }
 
@@ -747,10 +747,20 @@ export class HexMap {
         if (icon.img) {
           this.ctx.drawImage(icon.img, pos.x - drawSize / 2, pos.y - drawSize / 2, drawSize, drawSize)
         } else if (icon.emoji) {
-          this.ctx.font = `${drawSize * 0.8}px sans-serif`
+          this.ctx.font = `${drawSize * 0.7}px sans-serif`
           this.ctx.textAlign = 'center'
           this.ctx.textBaseline = 'middle'
           this.ctx.fillText(icon.emoji, pos.x, pos.y)
+        } else {
+          // Fallback dot for icons whose image hasn't loaded
+          const r = drawSize * 0.3
+          this.ctx.beginPath()
+          this.ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2)
+          this.ctx.fillStyle = '#ef233c'
+          this.ctx.fill()
+          this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
+          this.ctx.lineWidth = 1.5
+          this.ctx.stroke()
         }
 
         this.ctx.restore()
