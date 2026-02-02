@@ -477,6 +477,9 @@ export class HexMap {
     // === PASS 2: Draw noise-based terrain blending ===
     this.drawTerrainBlending(hexData)
 
+    // Reset globalAlpha after blending passes
+    this.ctx.globalAlpha = 1.0
+
     // === PASS 2.5: Draw map paths (roads/rivers) ===
     if (paths && paths.length > 0) this.drawPaths(paths)
     if (drawingPreview) this.drawPathPreview(drawingPreview)
@@ -684,6 +687,8 @@ export class HexMap {
   }
 
   drawHexIndicators(markers: Record<string, HexMarkerData>, userRole: string = 'player'): void {
+    // Ensure globalAlpha is fully reset before drawing icons
+    this.ctx.globalAlpha = 1.0
     const size = this.CONFIG.hexSize
     const isDmOrAdmin = userRole === 'dm' || userRole === 'admin'
     const zoom = this.camera.zoom
