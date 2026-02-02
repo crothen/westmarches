@@ -89,17 +89,17 @@ function toSketch(imageUrl: string, cacheKey: string) {
     const suppressed = nonMaxSuppression(magnitude, direction, w, h)
 
     // 5. Double threshold + hysteresis
-    const edges = hysteresis(suppressed, w, h, 25, 60)
+    const edges = hysteresis(suppressed, w, h, 15, 40)
 
     // 6. Render: dark lines on transparent (will show parchment through)
     const output = ctx.createImageData(w, h)
     for (let i = 0; i < w * h; i++) {
       const edge = edges[i]!
       // Invert: edges become dark lines, rest is transparent
-      const alpha = edge ? 200 : 0
-      output.data[i * 4] = 40       // dark brown-ish ink
-      output.data[i * 4 + 1] = 30
-      output.data[i * 4 + 2] = 20
+      const alpha = edge ? 255 : 0
+      output.data[i * 4] = 20       // near-black ink
+      output.data[i * 4 + 1] = 15
+      output.data[i * 4 + 2] = 10
       output.data[i * 4 + 3] = alpha
     }
     ctx.putImageData(output, 0, 0)
@@ -365,10 +365,10 @@ onUnmounted(() => {
           <!-- ==================== COVER PAGE ==================== -->
           <div v-if="currentPage === 0" class="relative h-full flex flex-col overflow-y-auto">
             <!-- Sketch cover image (centered, smaller) -->
-            <div v-if="sketchCache['cover'] || (session as any).imageUrl" class="flex justify-center pt-8 px-10">
+            <div v-if="sketchCache['cover'] || (session as any).imageUrl" class="flex justify-center pt-6 px-4">
               <img
                 :src="sketchCache['cover'] || (session as any).imageUrl"
-                class="max-w-[70%] max-h-[200px] object-contain"
+                class="w-[90%] object-contain"
                 :style="sketchCache['cover'] ? '' : 'filter: grayscale(1) contrast(1.5)'"
               />
             </div>
@@ -376,7 +376,7 @@ onUnmounted(() => {
             <div class="flex-1 flex flex-col justify-center px-10 sm:px-14 py-6" :style="{ fontFamily: currentFontFamily }">
               <div class="space-y-4">
                 <!-- Session number as handwritten label -->
-                <div class="text-amber-950/30 text-xs tracking-[0.15em] uppercase" style="font-family: Manrope, sans-serif">
+                <div class="text-amber-950 text-xs tracking-[0.15em] uppercase" style="font-family: Manrope, sans-serif">
                   Session {{ session.sessionNumber }}
                 </div>
 
@@ -389,7 +389,7 @@ onUnmounted(() => {
                 <div class="w-24 border-t border-amber-900/20" />
 
                 <!-- Meta as plain text lines -->
-                <div class="text-sm text-amber-950/70 space-y-1" :style="{ fontFamily: currentFontFamily }">
+                <div class="text-sm text-amber-950 space-y-1" :style="{ fontFamily: currentFontFamily }">
                   <div v-if="session.date">{{ formatDate(session.date) }}</div>
                   <div v-if="session.sessionLocationName">{{ session.sessionLocationName }}</div>
                   <div v-if="session.dmName">Dungeon Master: {{ session.dmName }}</div>
@@ -397,8 +397,8 @@ onUnmounted(() => {
 
                 <!-- Adventurers as tilde-separated list -->
                 <div v-if="session.participants?.length" :style="{ fontFamily: currentFontFamily }">
-                  <div class="text-amber-950/40 text-xs italic mb-1">Adventurers</div>
-                  <div class="text-sm text-amber-950/80">
+                  <div class="text-amber-950 text-xs italic mb-1">Adventurers</div>
+                  <div class="text-sm text-amber-950/95">
                     <template v-for="(p, i) in session.participants" :key="p.characterId">
                       {{ p.characterName }}<template v-if="i < session.participants.length - 1"> ~ </template>
                     </template>
@@ -406,7 +406,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Summary as italic block -->
-                <div v-if="session.summary" class="text-sm text-amber-950/65 leading-relaxed italic border-l-2 border-amber-900/15 pl-4 mt-4" :style="{ fontFamily: currentFontFamily }">
+                <div v-if="session.summary" class="text-sm text-amber-950 leading-relaxed italic border-l-2 border-amber-900/15 pl-4 mt-4" :style="{ fontFamily: currentFontFamily }">
                   {{ session.summary }}
                 </div>
               </div>
@@ -416,17 +416,17 @@ onUnmounted(() => {
           <!-- ==================== ENTRY PAGES ==================== -->
           <div v-else-if="currentEntry" class="relative h-full flex flex-col overflow-y-auto">
             <!-- Sketch image (centered, compact) -->
-            <div v-if="sketchCache[currentEntry.id] || currentEntry.imageUrl" class="flex justify-center pt-6 px-10">
+            <div v-if="sketchCache[currentEntry.id] || currentEntry.imageUrl" class="flex justify-center pt-6 px-4">
               <img
                 :src="sketchCache[currentEntry.id] || currentEntry.imageUrl"
-                class="max-w-[60%] max-h-[180px] object-contain"
+                class="w-[90%] object-contain"
                 :style="sketchCache[currentEntry.id] ? '' : 'filter: grayscale(1) contrast(1.5)'"
               />
             </div>
 
             <div class="flex-1 px-10 sm:px-14 py-6" :style="{ fontFamily: currentFontFamily }">
               <!-- Type label -->
-              <div class="text-amber-950/30 text-xs italic mb-1">
+              <div class="text-amber-950 text-xs italic mb-1">
                 {{ entryTypeLabels[currentEntry.type] || 'Note' }}
               </div>
 
@@ -439,19 +439,19 @@ onUnmounted(() => {
               <div class="w-16 border-t border-amber-900/15 mb-4" />
 
               <!-- Participants (if subset) -->
-              <div v-if="currentEntry.allParticipantsPresent === false && currentEntry.presentParticipants?.length" class="text-sm text-amber-950/60 mb-4 italic">
+              <div v-if="currentEntry.allParticipantsPresent === false && currentEntry.presentParticipants?.length" class="text-sm text-amber-950 mb-4 italic">
                 Present: <template v-for="(p, i) in currentEntry.presentParticipants" :key="p.characterId">{{ p.characterName }}<template v-if="i < currentEntry.presentParticipants.length - 1">, </template></template>
               </div>
 
               <!-- Description -->
-              <div v-if="currentEntry.description" class="text-[0.95rem] text-amber-950/85 whitespace-pre-wrap leading-relaxed mb-6">
+              <div v-if="currentEntry.description" class="text-[0.95rem] text-amber-950 whitespace-pre-wrap leading-relaxed mb-6">
                 {{ currentEntry.description }}
               </div>
 
               <!-- People of Interest -->
               <div v-if="currentEntry.npcIds?.length" class="mt-auto pt-4 border-t border-amber-900/10">
-                <div class="text-amber-950/40 text-xs italic mb-1">People of Interest</div>
-                <div class="text-sm text-amber-950/70">
+                <div class="text-amber-950 text-xs italic mb-1">People of Interest</div>
+                <div class="text-sm text-amber-950">
                   <template v-for="(id, i) in currentEntry.npcIds" :key="id">
                     {{ getNpcName(id) }}<template v-if="i < currentEntry.npcIds.length - 1"> ~ </template>
                   </template>
