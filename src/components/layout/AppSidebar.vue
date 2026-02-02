@@ -58,6 +58,7 @@ const sections: NavSection[] = [
     title: 'Journal',
     items: [
       { to: '/sessions', label: 'Sessions', icon: '📖', show: 'all' },
+      { to: '/generate', label: 'Generate', icon: '✨', show: 'player' },
       { to: '/schedule', label: 'Schedule', icon: '📅', show: 'player' },
       { to: '/inventory', label: 'Inventory', icon: '🎒', show: 'player' },
       { to: '/my-notes', label: 'My Notes', icon: '📝', show: 'player' },

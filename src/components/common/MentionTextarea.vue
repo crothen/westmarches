@@ -21,33 +21,47 @@ const emit = defineEmits<{
 interface MentionCandidate {
   id: string
   name: string
-  kind: 'char' | 'npc'
-  detail?: string  // e.g. race, class
+  kind: 'char' | 'npc' | 'location' | 'feature' | 'org'
+  detail?: string
 }
+
+type TriggerChar = '@' | '#' | '¦'
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const showDropdown = ref(false)
 const mentionSearch = ref('')
 const mentionStartIndex = ref(-1)
 const selectedIndex = ref(0)
-const allCandidates = ref<MentionCandidate[]>([])
+const activeTrigger = ref<TriggerChar | null>(null)
 const dropdownPos = ref({ top: 0, left: 0 })
-const loaded = ref(false)
+
+// Separate loaded flags per trigger type
+const loadedAt = ref(false)
+const loadedHash = ref(false)
+const loadedPipe = ref(false)
 
 const _mentionUnsubs: (() => void)[] = []
+
+// @ trigger candidates
 const charCandidates = ref<MentionCandidate[]>([])
 const npcCandidates = ref<MentionCandidate[]>([])
 
-function loadCandidates() {
-  if (loaded.value) return
-  loaded.value = true
+// # trigger candidates
+const locationCandidates = ref<MentionCandidate[]>([])
+const featureCandidates = ref<MentionCandidate[]>([])
+
+// ¦ trigger candidates
+const orgCandidates = ref<MentionCandidate[]>([])
+
+function loadAtCandidates() {
+  if (loadedAt.value) return
+  loadedAt.value = true
 
   _mentionUnsubs.push(onSnapshot(query(collection(db, 'characters'), orderBy('name', 'asc')), (snap) => {
     charCandidates.value = snap.docs.map(d => {
       const data = d.data()
       return { id: d.id, name: data.name, kind: 'char' as const, detail: `${data.race} ${data.class}` }
     })
-    allCandidates.value = [...charCandidates.value, ...npcCandidates.value]
   }, (e) => console.warn('Failed to load character candidates:', e)))
 
   _mentionUnsubs.push(onSnapshot(query(collection(db, 'npcs'), orderBy('name', 'asc')), (snap) => {
@@ -55,17 +69,63 @@ function loadCandidates() {
       const data = d.data()
       return { id: d.id, name: data.name, kind: 'npc' as const, detail: data.race || '' }
     })
-    allCandidates.value = [...charCandidates.value, ...npcCandidates.value]
   }, (e) => console.warn('Failed to load NPC candidates:', e)))
 }
 
+function loadHashCandidates() {
+  if (loadedHash.value) return
+  loadedHash.value = true
+
+  _mentionUnsubs.push(onSnapshot(query(collection(db, 'locations'), orderBy('name', 'asc')), (snap) => {
+    locationCandidates.value = snap.docs.map(d => {
+      const data = d.data()
+      return { id: d.id, name: data.name, kind: 'location' as const, detail: data.type || '' }
+    })
+  }, (e) => console.warn('Failed to load location candidates:', e)))
+
+  _mentionUnsubs.push(onSnapshot(query(collection(db, 'features'), orderBy('name', 'asc')), (snap) => {
+    featureCandidates.value = snap.docs.map(d => {
+      const data = d.data()
+      return { id: d.id, name: data.name, kind: 'feature' as const, detail: data.type || '' }
+    })
+  }, (e) => console.warn('Failed to load feature candidates:', e)))
+}
+
+function loadPipeCandidates() {
+  if (loadedPipe.value) return
+  loadedPipe.value = true
+
+  _mentionUnsubs.push(onSnapshot(query(collection(db, 'organizations'), orderBy('name', 'asc')), (snap) => {
+    orgCandidates.value = snap.docs.map(d => {
+      const data = d.data()
+      return { id: d.id, name: data.name, kind: 'org' as const, detail: '' }
+    })
+  }, (e) => console.warn('Failed to load organization candidates:', e)))
+}
+
+const activeCandidates = computed<MentionCandidate[]>(() => {
+  if (activeTrigger.value === '@') {
+    return [...charCandidates.value, ...npcCandidates.value]
+  }
+  if (activeTrigger.value === '#') {
+    return [...locationCandidates.value, ...featureCandidates.value]
+  }
+  if (activeTrigger.value === '¦') {
+    return [...orgCandidates.value]
+  }
+  return []
+})
+
 const filteredCandidates = computed(() => {
   const q = mentionSearch.value.toLowerCase()
-  if (!q) return allCandidates.value.slice(0, 10)
-  return allCandidates.value
+  const candidates = activeCandidates.value
+  if (!q) return candidates.slice(0, 10)
+  return candidates
     .filter(c => c.name.toLowerCase().includes(q))
     .slice(0, 10)
 })
+
+const TRIGGER_CHARS = new Set<string>(['@', '#', '¦'])
 
 function onInput(e: Event) {
   const textarea = e.target as HTMLTextAreaElement
@@ -76,29 +136,38 @@ function onInput(e: Event) {
 function checkForMention(textarea: HTMLTextAreaElement) {
   const cursorPos = textarea.selectionStart
   const text = textarea.value
-  // Look backwards from cursor for an @ that starts a mention
-  let atIndex = -1
+  // Look backwards from cursor for a trigger char that starts a mention
+  let triggerIndex = -1
+  let triggerChar: TriggerChar | null = null
   for (let i = cursorPos - 1; i >= 0; i--) {
-    const ch = text[i]
-    if (ch === '@') {
+    const ch = text[i]!
+    if (TRIGGER_CHARS.has(ch)) {
       // Check if it's at start or preceded by whitespace
       if (i === 0 || /\s/.test(text[i - 1]!)) {
-        atIndex = i
+        triggerIndex = i
+        triggerChar = ch as TriggerChar
       }
       break
     }
-    if (/\s/.test(ch!)) break
+    if (/\s/.test(ch)) break
   }
 
-  if (atIndex >= 0) {
-    mentionStartIndex.value = atIndex
-    mentionSearch.value = text.substring(atIndex + 1, cursorPos)
+  if (triggerIndex >= 0 && triggerChar) {
+    mentionStartIndex.value = triggerIndex
+    mentionSearch.value = text.substring(triggerIndex + 1, cursorPos)
+    activeTrigger.value = triggerChar
     showDropdown.value = true
     selectedIndex.value = 0
-    loadCandidates()
-    positionDropdown(textarea, atIndex)
+
+    // Lazy-load candidates per trigger
+    if (triggerChar === '@') loadAtCandidates()
+    else if (triggerChar === '#') loadHashCandidates()
+    else if (triggerChar === '¦') loadPipeCandidates()
+
+    positionDropdown(textarea, triggerIndex)
   } else {
     showDropdown.value = false
+    activeTrigger.value = null
   }
 }
 
@@ -111,6 +180,14 @@ function positionDropdown(textarea: HTMLTextAreaElement, _atIndex: number) {
   }
 }
 
+const TOKEN_PREFIX: Record<MentionCandidate['kind'], string> = {
+  char: '@',
+  npc: '@',
+  location: '#',
+  feature: '#',
+  org: '¦',
+}
+
 function selectCandidate(candidate: MentionCandidate) {
   const textarea = textareaRef.value
   if (!textarea) return
@@ -119,11 +196,13 @@ function selectCandidate(candidate: MentionCandidate) {
   const cursorPos = textarea.selectionStart
   const before = text.substring(0, mentionStartIndex.value)
   const after = text.substring(cursorPos)
-  const token = `@[${candidate.name}](${candidate.kind}:${candidate.id})`
+  const prefix = TOKEN_PREFIX[candidate.kind]
+  const token = `${prefix}[${candidate.name}](${candidate.kind}:${candidate.id})`
   const newText = before + token + ' ' + after
 
   emit('update:modelValue', newText)
   showDropdown.value = false
+  activeTrigger.value = null
 
   nextTick(() => {
     if (textareaRef.value) {
@@ -166,6 +245,28 @@ function onClickOutside(e: MouseEvent) {
   }
 }
 
+function getBadgeClass(kind: MentionCandidate['kind']): string {
+  switch (kind) {
+    case 'char': return 'bg-blue-500/20 text-blue-400'
+    case 'npc': return 'bg-amber-500/20 text-amber-400'
+    case 'location': return 'bg-green-500/20 text-green-400'
+    case 'feature': return 'bg-purple-500/20 text-purple-400'
+    case 'org': return 'bg-rose-500/20 text-rose-400'
+    default: return 'bg-white/10 text-zinc-400'
+  }
+}
+
+function getBadgeEmoji(kind: MentionCandidate['kind']): string {
+  switch (kind) {
+    case 'char': return '🧙'
+    case 'npc': return '👤'
+    case 'location': return '📍'
+    case 'feature': return '📌'
+    case 'org': return '🏛️'
+    default: return '❓'
+  }
+}
+
 onMounted(() => document.addEventListener('click', onClickOutside))
 onUnmounted(() => {
   document.removeEventListener('click', onClickOutside)
@@ -201,7 +302,7 @@ onUnmounted(() => {
         >
           <button
             v-for="(c, i) in filteredCandidates"
-            :key="c.id"
+            :key="c.kind + ':' + c.id"
             :class="[
               'w-full text-left px-3 py-2 flex items-center gap-2 transition-colors text-sm',
               i === selectedIndex ? 'bg-[#ef233c]/15 text-white' : 'text-zinc-300 hover:bg-white/5'
@@ -209,8 +310,8 @@ onUnmounted(() => {
             @mousedown.prevent="selectCandidate(c)"
             @mouseenter="selectedIndex = i"
           >
-            <span :class="['text-xs shrink-0 rounded-full px-1.5 py-0.5', c.kind === 'char' ? 'bg-blue-500/20 text-blue-400' : 'bg-amber-500/20 text-amber-400']">
-              {{ c.kind === 'char' ? '🧙' : '👤' }}
+            <span :class="['text-xs shrink-0 rounded-full px-1.5 py-0.5', getBadgeClass(c.kind)]">
+              {{ getBadgeEmoji(c.kind) }}
             </span>
             <span class="truncate font-medium">{{ c.name }}</span>
             <span v-if="c.detail" class="text-zinc-600 text-xs truncate">{{ c.detail }}</span>

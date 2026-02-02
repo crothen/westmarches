@@ -23,6 +23,8 @@ const deletedIds = computed(() => {
     } else if (token.kind === 'npc' && npcIds.value.size > 0 && !npcIds.value.has(token.id)) {
       deleted.add(token.id)
     }
+    // For location, feature, org — we don't track deleted state (too many collections),
+    // so they always render as clickable links
   }
   return deleted.size > 0 ? deleted : undefined
 })
