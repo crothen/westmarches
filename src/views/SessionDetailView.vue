@@ -383,13 +383,18 @@ function canDeleteNote(note: SessionNote): boolean {
           <span class="text-[#ef233c] font-bold text-2xl" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
           <span class="text-zinc-600">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
           <span v-if="session.sessionLocationName" class="text-zinc-600 text-sm">📍 {{ session.sessionLocationName }}</span>
-          <button
-            v-if="canEdit"
-            @click="editing = true"
-            class="btn !text-xs !py-1.5 !px-3 ml-auto"
-          >
-            ✏️ Edit
-          </button>
+          <div class="flex items-center gap-2 ml-auto">
+            <router-link :to="`/sessions/${session.id}/read`" class="btn-action !py-1.5">
+              📖 Read
+            </router-link>
+            <button
+              v-if="canEdit"
+              @click="editing = true"
+              class="btn !text-xs !py-1.5 !px-3"
+            >
+              ✏️ Edit
+            </button>
+          </div>
         </div>
         <h1 class="text-3xl font-bold text-white mb-6" style="font-family: Manrope, sans-serif">{{ session.title }}</h1>
 

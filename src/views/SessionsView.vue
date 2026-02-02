@@ -113,8 +113,17 @@ async function handleCreate(data: Partial<SessionLog>) {
             <div class="text-zinc-600 text-xs">
               {{ session.participants?.length || 0 }} adventurers
             </div>
-            <div v-if="session.tags?.length" class="flex gap-1 flex-wrap justify-end">
-              <span v-for="tag in session.tags.slice(0, 3)" :key="tag" class="text-[0.6rem] bg-white/[0.05] text-zinc-500 px-1.5 py-0.5 rounded border border-white/[0.06]">{{ tag }}</span>
+            <div class="flex items-center gap-2">
+              <RouterLink
+                :to="`/sessions/${session.id}/read`"
+                class="text-[0.65rem] text-zinc-600 hover:text-[#ef233c] transition-colors relative z-20"
+                @click.stop
+              >
+                📖 Read
+              </RouterLink>
+              <div v-if="session.tags?.length" class="flex gap-1 flex-wrap justify-end">
+                <span v-for="tag in session.tags.slice(0, 3)" :key="tag" class="text-[0.6rem] bg-white/[0.05] text-zinc-500 px-1.5 py-0.5 rounded border border-white/[0.06]">{{ tag }}</span>
+              </div>
             </div>
           </div>
         </div>

@@ -17,6 +17,7 @@ const routes = [
   { path: '/organizations', name: 'organizations', component: () => import('../views/OrganizationsView.vue'), meta: { auth: true } },
   { path: '/sessions', name: 'sessions', component: () => import('../views/SessionsView.vue'), meta: { auth: true } },
   { path: '/sessions/:id', name: 'session-detail', component: () => import('../views/SessionDetailView.vue'), meta: { auth: true } },
+  { path: '/sessions/:id/read', name: 'session-reader', component: () => import('../views/SessionReaderView.vue'), meta: { auth: true } },
   { path: '/missions', name: 'missions', component: () => import('../views/MissionsView.vue'), meta: { auth: true } },
   { path: '/schedule', name: 'schedule', component: () => import('../views/ScheduleView.vue'), meta: { auth: true } },
   { path: '/my-notes', name: 'my-notes', component: () => import('../views/MyNotesView.vue'), meta: { auth: true } },
