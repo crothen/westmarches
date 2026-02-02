@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import type { LocationFeature, CampaignLocation } from '../../types'
+import type { LocationFeature, CampaignLocation, HexMarker } from '../../types'
 
 const props = defineProps<{
   mapUrl: string
   features: LocationFeature[]
   subLocations?: CampaignLocation[]
+  markers?: HexMarker[]
   placingFeature: string | null
   placingSubLocation?: string | null
   isInteractive?: boolean
@@ -52,6 +53,7 @@ const MAX_ZOOM = 20
 
 const placedFeatures = computed(() => props.features.filter(f => f.mapPosition))
 const placedSubLocations = computed(() => (props.subLocations || []).filter(l => l.mapPosition))
+const placedMarkers = computed(() => (props.markers || []).filter(m => m.mapPosition))
 const isPlacing = computed(() => !!props.placingFeature || !!props.placingSubLocation)
 
 function onWheel(e: WheelEvent) {
@@ -434,6 +436,26 @@ onUnmounted(() => {
           @click="onFeatureClick($event, feat)"
         >
           <img :src="getIconUrl(feat.type)" :class="['cursor-pointer transition-all duration-200 w-full h-full object-contain', highlightedFeatureId === feat.id ? 'drop-shadow-[0_0_8px_rgba(239,35,60,0.8)]' : 'drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]']" />
+        </div>
+
+        <!-- Hex markers / pins (positioned on the image) -->
+        <div
+          v-for="marker in placedMarkers" :key="'marker-' + marker.id"
+          class="absolute flex items-center justify-center hover:scale-110"
+          :style="{
+            left: marker.mapPosition!.x + '%',
+            top: marker.mapPosition!.y + '%',
+            width: `${22 / zoom}px`,
+            height: `${22 / zoom}px`,
+            transform: 'translate(-50%, -50%)',
+            zIndex: hoveredFeature?.id === marker.id ? 30 : 8,
+            transition: 'filter 0.2s, width 0.2s, height 0.2s'
+          }"
+          @mouseenter="onFeatureHover($event, { id: marker.id, name: marker.name, type: marker.type as any, description: marker.description } as any)"
+          @mouseleave="onFeatureLeave"
+          @click.stop
+        >
+          <img :src="getIconUrl(marker.type)" class="cursor-pointer transition-all duration-200 w-full h-full object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]" />
         </div>
       </div>
     </div>

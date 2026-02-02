@@ -518,6 +518,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
             :mapUrl="location.mapImageUrl"
             :features="features"
             :subLocations="subLocations"
+            :markers="locationMarkers"
             :placingFeature="placingFeature"
             :placingSubLocation="placingSubLocation"
             :highlightedFeatureId="highlightedFeature"
