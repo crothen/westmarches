@@ -99,7 +99,7 @@ function hasVisibleItems(section: NavSection): boolean {
       open ? 'translate-x-0' : '-translate-x-full'
     ]"
   >
-    <nav class="p-3 mt-1 flex-1 overflow-y-auto">
+    <nav class="p-3 mt-1 flex-1 overflow-y-auto pb-[50px]">
       <template v-for="(section, si) in sections" :key="si">
         <div v-if="hasVisibleItems(section)">
           <!-- Section title -->
@@ -126,7 +126,7 @@ function hasVisibleItems(section: NavSection): boolean {
     </nav>
 
     <!-- User controls at bottom -->
-    <div class="shrink-0 border-t border-white/[0.06] p-3 mt-[50px]">
+    <div class="shrink-0 border-t border-white/[0.06] p-3">
       <div class="px-2 space-y-2">
         <div class="text-sm text-zinc-400 font-medium truncate">{{ auth.appUser?.displayName }}</div>
         <div class="flex flex-wrap gap-1">

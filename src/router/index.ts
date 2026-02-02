@@ -10,6 +10,7 @@ const routes = [
   { path: '/locations', name: 'locations', component: () => import('../views/LocationsView.vue'), meta: { auth: true } },
   { path: '/locations/:id', name: 'location-detail', component: () => import('../views/LocationDetailView.vue'), meta: { auth: true } },
   { path: '/features', name: 'features', component: () => import('../views/FeaturesView.vue'), meta: { auth: true } },
+  { path: '/features/:id', name: 'feature-detail', component: () => import('../views/FeatureDetailView.vue'), meta: { auth: true } },
   { path: '/map', name: 'map', component: () => import('../views/MapView.vue'), meta: { auth: true } },
   { path: '/inventory', name: 'inventory', component: () => import('../views/InventoryView.vue'), meta: { auth: true } },
   { path: '/npcs', name: 'npcs', component: () => import('../views/NpcsView.vue'), meta: { auth: true } },
