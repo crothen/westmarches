@@ -44,16 +44,16 @@ const entryTypeConfig: Record<SessionEntryType, { icon: string; label: string; c
   custom: { icon: '📝', label: 'Custom', color: 'bg-zinc-500/15 text-zinc-400', borderColor: 'border-l-zinc-500/50' },
 }
 
-// Serpentine layout: group entries into rows of 3, alternating direction
-const serpentineRows = computed(() => {
-  const rows: { entries: SessionEntry[]; reversed: boolean }[] = []
-  for (let i = 0; i < entries.value.length; i += 3) {
-    const chunk = entries.value.slice(i, i + 3)
-    const rowIndex = Math.floor(i / 3)
-    rows.push({ entries: chunk, reversed: rowIndex % 2 === 1 })
-  }
-  return rows
-})
+// Dot color mapping for timeline circles
+const dotColorMap: Record<SessionEntryType, string> = {
+  interaction: 'bg-purple-500',
+  task: 'bg-green-500',
+  encounter: 'bg-red-500',
+  discovery: 'bg-blue-500',
+  travel: 'bg-amber-500',
+  rest: 'bg-teal-500',
+  custom: 'bg-zinc-500',
+}
 
 onMounted(() => {
   const entriesQuery = query(
@@ -255,21 +255,48 @@ function formatCommentDate(date: any): string {
       <span v-if="canEdit"> Click "Add Entry" to begin documenting this session.</span>
     </div>
 
-    <!-- Serpentine 3-column layout with connecting lines -->
-    <div v-if="entries.length > 0">
-      <template v-for="(row, rowIdx) in serpentineRows" :key="rowIdx">
-        <!-- Row of up to 3 entries with horizontal connectors -->
-        <div class="hidden sm:flex items-stretch" :class="row.reversed ? 'flex-row-reverse' : 'flex-row'">
-          <template v-for="(entry, colIdx) in row.entries" :key="entry.id">
-            <!-- Horizontal connector (between cards, not before first) -->
-            <div v-if="colIdx > 0" class="flex items-center shrink-0 w-10">
-              <div class="w-full h-0.5 bg-zinc-600" />
-            </div>
-            <!-- Entry card -->
+    <!-- Classic vertical timeline -->
+    <div v-if="entries.length > 0" class="relative pb-4">
+      <!-- Center line (desktop) -->
+      <div class="hidden sm:block absolute left-1/2 top-0 bottom-0 w-0.5 bg-zinc-700 -translate-x-1/2" />
+      <!-- Left line (mobile) -->
+      <div class="sm:hidden absolute left-5 top-0 bottom-0 w-0.5 bg-zinc-700" />
+
+      <template v-for="(entry, idx) in entries" :key="entry.id">
+        <!-- Insert button between entries -->
+        <div v-if="canEdit && idx > 0" class="relative h-8 sm:h-10">
+          <!-- Desktop: centered on line -->
+          <div class="hidden sm:flex absolute inset-0 justify-center items-center">
+            <button
+              @click="openInsertModal(entries[idx - 1]!.id)"
+              class="w-6 h-6 rounded-full border-2 border-zinc-700 bg-zinc-900 text-zinc-600 hover:text-[#ef233c] hover:border-[#ef233c]/50 flex items-center justify-center text-xs transition-colors z-10"
+              title="Insert entry here"
+            >+</button>
+          </div>
+          <!-- Mobile: on left line -->
+          <div class="sm:hidden absolute left-5 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+            <button
+              @click="openInsertModal(entries[idx - 1]!.id)"
+              class="w-5 h-5 rounded-full border-2 border-zinc-700 bg-zinc-900 text-zinc-600 hover:text-[#ef233c] hover:border-[#ef233c]/50 flex items-center justify-center text-[0.6rem] transition-colors"
+              title="Insert entry here"
+            >+</button>
+          </div>
+        </div>
+        <!-- Spacer between entries (when not canEdit) -->
+        <div v-else-if="idx > 0" class="h-6 sm:h-10" />
+
+        <!-- Entry row -->
+        <div
+          class="relative flex items-start pl-10 sm:pl-0"
+          :class="idx % 2 === 0 ? '' : 'sm:flex-row-reverse'"
+        >
+          <!-- Card container -->
+          <div class="flex-1 sm:flex-none sm:w-[45%]">
             <div
               :class="[
-                'card-flat border-l-4 overflow-visible transition-all duration-150 flex-1 min-w-0',
+                'card-flat border-l-4 overflow-visible transition-all duration-150 relative timeline-card',
                 entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700',
+                idx % 2 === 0 ? 'timeline-card-even' : 'timeline-card-odd',
                 canEdit ? 'cursor-grab active:cursor-grabbing' : '',
                 dragEntryId === entry.id ? 'opacity-40 scale-95' : '',
                 dragOverEntryId === entry.id && dragEntryId !== entry.id ? 'ring-2 ring-[#ef233c]/50 scale-[1.02]' : '',
@@ -281,10 +308,12 @@ function formatCommentDate(date: any): string {
               @drop="canEdit && onDrop($event, entry.id)"
               @dragend="canEdit && onDragEnd()"
             >
+              <!-- Image banner at top -->
               <div v-if="entry.imageUrl" class="w-full overflow-hidden rounded-t-[inherit] cursor-pointer" style="aspect-ratio: 3 / 1" @click="lightboxUrl = entry.imageUrl!">
                 <img :src="entry.imageUrl" class="w-full h-full object-cover" draggable="false" />
               </div>
               <div class="px-3 pt-2.5 pb-2">
+                <!-- Type badge + edit/delete -->
                 <div class="flex items-start justify-between gap-1 mb-1">
                   <span :class="['text-[0.65rem] px-1.5 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
                     {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
@@ -294,25 +323,31 @@ function formatCommentDate(date: any): string {
                     <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-[0.65rem] p-0.5 transition-colors" title="Delete">🗑️</button>
                   </div>
                 </div>
+                <!-- Title -->
                 <h3 class="text-sm font-semibold text-zinc-100 leading-tight mb-1" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
+                <!-- Participants -->
                 <div v-if="entry.allParticipantsPresent === false && entry.presentParticipants?.length" class="mb-1">
                   <div class="flex items-center gap-1 flex-wrap">
                     <span class="text-[0.6rem] text-zinc-600 uppercase tracking-wider">Present:</span>
                     <span v-for="p in entry.presentParticipants" :key="p.characterId" class="text-[0.65rem] bg-white/5 text-zinc-500 px-1 py-0.5 rounded">{{ p.characterName }}</span>
                   </div>
                 </div>
+                <!-- Description -->
                 <div v-if="entry.description" class="text-xs text-zinc-400 leading-relaxed line-clamp-4 mb-2">
                   <MentionText :text="entry.description" />
                 </div>
+                <!-- NPC / Location / Feature badges -->
                 <div v-if="(entry.npcIds?.length || entry.linkedLocationIds?.length || entry.linkedFeatureIds?.length)" class="flex flex-wrap gap-1 mb-2">
                   <span v-for="id in entry.npcIds" :key="'npc-'+id" class="text-[0.6rem] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">👤 {{ getNpcName(id) }}</span>
                   <span v-for="id in entry.linkedLocationIds" :key="'loc-'+id" class="text-[0.6rem] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">🏰 {{ getLocationName(id) }}</span>
                   <span v-for="id in entry.linkedFeatureIds" :key="'feat-'+id" class="text-[0.6rem] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded border border-green-500/20">📌 {{ getFeatureName(id) }}</span>
                 </div>
+                <!-- Attachments -->
                 <div v-if="entry.attachments?.length" class="flex flex-wrap gap-1 mb-2">
                   <a v-for="att in entry.attachments" :key="att.url" :href="att.url" target="_blank" class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/[0.06] transition-colors">📎 {{ att.name }}</a>
                 </div>
               </div>
+              <!-- Comments section -->
               <div class="border-t border-white/[0.04] px-3 py-1.5">
                 <button @click="toggleComments(entry.id)" class="text-[0.65rem] text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1">
                   <span>{{ expandedComments.has(entry.id) ? '▾' : '▸' }}</span>
@@ -336,76 +371,18 @@ function formatCommentDate(date: any): string {
                 </div>
               </div>
             </div>
-          </template>
-          <!-- Fill empty slots in last row -->
-          <template v-if="row.entries.length < 3">
-            <template v-for="n in (3 - row.entries.length)" :key="'empty-'+n">
-              <div class="w-10 shrink-0" /><!-- spacer for missing connector -->
-              <div v-if="canEdit && rowIdx === serpentineRows.length - 1 && n === 1"
-                class="flex-1 border border-dashed border-white/[0.08] rounded-xl flex items-center justify-center min-h-[100px] hover:border-[#ef233c]/30 hover:bg-[#ef233c]/[0.02] transition-all cursor-pointer group"
-                @click="openAddModal"
-              >
-                <span class="text-zinc-700 group-hover:text-[#ef233c]/50 text-sm transition-colors">+ Add Entry</span>
-              </div>
-              <div v-else class="flex-1" /><!-- empty spacer -->
-            </template>
-          </template>
-        </div>
-
-        <!-- Mobile: single column, hero image left + text right -->
-        <div class="sm:hidden space-y-1">
-          <template v-for="(entry, colIdx) in row.entries" :key="entry.id">
-            <div v-if="colIdx > 0 || rowIdx > 0" class="flex justify-center">
-              <div class="h-3 w-0.5 bg-zinc-700" />
-            </div>
-            <div
-              :class="[
-                'card-flat border-l-4 overflow-visible transition-all duration-150',
-                entryTypeConfig[entry.type]?.borderColor || 'border-l-zinc-700',
-              ]"
-            >
-              <div class="flex">
-                <!-- Hero image on the left -->
-                <div v-if="entry.imageUrl" class="shrink-0 w-24 overflow-hidden rounded-l-[inherit] cursor-pointer" @click="lightboxUrl = entry.imageUrl!">
-                  <img :src="entry.imageUrl" class="w-full h-full object-cover" />
-                </div>
-                <!-- Content on the right -->
-                <div class="flex-1 min-w-0 px-3 pt-2 pb-2">
-                  <div class="flex items-start justify-between gap-1 mb-1">
-                    <span :class="['text-[0.6rem] px-1 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
-                      {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
-                    </span>
-                    <div v-if="canEdit" class="flex items-center gap-0.5 shrink-0">
-                      <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-[0.6rem] p-0.5 transition-colors">✏️</button>
-                      <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-[0.6rem] p-0.5 transition-colors">🗑️</button>
-                    </div>
-                  </div>
-                  <h3 class="text-sm font-semibold text-zinc-100 leading-tight mb-1" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
-                  <div v-if="entry.description" class="text-xs text-zinc-400 leading-relaxed line-clamp-3">
-                    <MentionText :text="entry.description" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- Vertical connector between rows (desktop) -->
-        <div v-if="rowIdx < serpentineRows.length - 1" class="hidden sm:flex relative h-14"
-          :class="row.reversed ? 'justify-start pl-[calc(16.67%-12px)]' : 'justify-end pr-[calc(16.67%-12px)]'"
-        >
-          <div class="flex flex-col items-center">
-            <div class="flex-1 w-0.5 bg-zinc-600" />
-            <!-- Insert button on the line -->
-            <button
-              v-if="canEdit"
-              @click="openInsertModal(row.entries[row.entries.length - 1]!.id)"
-              class="w-6 h-6 rounded-full border-2 border-zinc-600 bg-zinc-900 text-zinc-500 hover:text-[#ef233c] hover:border-[#ef233c]/50 flex items-center justify-center text-sm transition-colors shrink-0"
-              title="Insert entry here"
-            >+</button>
-            <div v-else class="w-2 h-2 rounded-full bg-zinc-600 shrink-0" />
-            <div class="flex-1 w-0.5 bg-zinc-600" />
           </div>
+
+          <!-- Desktop: center spacer with dot -->
+          <div class="hidden sm:flex sm:w-[10%] justify-center pt-3">
+            <div :class="['w-4 h-4 rounded-full border-2 border-zinc-800 z-10', dotColorMap[entry.type] || 'bg-zinc-500']" />
+          </div>
+
+          <!-- Mobile: dot on left line (absolute) -->
+          <div :class="['sm:hidden absolute left-5 -translate-x-1/2 top-3 w-3 h-3 rounded-full border-2 border-zinc-800 z-10', dotColorMap[entry.type] || 'bg-zinc-500']" />
+
+          <!-- Desktop: empty spacer opposite side -->
+          <div class="hidden sm:block sm:w-[45%]" />
         </div>
       </template>
     </div>
@@ -450,3 +427,67 @@ function formatCommentDate(date: any): string {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* Mobile arrow — always points left (toward the left line) */
+.timeline-card::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: -6px;
+  width: 10px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  transform: rotate(45deg);
+}
+
+@media (min-width: 640px) {
+  .timeline-card::before {
+    display: none;
+  }
+}
+
+/* Desktop arrow — points right (for even/left-side cards) */
+.timeline-card-even::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  right: -6px;
+  width: 10px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  transform: rotate(45deg);
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .timeline-card-even::after {
+    display: block;
+  }
+}
+
+/* Desktop arrow — points left (for odd/right-side cards) */
+.timeline-card-odd::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: -6px;
+  width: 10px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  transform: rotate(45deg);
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .timeline-card-odd::after {
+    display: block;
+  }
+}
+</style>
