@@ -602,8 +602,8 @@ async function toggleFeatureHidden(feat: LocationFeature) {
       <div v-if="subLocations.length > 0 || auth.isDm || auth.isAdmin" class="mb-8">
         <div class="flex items-center gap-3 mb-3">
           <h2 class="label">Sub-Locations ({{ subLocations.length }})</h2>
-          <button v-if="auth.isDm || auth.isAdmin" @click="showAddSubLocation = !showAddSubLocation" class="btn !text-xs !py-1">
-            {{ showAddSubLocation ? 'Cancel' : '+ Add Location' }}
+          <button v-if="auth.isDm || auth.isAdmin" @click="showAddSubLocation = true" class="btn !text-xs !py-1">
+            + Add Location
           </button>
         </div>
         <div v-if="subLocations.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-3">
@@ -628,13 +628,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
             </div>
           </div>
         </div>
-        <!-- Add Sub-Location form -->
-        <div v-if="showAddSubLocation" class="card-flat !rounded-lg p-3 space-y-2">
-          <input v-model="newSubLoc.name" placeholder="Location name" class="input w-full text-sm" @keyup.enter="addSubLocation" />
-          <TypeSelect v-model="newSubLoc.type" :options="locationTypeOptions" input-class="w-full text-sm" />
-          <MentionTextarea v-model="newSubLoc.description" input-class="text-sm" :rows="2" placeholder="Description (optional)" />
-          <button @click="addSubLocation" :disabled="!newSubLoc.name.trim()" class="btn !text-xs !py-1.5 w-full">Create Sub-Location</button>
-        </div>
+        <!-- Add Sub-Location form is now a modal (see Teleport below) -->
       </div>
 
       <!-- Location Markers Section -->
@@ -655,20 +649,12 @@ async function toggleFeatureHidden(feat: LocationFeature) {
       <div>
         <div class="flex items-center gap-3 mb-3">
           <h2 class="label">Features & Points of Interest ({{ visibleFeatures.length }})</h2>
-          <button v-if="auth.isAuthenticated && !auth.isGuest" @click="showAddFeature = !showAddFeature" class="btn !text-xs !py-1">
-            {{ showAddFeature ? 'Cancel' : '+ Add Feature' }}
+          <button v-if="auth.isAuthenticated && !auth.isGuest" @click="showAddFeature = true" class="btn !text-xs !py-1">
+            + Add Feature
           </button>
         </div>
 
-        <!-- Add feature form -->
-        <div v-if="showAddFeature" class="card-flat p-4 mb-4">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <input v-model="newFeat.name" placeholder="Feature name" class="input" />
-            <TypeSelect v-model="newFeat.type" :options="featureTypeOptions" />
-            <button @click="addFeature" :disabled="!newFeat.name.trim()" class="btn !py-2">Add</button>
-          </div>
-          <MentionTextarea v-model="newFeat.description" placeholder="Description..." input-class="mt-2" :rows="2" />
-        </div>
+        <!-- Add feature form is now a modal (see Teleport below) -->
 
         <div v-if="visibleFeatures.length === 0" class="text-zinc-600 text-sm">No features discovered yet.</div>
 
@@ -799,6 +785,81 @@ async function toggleFeatureHidden(feat: LocationFeature) {
       >
         <div v-if="miniMapHex" class="fixed z-[100] shadow-2xl rounded-lg border border-white/10 bg-zinc-950/95 backdrop-blur-sm p-1 pointer-events-none" :style="{ left: miniMapPos.x + 'px', top: miniMapPos.y + 'px' }">
           <HexMiniMap :hexKey="miniMapHex" :width="320" />
+        </div>
+      </transition>
+    </Teleport>
+    <!-- Add Sub-Location Modal -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0" enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-100"
+        leave-from-class="opacity-100" leave-to-class="opacity-0"
+      >
+        <div v-if="showAddSubLocation" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showAddSubLocation = false" />
+          <div class="relative bg-zinc-900 border border-white/10 rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">📍 Add Sub-Location</h2>
+              <button @click="showAddSubLocation = false" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+            </div>
+            <div class="space-y-3">
+              <div>
+                <label class="text-sm font-semibold text-zinc-400">Name</label>
+                <input v-model="newSubLoc.name" placeholder="Location name" class="input w-full" @keyup.enter="addSubLocation" />
+              </div>
+              <div>
+                <label class="text-sm font-semibold text-zinc-400">Type</label>
+                <TypeSelect v-model="newSubLoc.type" :options="locationTypeOptions" input-class="w-full" />
+              </div>
+              <div>
+                <label class="text-sm font-semibold text-zinc-400">Description</label>
+                <MentionTextarea v-model="newSubLoc.description" :rows="2" placeholder="Description (optional)" />
+              </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+              <button @click="showAddSubLocation = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+              <button @click="addSubLocation" :disabled="!newSubLoc.name.trim()" class="btn text-sm">Create</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
+
+    <!-- Add Feature Modal -->
+    <Teleport to="body">
+      <transition
+        enter-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0" enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-100"
+        leave-from-class="opacity-100" leave-to-class="opacity-0"
+      >
+        <div v-if="showAddFeature" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showAddFeature = false" />
+          <div class="relative bg-zinc-900 border border-white/10 rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">📌 Add Feature</h2>
+              <button @click="showAddFeature = false" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+            </div>
+            <div class="space-y-3">
+              <div>
+                <label class="text-sm font-semibold text-zinc-400">Name</label>
+                <input v-model="newFeat.name" placeholder="Feature name" class="input w-full" />
+              </div>
+              <div>
+                <label class="text-sm font-semibold text-zinc-400">Type</label>
+                <TypeSelect v-model="newFeat.type" :options="featureTypeOptions" input-class="w-full" />
+              </div>
+              <div>
+                <label class="text-sm font-semibold text-zinc-400">Description</label>
+                <MentionTextarea v-model="newFeat.description" placeholder="Description..." :rows="2" />
+              </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+              <button @click="showAddFeature = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+              <button @click="addFeature" :disabled="!newFeat.name.trim()" class="btn text-sm">Add</button>
+            </div>
+          </div>
         </div>
       </transition>
     </Teleport>
