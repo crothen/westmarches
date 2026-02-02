@@ -223,7 +223,7 @@ async function deleteTerrain(name: string) {
 
 function startGenerate(name: string) {
   generatingKey.value = name
-  genPrompt.value = `A seamless tileable top-down texture for a fantasy hex map representing "${name}" terrain. Style: painterly, dark fantasy, muted natural colors. Must tile seamlessly. 200x200 pixels.`
+  genPrompt.value = `Top-down view of ${name.toLowerCase()} terrain for a dark fantasy hex map. Single hex tile, abstract and painterly. Muted earthy tones, no borders, no text, no grid lines. Fill the entire image with the terrain surface only.`
 }
 
 async function generateTexture() {

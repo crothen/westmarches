@@ -539,8 +539,8 @@ async function removeDetailMap() {
         </div>
       </div>
 
-      <!-- DM Edit Section -->
-      <div v-if="auth.isDm" class="card-flat !rounded-lg p-3 space-y-3">
+      <!-- DM/Admin Edit Section -->
+      <div v-if="auth.isDm || auth.isAdmin" class="card-flat !rounded-lg p-3 space-y-3">
         <h4 class="label text-[#ef233c]">DM Tools</h4>
         
         <!-- Terrain picker -->
@@ -592,8 +592,8 @@ async function removeDetailMap() {
         </div>
       </div>
 
-      <!-- Detail Map Preview (visible to non-DMs) -->
-      <div v-if="detailMapUrl && !auth.isDm">
+      <!-- Detail Map Preview (visible to non-DMs/non-admins) -->
+      <div v-if="detailMapUrl && !auth.isDm && !auth.isAdmin">
         <h4 class="label mb-2">Detail Map</h4>
         <img :src="detailMapUrl" class="w-full max-h-48 object-contain rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors" @click="showDetailMapViewer = true" />
       </div>
