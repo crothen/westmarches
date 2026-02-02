@@ -378,8 +378,18 @@ onUnmounted(() => {
 
           <!-- ==================== ENTRY PAGES ==================== -->
           <div v-else-if="currentEntry" class="relative h-full flex flex-col overflow-y-auto">
+            <!-- Title + type above image, centered -->
+            <div class="px-10 sm:px-14 pt-6 pb-2 text-center" :style="{ fontFamily: currentFontFamily }">
+              <div class="journal-text underline mb-1" :style="{ fontFamily: currentFontFamily }">
+                {{ entryTypeLabels[currentEntry.type] || 'Note' }}
+              </div>
+              <h2 class="text-4xl text-amber-950 leading-tight" :style="{ fontFamily: currentFontFamily }">
+                {{ currentEntry.title }}
+              </h2>
+            </div>
+
             <!-- Sketch image (centered, compact) -->
-            <div v-if="sketchCache[currentEntry.id] || currentEntry.imageUrl" class="flex justify-center pt-6 px-4">
+            <div v-if="sketchCache[currentEntry.id] || currentEntry.imageUrl" class="flex justify-center px-4 py-2">
               <img
                 :src="sketchCache[currentEntry.id] || currentEntry.imageUrl"
                 class="w-[65%] object-contain sketch-fade"
@@ -387,19 +397,9 @@ onUnmounted(() => {
               />
             </div>
 
-            <div class="flex-1 px-10 sm:px-14 py-6" :style="{ fontFamily: currentFontFamily }">
-              <!-- Type label -->
-              <div class="journal-text underline mb-1" :style="{ fontFamily: currentFontFamily }">
-                {{ entryTypeLabels[currentEntry.type] || 'Note' }}
-              </div>
-
-              <!-- Title -->
-              <h2 class="text-4xl text-amber-950 mb-4 leading-tight" :style="{ fontFamily: currentFontFamily }">
-                {{ currentEntry.title }}
-              </h2>
-
+            <div class="flex-1 px-10 sm:px-14 py-4" :style="{ fontFamily: currentFontFamily }">
               <!-- Separator -->
-              <div class="w-16 border-t border-amber-900/15 mb-4" />
+              <div class="w-16 border-t border-amber-900/15 mb-4 mx-auto" />
 
               <!-- Participants (if subset) -->
               <div v-if="currentEntry.allParticipantsPresent === false && currentEntry.presentParticipants?.length" class="journal-text mb-4 italic">
