@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { doc, collection, query, where, addDoc, updateDoc, deleteDoc, Timestamp, onSnapshot } from 'firebase/firestore'
+import { doc, collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, Timestamp, onSnapshot } from 'firebase/firestore'
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
@@ -55,7 +55,12 @@ onUnmounted(() => {
 const location = ref<CampaignLocation | null>(null)
 const features = ref<LocationFeature[]>([])
 const loading = ref(true)
-const showAddFeature = ref(false)
+const showAddModal = ref(false)
+const addModalTab = ref<'location' | 'feature' | 'pin'>('feature')
+const addModalMode = ref<'new' | 'existing'>('new')
+const existingSearch = ref('')
+const allLocations = ref<CampaignLocation[]>([])
+const allFeatures = ref<LocationFeature[]>([])
 const uploadingMap = ref(false)
 const uploadProgress = ref(0)
 const placingFeature = ref<string | null>(null)
@@ -68,12 +73,11 @@ const { locationTypes: locationTypeOptions, featureTypes: featureTypeOptions, pi
 // Quick-add from map click
 const showQuickAdd = ref(false)
 const quickAddPos = ref({ x: 0, y: 0 })
-const quickAddKind = ref<'feature' | 'pin'>('feature')
+const quickAddKind = ref<'location' | 'feature' | 'pin'>('feature')
 const quickAddForm = ref({ name: '', type: 'other' as any, description: '' })
 const quickAddPinForm = ref({ name: '', type: 'clue' as MarkerType, description: '', isPrivate: false })
 
 const newFeat = ref({ name: '', type: 'other' as any, description: '' })
-const showAddSubLocation = ref(false)
 const newSubLoc = ref({ name: '', type: 'other' as any, description: '' })
 
 // featureTypes kept for backward compat fallback
@@ -173,6 +177,16 @@ onMounted(() => {
   _unsubs.push(onSnapshot(query(collection(db, 'markers'), where('locationId', '==', locationId)), (snap) => {
     locationMarkers.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as HexMarker))
   }, (e) => console.warn('Failed to load location markers:', e)))
+
+  // Listen to all locations (for existing tab in unified modal)
+  _unsubs.push(onSnapshot(query(collection(db, 'locations'), orderBy('name')), (snap) => {
+    allLocations.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
+  }, (e) => console.warn('Failed to load all locations:', e)))
+
+  // Listen to all features (for existing tab in unified modal)
+  _unsubs.push(onSnapshot(query(collection(db, 'features'), orderBy('name')), (snap) => {
+    allFeatures.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
+  }, (e) => console.warn('Failed to load all features:', e)))
 })
 
 async function uploadMapImage(event: Event) {
@@ -328,6 +342,52 @@ async function quickAddPin() {
   showQuickAdd.value = false
 }
 
+async function quickAddLocation() {
+  if (!quickAddForm.value.name.trim() || !location.value) return
+  const data = {
+    name: quickAddForm.value.name.trim(),
+    type: quickAddForm.value.type,
+    description: quickAddForm.value.description.trim(),
+    parentLocationId: location.value.id,
+    hexKey: location.value.hexKey || null,
+    mapPosition: quickAddPos.value,
+    tags: [],
+    discoveredBy: auth.firebaseUser?.uid,
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now()
+  }
+  await addDoc(collection(db, 'locations'), data)
+  showQuickAdd.value = false
+}
+
+async function addModalPin() {
+  if (!quickAddPinForm.value.name.trim() || !location.value) return
+  await addDoc(collection(db, 'markers'), {
+    name: quickAddPinForm.value.name.trim(),
+    type: quickAddPinForm.value.type,
+    description: quickAddPinForm.value.description.trim(),
+    locationId: location.value.id,
+    hexKey: location.value.hexKey || null,
+    isPrivate: quickAddPinForm.value.isPrivate,
+    tags: [],
+    createdBy: auth.firebaseUser?.uid || null,
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now()
+  })
+  quickAddPinForm.value = { name: '', type: 'clue' as MarkerType, description: '', isPrivate: false }
+  showAddModal.value = false
+}
+
+async function linkExistingLocation(loc: CampaignLocation) {
+  await updateDoc(doc(db, 'locations', loc.id), { parentLocationId: location.value!.id })
+  showAddModal.value = false
+}
+
+async function linkExistingFeature(feat: LocationFeature) {
+  await updateDoc(doc(db, 'features', feat.id), { locationId: location.value!.id })
+  showAddModal.value = false
+}
+
 function onClickFeature(feat: LocationFeature) {
   // Could navigate to feature detail in the future; for now scroll to it in the list
   const el = document.getElementById('feat-' + feat.id)
@@ -351,7 +411,7 @@ async function addSubLocation() {
     const docRef = await addDoc(collection(db, 'locations'), data)
     subLocations.value.push({ id: docRef.id, ...data } as any)
     newSubLoc.value = { name: '', type: 'other', description: '' }
-    showAddSubLocation.value = false
+    showAddModal.value = false
   } catch (e) {
     console.error('Failed to add sub-location:', e)
     alert('Failed to add sub-location.')
@@ -373,7 +433,7 @@ async function addFeature() {
   })
   features.value.push({ id: docRef.id, ...newFeat.value, locationId: location.value.id, tags: [], createdAt: new Date(), updatedAt: new Date() } as any)
   newFeat.value = { name: '', type: 'other', description: '' }
-  showAddFeature.value = false
+  showAddModal.value = false
 }
 
 // --- Feature edit/delete ---
@@ -553,13 +613,17 @@ async function toggleFeatureHidden(feat: LocationFeature) {
             @click-sublocation="onClickSubLocation"
             @map-click="onMapClick"
           />
-          <div class="flex items-center gap-2 mt-3">
-            <p class="text-zinc-600 text-[0.6rem]">Scroll/pinch to zoom · Drag to pan · Click to pin</p>
-            <div v-if="auth.isDm || auth.isAdmin" class="flex gap-1.5 ml-auto">
-              <button @click="showAddSubLocation = true" class="text-[0.65rem] px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors">+ Location</button>
-              <button @click="showAddFeature = true" class="text-[0.65rem] px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 transition-colors">+ Feature</button>
+          <div class="flex flex-wrap items-center gap-2 mt-3">
+            <div v-if="auth.isDm || auth.isAdmin" class="flex gap-2">
+              <button @click="addModalTab = 'location'; addModalMode = 'new'; showAddModal = true" class="text-sm px-4 py-2 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors font-medium">+ Location</button>
+              <button @click="addModalTab = 'feature'; addModalMode = 'new'; showAddModal = true" class="text-sm px-4 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 transition-colors font-medium">+ Feature</button>
+              <button @click="addModalTab = 'pin'; addModalMode = 'new'; showAddModal = true" class="text-sm px-4 py-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 transition-colors font-medium">+ Pin</button>
             </div>
-            <button v-else-if="auth.isAuthenticated && !auth.isGuest" @click="showAddFeature = true" class="text-[0.65rem] px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 transition-colors ml-auto">+ Feature</button>
+            <div v-else-if="auth.isAuthenticated && !auth.isGuest" class="flex gap-2">
+              <button @click="addModalTab = 'feature'; addModalMode = 'new'; showAddModal = true" class="text-sm px-4 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 transition-colors font-medium">+ Feature</button>
+              <button @click="addModalTab = 'pin'; addModalMode = 'new'; showAddModal = true" class="text-sm px-4 py-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 transition-colors font-medium">+ Pin</button>
+            </div>
+            <p class="text-zinc-600 text-[0.6rem] ml-auto">Scroll/pinch to zoom · Drag to pan · Click to pin</p>
           </div>
         </div>
 
@@ -594,12 +658,24 @@ async function toggleFeatureHidden(feat: LocationFeature) {
 
               <!-- Kind toggle -->
               <div class="flex gap-1">
+                <button v-if="auth.isDm || auth.isAdmin" @click="quickAddKind = 'location'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', quickAddKind === 'location' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">📍 Location</button>
                 <button @click="quickAddKind = 'feature'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', quickAddKind === 'feature' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">📌 Feature</button>
-                <button @click="quickAddKind = 'pin'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', quickAddKind === 'pin' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">📍 Pin</button>
+                <button @click="quickAddKind = 'pin'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', quickAddKind === 'pin' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">🏷️ Pin</button>
               </div>
 
+              <!-- Location form -->
+              <template v-if="quickAddKind === 'location'">
+                <input v-model="quickAddForm.name" placeholder="Name" class="input w-full" @keyup.enter="quickAddLocation" />
+                <TypeSelect v-model="quickAddForm.type" :options="locationTypeOptions" input-class="w-full" />
+                <MentionTextarea v-model="quickAddForm.description" placeholder="Description (optional)" :rows="2" />
+                <div class="flex justify-end gap-2">
+                  <button @click="showQuickAdd = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+                  <button @click="quickAddLocation" :disabled="!quickAddForm.name.trim()" class="btn text-sm">Add Location</button>
+                </div>
+              </template>
+
               <!-- Feature form -->
-              <template v-if="quickAddKind === 'feature'">
+              <template v-else-if="quickAddKind === 'feature'">
                 <input v-model="quickAddForm.name" placeholder="Name" class="input w-full" @keyup.enter="quickAddFeature" />
                 <TypeSelect v-model="quickAddForm.type" :options="featureTypeOptions" input-class="w-full" />
                 <MentionTextarea v-model="quickAddForm.description" placeholder="Description (optional)" :rows="2" />
@@ -814,7 +890,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
         </div>
       </transition>
     </Teleport>
-    <!-- Add Sub-Location Modal -->
+    <!-- Unified Add to Location Modal -->
     <Teleport to="body">
       <transition
         enter-active-class="transition-opacity duration-150"
@@ -822,69 +898,134 @@ async function toggleFeatureHidden(feat: LocationFeature) {
         leave-active-class="transition-opacity duration-100"
         leave-from-class="opacity-100" leave-to-class="opacity-0"
       >
-        <div v-if="showAddSubLocation" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showAddSubLocation = false" />
-          <div class="relative bg-zinc-900 border border-white/10 rounded-xl p-6 w-full max-w-md shadow-2xl">
+        <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showAddModal = false" />
+          <div class="relative bg-zinc-900 border border-white/10 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl z-10">
             <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">📍 Add Sub-Location</h2>
-              <button @click="showAddSubLocation = false" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+              <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">➕ Add to Location</h2>
+              <button @click="showAddModal = false" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
             </div>
-            <div class="space-y-3">
-              <div>
-                <label class="text-sm font-semibold text-zinc-400">Name</label>
-                <input v-model="newSubLoc.name" placeholder="Location name" class="input w-full" @keyup.enter="addSubLocation" />
-              </div>
-              <div>
-                <label class="text-sm font-semibold text-zinc-400">Type</label>
-                <TypeSelect v-model="newSubLoc.type" :options="locationTypeOptions" input-class="w-full" />
-              </div>
-              <div>
-                <label class="text-sm font-semibold text-zinc-400">Description</label>
-                <MentionTextarea v-model="newSubLoc.description" :rows="2" placeholder="Description (optional)" />
-              </div>
-            </div>
-            <div class="flex justify-end gap-2 mt-6">
-              <button @click="showAddSubLocation = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
-              <button @click="addSubLocation" :disabled="!newSubLoc.name.trim()" class="btn text-sm">Create</button>
-            </div>
-          </div>
-        </div>
-      </transition>
-    </Teleport>
 
-    <!-- Add Feature Modal -->
-    <Teleport to="body">
-      <transition
-        enter-active-class="transition-opacity duration-150"
-        enter-from-class="opacity-0" enter-to-class="opacity-100"
-        leave-active-class="transition-opacity duration-100"
-        leave-from-class="opacity-100" leave-to-class="opacity-0"
-      >
-        <div v-if="showAddFeature" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showAddFeature = false" />
-          <div class="relative bg-zinc-900 border border-white/10 rounded-xl p-6 w-full max-w-md shadow-2xl">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-semibold text-[#ef233c]" style="font-family: Manrope, sans-serif">📌 Add Feature</h2>
-              <button @click="showAddFeature = false" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
+            <!-- Main tabs: Location | Feature | Pin -->
+            <div class="flex gap-1 mb-4">
+              <button v-if="auth.isDm || auth.isAdmin" @click="addModalTab = 'location'; addModalMode = 'new'; existingSearch = ''" :class="['flex-1 text-xs py-2 rounded-lg transition-colors font-medium', addModalTab === 'location' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-zinc-500 hover:text-zinc-300 border border-transparent']">📍 Location</button>
+              <button @click="addModalTab = 'feature'; addModalMode = 'new'; existingSearch = ''" :class="['flex-1 text-xs py-2 rounded-lg transition-colors font-medium', addModalTab === 'feature' ? 'bg-green-500/15 text-green-400 border border-green-500/30' : 'bg-white/5 text-zinc-500 hover:text-zinc-300 border border-transparent']">📌 Feature</button>
+              <button @click="addModalTab = 'pin'; addModalMode = 'new'; existingSearch = ''" :class="['flex-1 text-xs py-2 rounded-lg transition-colors font-medium', addModalTab === 'pin' ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-white/5 text-zinc-500 hover:text-zinc-300 border border-transparent']">🏷️ Pin</button>
             </div>
-            <div class="space-y-3">
-              <div>
-                <label class="text-sm font-semibold text-zinc-400">Name</label>
-                <input v-model="newFeat.name" placeholder="Feature name" class="input w-full" />
-              </div>
-              <div>
-                <label class="text-sm font-semibold text-zinc-400">Type</label>
-                <TypeSelect v-model="newFeat.type" :options="featureTypeOptions" input-class="w-full" />
-              </div>
-              <div>
-                <label class="text-sm font-semibold text-zinc-400">Description</label>
-                <MentionTextarea v-model="newFeat.description" placeholder="Description..." :rows="2" />
-              </div>
+
+            <!-- Sub-tabs: New | Existing (not for pin) -->
+            <div v-if="addModalTab !== 'pin'" class="flex gap-1 mb-4">
+              <button @click="addModalMode = 'new'" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', addModalMode === 'new' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">✨ New</button>
+              <button @click="addModalMode = 'existing'; existingSearch = ''" :class="['flex-1 text-xs py-1.5 rounded-lg transition-colors', addModalMode === 'existing' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-white/5 text-zinc-500 hover:text-zinc-300']">🔗 Existing</button>
             </div>
-            <div class="flex justify-end gap-2 mt-6">
-              <button @click="showAddFeature = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
-              <button @click="addFeature" :disabled="!newFeat.name.trim()" class="btn text-sm">Add</button>
-            </div>
+
+            <!-- LOCATION TAB -->
+            <template v-if="addModalTab === 'location'">
+              <!-- New location form -->
+              <template v-if="addModalMode === 'new'">
+                <div class="space-y-3">
+                  <div>
+                    <label class="text-sm font-semibold text-zinc-400">Name</label>
+                    <input v-model="newSubLoc.name" placeholder="Location name" class="input w-full" @keyup.enter="addSubLocation" />
+                  </div>
+                  <div>
+                    <label class="text-sm font-semibold text-zinc-400">Type</label>
+                    <TypeSelect v-model="newSubLoc.type" :options="locationTypeOptions" input-class="w-full" />
+                  </div>
+                  <div>
+                    <label class="text-sm font-semibold text-zinc-400">Description</label>
+                    <MentionTextarea v-model="newSubLoc.description" :rows="2" placeholder="Description (optional)" />
+                  </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                  <button @click="showAddModal = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+                  <button @click="addSubLocation" :disabled="!newSubLoc.name.trim()" class="btn text-sm">Create</button>
+                </div>
+              </template>
+              <!-- Existing locations list -->
+              <template v-else>
+                <input v-model="existingSearch" placeholder="Search locations..." class="input w-full mb-3" />
+                <div class="max-h-64 overflow-y-auto space-y-1">
+                  <template v-for="loc in allLocations.filter(l => l.id !== location!.id && l.parentLocationId !== location!.id && l.name.toLowerCase().includes(existingSearch.toLowerCase()))" :key="loc.id">
+                    <button @click="linkExistingLocation(loc)" class="w-full flex items-center gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/10 transition-colors text-left">
+                      <img :src="getIconUrl(loc.type)" class="w-5 h-5 object-contain shrink-0" :alt="loc.type" />
+                      <div class="min-w-0 flex-1">
+                        <span class="text-xs font-semibold text-zinc-200 truncate block" style="font-family: Manrope, sans-serif">{{ loc.name }}</span>
+                        <span class="text-[0.6rem] text-zinc-600">{{ loc.type }}</span>
+                      </div>
+                    </button>
+                  </template>
+                  <p v-if="allLocations.filter(l => l.id !== location!.id && l.parentLocationId !== location!.id && l.name.toLowerCase().includes(existingSearch.toLowerCase())).length === 0" class="text-zinc-600 text-xs text-center py-4">No matching locations found.</p>
+                </div>
+              </template>
+            </template>
+
+            <!-- FEATURE TAB -->
+            <template v-if="addModalTab === 'feature'">
+              <!-- New feature form -->
+              <template v-if="addModalMode === 'new'">
+                <div class="space-y-3">
+                  <div>
+                    <label class="text-sm font-semibold text-zinc-400">Name</label>
+                    <input v-model="newFeat.name" placeholder="Feature name" class="input w-full" @keyup.enter="addFeature" />
+                  </div>
+                  <div>
+                    <label class="text-sm font-semibold text-zinc-400">Type</label>
+                    <TypeSelect v-model="newFeat.type" :options="featureTypeOptions" input-class="w-full" />
+                  </div>
+                  <div>
+                    <label class="text-sm font-semibold text-zinc-400">Description</label>
+                    <MentionTextarea v-model="newFeat.description" placeholder="Description..." :rows="2" />
+                  </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                  <button @click="showAddModal = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+                  <button @click="addFeature" :disabled="!newFeat.name.trim()" class="btn text-sm">Add</button>
+                </div>
+              </template>
+              <!-- Existing features list -->
+              <template v-else>
+                <input v-model="existingSearch" placeholder="Search features..." class="input w-full mb-3" />
+                <div class="max-h-64 overflow-y-auto space-y-1">
+                  <template v-for="feat in allFeatures.filter(f => f.locationId !== location!.id && f.name.toLowerCase().includes(existingSearch.toLowerCase()))" :key="feat.id">
+                    <button @click="linkExistingFeature(feat)" class="w-full flex items-center gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/10 transition-colors text-left">
+                      <img :src="getIconUrl(feat.type)" class="w-5 h-5 object-contain shrink-0" :alt="feat.type" />
+                      <div class="min-w-0 flex-1">
+                        <span class="text-xs font-semibold text-zinc-200 truncate block" style="font-family: Manrope, sans-serif">{{ feat.name }}</span>
+                        <span class="text-[0.6rem] text-zinc-600">{{ feat.type }}</span>
+                      </div>
+                    </button>
+                  </template>
+                  <p v-if="allFeatures.filter(f => f.locationId !== location!.id && f.name.toLowerCase().includes(existingSearch.toLowerCase())).length === 0" class="text-zinc-600 text-xs text-center py-4">No matching features found.</p>
+                </div>
+              </template>
+            </template>
+
+            <!-- PIN TAB (always new) -->
+            <template v-if="addModalTab === 'pin'">
+              <div class="space-y-3">
+                <div>
+                  <label class="text-sm font-semibold text-zinc-400">Name</label>
+                  <input v-model="quickAddPinForm.name" placeholder="Pin name" class="input w-full" />
+                </div>
+                <div>
+                  <label class="text-sm font-semibold text-zinc-400">Type</label>
+                  <TypeSelect v-model="quickAddPinForm.type" :options="pinTypeOptions" input-class="w-full" />
+                </div>
+                <div>
+                  <label class="text-sm font-semibold text-zinc-400">Description</label>
+                  <MentionTextarea v-model="quickAddPinForm.description" placeholder="Description (optional)" :rows="2" />
+                </div>
+                <label class="flex items-center gap-1.5 text-xs text-zinc-500">
+                  <input v-model="quickAddPinForm.isPrivate" type="checkbox" class="accent-purple-500" />
+                  🔒 Private (only you & admins)
+                </label>
+              </div>
+              <div class="flex justify-end gap-2 mt-6">
+                <button @click="showAddModal = false" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
+                <button @click="addModalPin" :disabled="!quickAddPinForm.name.trim()" class="btn text-sm">Add Pin</button>
+              </div>
+            </template>
           </div>
         </div>
       </transition>
