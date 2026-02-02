@@ -14,7 +14,7 @@ const auth = useAuthStore()
 const character = ref<Character | null>(null)
 const loading = ref(true)
 const editing = ref(false)
-const editForm = ref({ name: '', race: '', class: '', level: 1, description: '', appearance: '' })
+const editForm = ref({ name: '', race: '', class: '', level: 1, description: '', appearance: '', characterUrl: '' })
 const savingEdit = ref(false)
 const uploadingImage = ref(false)
 const uploadProgress = ref(0)
@@ -64,7 +64,8 @@ function startEdit() {
     class: character.value.class,
     level: character.value.level,
     description: character.value.description || '',
-    appearance: character.value.appearance || ''
+    appearance: character.value.appearance || '',
+    characterUrl: character.value.characterUrl || ''
   }
   editing.value = true
 }
@@ -79,6 +80,7 @@ async function saveEdit() {
     level: editForm.value.level,
     description: editForm.value.description.trim(),
     appearance: editForm.value.appearance.trim() || null,
+    characterUrl: editForm.value.characterUrl.trim() || null,
     updatedAt: Timestamp.now()
   }
   try {
@@ -309,6 +311,12 @@ async function deleteCharacter() {
             </template>
           </div>
 
+          <!-- Character URL -->
+          <div v-if="character.characterUrl" class="mt-3 flex items-center gap-2">
+            <span class="text-xs text-zinc-600">📋 Sheet:</span>
+            <a :href="character.characterUrl" target="_blank" rel="noopener" class="text-sm text-[#ef233c] hover:text-[#ef233c]/80 transition-colors truncate">{{ character.characterUrl }}</a>
+          </div>
+
           <!-- Appearance -->
           <div v-if="character.appearance" class="mt-4">
             <h2 class="label mb-1">Appearance <span class="text-zinc-600 font-normal text-[0.65rem]">🎨 used for AI art</span></h2>
@@ -385,6 +393,10 @@ async function deleteCharacter() {
               <div>
                 <label class="label text-xs block mb-1">Appearance <span class="text-zinc-600 font-normal">({{ editForm.appearance.length }}/200 — used for AI art)</span></label>
                 <input v-model="editForm.appearance" class="input w-full" maxlength="200" placeholder="e.g. Tall half-elf with silver hair, blue eyes, wears leather armor and a tattered red cloak" />
+              </div>
+              <div>
+                <label class="label text-xs block mb-1">Character URL <span class="text-zinc-600 font-normal">(e.g. D&D Beyond link)</span></label>
+                <input v-model="editForm.characterUrl" class="input w-full" type="url" placeholder="https://www.dndbeyond.com/characters/..." />
               </div>
               <div>
                 <label class="label text-xs block mb-1">Description</label>

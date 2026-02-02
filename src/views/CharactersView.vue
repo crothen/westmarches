@@ -11,7 +11,7 @@ const users = ref<{ uid: string; displayName: string }[]>([])
 const loading = ref(true)
 const showCreate = ref(false)
 
-const newChar = ref({ name: '', race: '', class: '', level: 1, description: '', appearance: '' })
+const newChar = ref({ name: '', race: '', class: '', level: 1, description: '', appearance: '', characterUrl: '' })
 
 const _unsubs: (() => void)[] = []
 
@@ -56,6 +56,7 @@ async function createCharacter() {
     level: newChar.value.level,
     description: newChar.value.description.trim(),
     appearance: newChar.value.appearance.trim() || null,
+    characterUrl: newChar.value.characterUrl.trim() || null,
     userId: auth.firebaseUser?.uid || null,
     isActive: true,
     createdAt: Timestamp.now(),
@@ -63,7 +64,7 @@ async function createCharacter() {
   }
   try {
     await addDoc(collection(db, 'characters'), data)
-    newChar.value = { name: '', race: '', class: '', level: 1, description: '', appearance: '' }
+    newChar.value = { name: '', race: '', class: '', level: 1, description: '', appearance: '', characterUrl: '' }
     showCreate.value = false
   } catch (e) {
     console.error('Failed to create:', e)
@@ -97,6 +98,10 @@ async function createCharacter() {
         <div>
           <label class="label text-xs block mb-1">Appearance <span class="text-zinc-600 font-normal">(used for AI art — {{ newChar.appearance.length }}/200)</span></label>
           <input v-model="newChar.appearance" class="input w-full" maxlength="200" placeholder="e.g. Tall half-elf with silver hair, blue eyes, wears leather armor and a tattered red cloak" />
+        </div>
+        <div>
+          <label class="label text-xs block mb-1">Character URL <span class="text-zinc-600 font-normal">(e.g. D&D Beyond link)</span></label>
+          <input v-model="newChar.characterUrl" class="input w-full" type="url" placeholder="https://www.dndbeyond.com/characters/..." />
         </div>
         <button @click="createCharacter" :disabled="!newChar.name.trim()" class="btn text-sm">Create</button>
       </div>

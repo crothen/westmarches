@@ -44,6 +44,7 @@ export interface Character {
   appearance?: string  // visual description for consistent AI image gen (max 200 chars)
   imageUrl?: string
   galleryUrls?: string[]  // additional images, first = hero portrait
+  characterUrl?: string  // external character sheet URL (e.g. D&D Beyond)
   isActive: boolean
   createdAt: Date
   updatedAt: Date
