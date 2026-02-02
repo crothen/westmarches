@@ -599,14 +599,107 @@ export class HexMap {
     this.ctx.restore()
   }
 
+  /**
+   * Collect all drawable icons for a hex into a flat list.
+   * Priority: location > feature > markers > notes
+   */
+  private collectHexIcons(data: HexMarkerData): { img: HTMLImageElement | null; emoji?: string }[] {
+    const icons: { img: HTMLImageElement | null; emoji?: string }[] = []
+
+    // Location icon
+    if (data.locationType) {
+      const img = this.iconImages[data.locationType] || this.iconImages['other'] || null
+      icons.push({ img })
+    }
+
+    // Feature icon (only if no location — avoid double-showing the same hex)
+    if (!data.locationType && data.featureCount > 0) {
+      const img = this.iconImages['feature'] || null
+      icons.push({ img })
+    }
+
+    // Marker type icons
+    if (data.markerTypes) {
+      for (const mt of data.markerTypes) {
+        const img = this.iconImages[mt] || null
+        if (img) icons.push({ img })
+      }
+    }
+
+    // Note indicator
+    if (data.noteCount > 0) {
+      icons.push({ img: null, emoji: '💬' })
+    }
+
+    return icons
+  }
+
+  /**
+   * Get positions for N icons inside a hex, centered.
+   * 1 icon: center. 2-3: horizontal row. 4-6: two rows. 7: honeycomb.
+   */
+  private getIconPositions(cx: number, cy: number, count: number, iconSize: number): { x: number; y: number }[] {
+    const gap = iconSize * 0.15
+    const step = iconSize + gap
+
+    if (count === 1) return [{ x: cx, y: cy }]
+
+    if (count <= 3) {
+      // Single horizontal row, centered
+      const totalW = (count - 1) * step
+      return Array.from({ length: count }, (_, i) => ({
+        x: cx - totalW / 2 + i * step,
+        y: cy
+      }))
+    }
+
+    if (count <= 6) {
+      // Two rows
+      const topCount = Math.ceil(count / 2)
+      const botCount = count - topCount
+      const rowOffset = step * 0.45
+      const positions: { x: number; y: number }[] = []
+
+      const topW = (topCount - 1) * step
+      for (let i = 0; i < topCount; i++) {
+        positions.push({ x: cx - topW / 2 + i * step, y: cy - rowOffset })
+      }
+      const botW = (botCount - 1) * step
+      for (let i = 0; i < botCount; i++) {
+        positions.push({ x: cx - botW / 2 + i * step, y: cy + rowOffset })
+      }
+      return positions
+    }
+
+    // 7: honeycomb — 3 top, 1 center, 3 bottom (or 2-3-2)
+    const rowOffset = step * 0.5
+    const positions: { x: number; y: number }[] = []
+    // Top row: 2
+    for (let i = 0; i < 2; i++) positions.push({ x: cx - step * 0.5 + i * step, y: cy - rowOffset })
+    // Middle row: 3
+    for (let i = 0; i < 3; i++) positions.push({ x: cx - step + i * step, y: cy })
+    // Bottom row: 2
+    for (let i = 0; i < 2; i++) positions.push({ x: cx - step * 0.5 + i * step, y: cy + rowOffset })
+    return positions
+  }
+
   drawHexIndicators(markers: Record<string, HexMarkerData>, userRole: string = 'player'): void {
     const size = this.CONFIG.hexSize
     const isDmOrAdmin = userRole === 'dm' || userRole === 'admin'
+    const zoom = this.camera.zoom
 
-    // Compensate for zoom so icons stay readable at any zoom level
-    const zoomScale = Math.min(1 / Math.max(this.camera.zoom, 0.15), 4)
-    // When zoomed far out, only show the highest-priority icon per hex
-    const isZoomedOut = this.camera.zoom < 0.8
+    // Determine how many icons to show based on zoom level
+    let maxIcons: number
+    if (zoom >= 3.0) maxIcons = 7       // super close
+    else if (zoom >= 1.5) maxIcons = 6  // pretty close
+    else if (zoom >= 0.6) maxIcons = 3  // medium
+    else maxIcons = 1                   // far out
+
+    // Icon size: when single icon, fill most of the hex.
+    // At low zoom, icon should be ~100% of hex; at high zoom, ~80%
+    const singleIconFill = zoom < 1.0 ? 1.0 : 0.8
+    // For multiple icons, scale down to fit
+    const multiIconScale = zoom < 1.0 ? 0.55 : 0.45
 
     for (const [hexKey, data] of Object.entries(markers)) {
       const parts = hexKey.split('_')
@@ -620,91 +713,40 @@ export class HexMap {
 
       const center = this.getHexCenter(col, row)
       const isHidden = data.hasHiddenItems || data.hidden
-      let drewPrimary = false
 
-      // Location or feature indicator at bottom of hex
-      if (data.locationType || data.featureCount > 0) {
-        const iconY = center.y + size * 0.5
-        const iconDrawSize = Math.max(20, size * 0.9) * zoomScale
+      // Collect all icons for this hex
+      const allIcons = this.collectHexIcons(data)
+      if (allIcons.length === 0) continue
 
-        if (data.locationType) {
-          const iconImg = this.iconImages[data.locationType] || this.iconImages['other']
-          this.ctx.save()
-          if (isHidden && isDmOrAdmin) this.ctx.globalAlpha = 0.3
-          if (iconImg) {
-            this.ctx.shadowColor = 'rgba(0,0,0,0.7)'
-            this.ctx.shadowBlur = 4 * zoomScale
-            this.ctx.drawImage(iconImg, center.x - iconDrawSize / 2, iconY - iconDrawSize / 2, iconDrawSize, iconDrawSize)
-          } else {
-            // Fallback to text if icon not loaded
-            this.ctx.font = `${iconDrawSize}px sans-serif`
-            this.ctx.textAlign = 'center'
-            this.ctx.textBaseline = 'middle'
-            this.ctx.shadowColor = 'rgba(0,0,0,0.7)'
-            this.ctx.shadowBlur = 4 * zoomScale
-            this.ctx.fillText('📍', center.x, iconY)
-          }
-          this.ctx.restore()
-          drewPrimary = true
-        } else {
-          // Feature-only: use generic feature icon or cyan dot
-          const featureImg = this.iconImages['feature']
-          const dotSize = iconDrawSize * 0.7
-          this.ctx.save()
-          if (isHidden && isDmOrAdmin) this.ctx.globalAlpha = 0.3
-          if (featureImg) {
-            this.ctx.shadowColor = 'rgba(0,0,0,0.5)'
-            this.ctx.shadowBlur = 3 * zoomScale
-            this.ctx.drawImage(featureImg, center.x - dotSize / 2, iconY - dotSize / 2, dotSize, dotSize)
-          } else {
-            const dotRadius = size * 0.22 * zoomScale
-            this.ctx.beginPath()
-            this.ctx.arc(center.x, iconY, dotRadius, 0, Math.PI * 2)
-            this.ctx.fillStyle = '#06b6d4'
-            this.ctx.fill()
-            this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
-            this.ctx.lineWidth = 1.5 * zoomScale
-            this.ctx.stroke()
-          }
-          this.ctx.restore()
-          drewPrimary = true
-        }
-      }
+      const showCount = Math.min(allIcons.length, maxIcons)
+      const iconsToShow = allIcons.slice(0, showCount)
 
-      // Marker indicators (clue, battle, danger, etc.) at top-left
-      if (data.markerTypes && data.markerTypes.length > 0) {
-        const markerDrawSize = Math.max(16, size * 0.7) * zoomScale
-        const maxShow = isZoomedOut ? 1 : Math.min(data.markerTypes.length, 3)
-        for (let i = 0; i < maxShow; i++) {
-          const markerType = data.markerTypes[i]!
-          const markerImg = this.iconImages[markerType]
-          if (!markerImg) continue
-          const mx = center.x - size * 0.5 + (i * markerDrawSize * 0.6)
-          const my = center.y - size * 0.5
-          this.ctx.save()
-          if (isHidden && isDmOrAdmin) this.ctx.globalAlpha = 0.3
-          this.ctx.shadowColor = 'rgba(0,0,0,0.6)'
-          this.ctx.shadowBlur = 3 * zoomScale
-          this.ctx.drawImage(markerImg, mx - markerDrawSize / 2, my - markerDrawSize / 2, markerDrawSize, markerDrawSize)
-          this.ctx.restore()
-        }
-        drewPrimary = true
-      }
+      // Determine icon draw size
+      const iconDrawSize = iconsToShow.length === 1
+        ? size * 2 * singleIconFill   // single icon: fill hex diameter
+        : size * 2 * multiIconScale   // multiple: smaller
 
-      // Note indicator at top-right corner
-      // When zoomed out and we already drew a location/feature icon, skip the comment icon
-      if (data.noteCount > 0 && !(isZoomedOut && drewPrimary)) {
-        const nx = center.x + size * 0.5
-        const ny = center.y - size * 0.5
-        const noteSize = Math.max(18, size * 0.7) * zoomScale
+      const positions = this.getIconPositions(center.x, center.y, iconsToShow.length, iconDrawSize)
+
+      for (let i = 0; i < iconsToShow.length; i++) {
+        const icon = iconsToShow[i]!
+        const pos = positions[i]!
+        const drawSize = iconDrawSize
 
         this.ctx.save()
-        this.ctx.font = `${noteSize}px sans-serif`
-        this.ctx.textAlign = 'center'
-        this.ctx.textBaseline = 'middle'
-        this.ctx.shadowColor = 'rgba(0,0,0,0.7)'
-        this.ctx.shadowBlur = 3 * zoomScale
-        this.ctx.fillText('💬', nx, ny)
+        if (isHidden && isDmOrAdmin) this.ctx.globalAlpha = 0.3
+        this.ctx.shadowColor = 'rgba(0,0,0,0.6)'
+        this.ctx.shadowBlur = 3
+
+        if (icon.img) {
+          this.ctx.drawImage(icon.img, pos.x - drawSize / 2, pos.y - drawSize / 2, drawSize, drawSize)
+        } else if (icon.emoji) {
+          this.ctx.font = `${drawSize * 0.8}px sans-serif`
+          this.ctx.textAlign = 'center'
+          this.ctx.textBaseline = 'middle'
+          this.ctx.fillText(icon.emoji, pos.x, pos.y)
+        }
+
         this.ctx.restore()
       }
     }

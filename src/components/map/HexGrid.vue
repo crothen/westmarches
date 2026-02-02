@@ -24,6 +24,7 @@ let hexMap: HexMap | null = null
 
 const selectedHex = ref<{ x: number; y: number } | null>(null)
 const hexMarkers = ref<Record<string, HexMarkerData>>({})
+const currentZoom = ref(1)
 
 async function loadHexMarkers(fromServer = false) {
   try {
@@ -152,6 +153,7 @@ onMounted(() => {
         }
       }
       hexMap.onCameraChange = () => {
+        if (hexMap) currentZoom.value = hexMap.camera.zoom
         hexMap?.draw(hexData.value, selectedHex.value, false, auth.role, hexMarkers.value)
       }
       // If there's an initial hex from the URL, focus on it; otherwise fit to view
@@ -214,5 +216,9 @@ onUnmounted(() => {
       <span class="text-[#ef233c] animate-pulse">Loading map...</span>
     </div>
     <canvas ref="canvasRef" class="block w-full h-full" />
+    <!-- Zoom indicator -->
+    <div class="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm text-zinc-400 text-xs font-mono px-2 py-1 rounded-lg border border-white/[0.06] pointer-events-none select-none">
+      {{ currentZoom.toFixed(2) }}×
+    </div>
   </div>
 </template>
