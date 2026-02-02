@@ -58,7 +58,7 @@ const uploadProgress = ref(0)
 const placingFeature = ref<string | null>(null)
 const highlightedFeature = ref<string | null>(null)
 
-const { featureTypes: featureTypeOptions, pinTypes: pinTypeOptions } = useTypeConfig()
+const { locationTypes: locationTypeOptions, featureTypes: featureTypeOptions, pinTypes: pinTypeOptions } = useTypeConfig()
 
 // Quick-add from map click
 const showQuickAdd = ref(false)
@@ -68,6 +68,8 @@ const quickAddForm = ref({ name: '', type: 'other' as any, description: '' })
 const quickAddPinForm = ref({ name: '', type: 'clue' as MarkerType, description: '', isPrivate: false })
 
 const newFeat = ref({ name: '', type: 'other' as any, description: '' })
+const showAddSubLocation = ref(false)
+const newSubLoc = ref({ name: '', type: 'other' as any, description: '' })
 
 // featureTypes kept for backward compat fallback
 // const featureTypes = ['inn', 'shop', 'temple', 'shrine', 'blacksmith', 'tavern', 'guild', 'market', 'gate', 'tower', 'ruins', 'cave', 'bridge', 'well', 'monument', 'graveyard', 'dock', 'warehouse', 'barracks', 'library', 'other']
@@ -215,6 +217,30 @@ function onClickFeature(feat: LocationFeature) {
   // Could navigate to feature detail in the future; for now scroll to it in the list
   const el = document.getElementById('feat-' + feat.id)
   el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+async function addSubLocation() {
+  if (!newSubLoc.value.name.trim() || !location.value) return
+  try {
+    const data = {
+      name: newSubLoc.value.name.trim(),
+      type: newSubLoc.value.type,
+      description: newSubLoc.value.description.trim(),
+      parentLocationId: location.value.id,
+      hexKey: location.value.hexKey || null,
+      tags: [],
+      discoveredBy: auth.firebaseUser?.uid,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    }
+    const docRef = await addDoc(collection(db, 'locations'), data)
+    subLocations.value.push({ id: docRef.id, ...data } as any)
+    newSubLoc.value = { name: '', type: 'other', description: '' }
+    showAddSubLocation.value = false
+  } catch (e) {
+    console.error('Failed to add sub-location:', e)
+    alert('Failed to add sub-location.')
+  }
 }
 
 async function addFeature() {
@@ -467,10 +493,15 @@ async function toggleFeatureHidden(feat: LocationFeature) {
         </transition>
       </Teleport>
 
-      <!-- Sub-Locations Section (Feature 3: nested/recursive) -->
-      <div v-if="subLocations.length > 0" class="mb-8">
-        <h2 class="label mb-3">Sub-Locations ({{ subLocations.length }})</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+      <!-- Sub-Locations Section -->
+      <div v-if="subLocations.length > 0 || auth.isDm || auth.isAdmin" class="mb-8">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="label">Sub-Locations ({{ subLocations.length }})</h2>
+          <button v-if="auth.isDm || auth.isAdmin" @click="showAddSubLocation = !showAddSubLocation" class="text-xs text-zinc-600 hover:text-[#ef233c] transition-colors">
+            {{ showAddSubLocation ? 'Cancel' : '+ Add Location' }}
+          </button>
+        </div>
+        <div v-if="subLocations.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-3">
           <RouterLink
             v-for="sub in subLocations" :key="sub.id"
             :to="`/locations/${sub.id}`"
@@ -482,6 +513,13 @@ async function toggleFeatureHidden(feat: LocationFeature) {
               <span class="text-[0.6rem] text-zinc-600">{{ sub.type }}</span>
             </div>
           </RouterLink>
+        </div>
+        <!-- Add Sub-Location form -->
+        <div v-if="showAddSubLocation" class="card-flat !rounded-lg p-3 space-y-2">
+          <input v-model="newSubLoc.name" placeholder="Location name" class="input w-full text-sm" @keyup.enter="addSubLocation" />
+          <TypeSelect v-model="newSubLoc.type" :options="locationTypeOptions" input-class="w-full text-sm" />
+          <MentionTextarea v-model="newSubLoc.description" input-class="text-sm" :rows="2" placeholder="Description (optional)" />
+          <button @click="addSubLocation" :disabled="!newSubLoc.name.trim()" class="btn !text-xs !py-1.5 w-full">Create Sub-Location</button>
         </div>
       </div>
 
