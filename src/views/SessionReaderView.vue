@@ -376,12 +376,12 @@ onUnmounted(() => {
             <div class="flex-1 flex flex-col justify-center px-10 sm:px-14 py-6" :style="{ fontFamily: currentFontFamily }">
               <div class="space-y-4">
                 <!-- Session number as handwritten label -->
-                <div class="text-amber-950 text-xs tracking-[0.15em] uppercase" style="font-family: Manrope, sans-serif">
+                <div class="text-amber-950 text-sm tracking-[0.15em] uppercase" style="font-family: Manrope, sans-serif">
                   Session {{ session.sessionNumber }}
                 </div>
 
                 <!-- Title -->
-                <h1 class="text-3xl sm:text-4xl text-amber-950 leading-tight" :style="{ fontFamily: currentFontFamily }">
+                <h1 class="text-4xl sm:text-5xl text-amber-950 leading-tight" :style="{ fontFamily: currentFontFamily }">
                   {{ session.title }}
                 </h1>
 
@@ -389,7 +389,7 @@ onUnmounted(() => {
                 <div class="w-24 border-t border-amber-900/20" />
 
                 <!-- Meta as plain text lines -->
-                <div class="text-sm text-amber-950 space-y-1" :style="{ fontFamily: currentFontFamily }">
+                <div class="text-base text-amber-950 space-y-1" :style="{ fontFamily: currentFontFamily }">
                   <div v-if="session.date">{{ formatDate(session.date) }}</div>
                   <div v-if="session.sessionLocationName">{{ session.sessionLocationName }}</div>
                   <div v-if="session.dmName">Dungeon Master: {{ session.dmName }}</div>
@@ -397,7 +397,7 @@ onUnmounted(() => {
 
                 <!-- Adventurers as tilde-separated list -->
                 <div v-if="session.participants?.length" :style="{ fontFamily: currentFontFamily }">
-                  <div class="text-amber-950 text-xs italic mb-1">Adventurers</div>
+                  <div class="text-amber-950 text-sm italic mb-1">Adventurers</div>
                   <div class="text-sm text-amber-950/95">
                     <template v-for="(p, i) in session.participants" :key="p.characterId">
                       {{ p.characterName }}<template v-if="i < session.participants.length - 1"> ~ </template>
@@ -426,12 +426,12 @@ onUnmounted(() => {
 
             <div class="flex-1 px-10 sm:px-14 py-6" :style="{ fontFamily: currentFontFamily }">
               <!-- Type label -->
-              <div class="text-amber-950 text-xs italic mb-1">
+              <div class="text-amber-950 text-sm italic mb-1">
                 {{ entryTypeLabels[currentEntry.type] || 'Note' }}
               </div>
 
               <!-- Title -->
-              <h2 class="text-2xl text-amber-950 mb-4 leading-tight" :style="{ fontFamily: currentFontFamily }">
+              <h2 class="text-3xl text-amber-950 mb-4 leading-tight" :style="{ fontFamily: currentFontFamily }">
                 {{ currentEntry.title }}
               </h2>
 
@@ -439,18 +439,18 @@ onUnmounted(() => {
               <div class="w-16 border-t border-amber-900/15 mb-4" />
 
               <!-- Participants (if subset) -->
-              <div v-if="currentEntry.allParticipantsPresent === false && currentEntry.presentParticipants?.length" class="text-sm text-amber-950 mb-4 italic">
+              <div v-if="currentEntry.allParticipantsPresent === false && currentEntry.presentParticipants?.length" class="text-base text-amber-950 mb-4 italic">
                 Present: <template v-for="(p, i) in currentEntry.presentParticipants" :key="p.characterId">{{ p.characterName }}<template v-if="i < currentEntry.presentParticipants.length - 1">, </template></template>
               </div>
 
               <!-- Description -->
-              <div v-if="currentEntry.description" class="text-[0.95rem] text-amber-950 whitespace-pre-wrap leading-relaxed mb-6">
+              <div v-if="currentEntry.description" class="text-lg text-amber-950 whitespace-pre-wrap leading-relaxed mb-6">
                 {{ currentEntry.description }}
               </div>
 
               <!-- People of Interest -->
               <div v-if="currentEntry.npcIds?.length" class="mt-auto pt-4 border-t border-amber-900/10">
-                <div class="text-amber-950 text-xs italic mb-1">People of Interest</div>
+                <div class="text-amber-950 text-sm italic mb-1">People of Interest</div>
                 <div class="text-sm text-amber-950">
                   <template v-for="(id, i) in currentEntry.npcIds" :key="id">
                     {{ getNpcName(id) }}<template v-if="i < currentEntry.npcIds.length - 1"> ~ </template>
