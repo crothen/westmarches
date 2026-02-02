@@ -315,62 +315,62 @@ function formatCommentDate(date: any): string {
                   <img :src="entry.imageUrl" class="w-full h-full object-cover sm:min-h-full" :class="entry.imageUrl ? 'aspect-[3/1] sm:aspect-auto' : ''" draggable="false" />
                 </div>
                 <!-- Text content -->
-                <div class="flex-1 min-w-0 px-3 pt-2.5 pb-2">
+                <div class="flex-1 min-w-0 px-4 pt-3 pb-2.5">
                   <!-- Type badge + edit/delete -->
-                  <div class="flex items-start justify-between gap-1 mb-1">
-                    <span :class="['text-[0.65rem] px-1.5 py-0.5 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
+                  <div class="flex items-start justify-between gap-2 mb-1.5">
+                    <span :class="['text-xs px-2 py-1 rounded font-semibold leading-none', entryTypeConfig[entry.type]?.color || 'bg-zinc-500/15 text-zinc-400']">
                       {{ entryTypeConfig[entry.type]?.icon }} {{ entryTypeConfig[entry.type]?.label }}
                     </span>
-                    <div v-if="canEdit" class="flex items-center gap-0.5 shrink-0 -mt-0.5">
-                      <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-[0.65rem] p-0.5 transition-colors" title="Edit">✏️</button>
-                      <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-[0.65rem] p-0.5 transition-colors" title="Delete">🗑️</button>
+                    <div v-if="canEdit" class="flex items-center gap-1 shrink-0">
+                      <button @click="openEditModal(entry)" class="text-zinc-600 hover:text-[#ef233c] text-sm p-1 transition-colors" title="Edit">✏️</button>
+                      <button @click="deleteEntry(entry.id)" class="text-zinc-600 hover:text-red-400 text-sm p-1 transition-colors" title="Delete">🗑️</button>
                     </div>
                   </div>
                   <!-- Title -->
-                  <h3 class="text-sm font-semibold text-zinc-100 leading-tight mb-1" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
+                  <h3 class="text-base font-semibold text-zinc-100 leading-tight mb-1.5" style="font-family: Manrope, sans-serif">{{ entry.title }}</h3>
                   <!-- Participants -->
-                  <div v-if="entry.allParticipantsPresent === false && entry.presentParticipants?.length" class="mb-1">
-                    <div class="flex items-center gap-1 flex-wrap">
-                      <span class="text-[0.6rem] text-zinc-600 uppercase tracking-wider">Present:</span>
-                      <span v-for="p in entry.presentParticipants" :key="p.characterId" class="text-[0.65rem] bg-white/5 text-zinc-500 px-1 py-0.5 rounded">{{ p.characterName }}</span>
+                  <div v-if="entry.allParticipantsPresent === false && entry.presentParticipants?.length" class="mb-1.5">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="text-[0.7rem] text-zinc-600 uppercase tracking-wider">Present:</span>
+                      <span v-for="p in entry.presentParticipants" :key="p.characterId" class="text-xs bg-white/5 text-zinc-500 px-1.5 py-0.5 rounded">{{ p.characterName }}</span>
                     </div>
                   </div>
                   <!-- Description -->
-                  <div v-if="entry.description" class="text-xs text-zinc-400 leading-relaxed line-clamp-4 mb-2">
+                  <div v-if="entry.description" class="text-sm text-zinc-400 leading-relaxed line-clamp-4 mb-2">
                     <MentionText :text="entry.description" />
                   </div>
                   <!-- NPC / Location / Feature badges -->
-                  <div v-if="(entry.npcIds?.length || entry.linkedLocationIds?.length || entry.linkedFeatureIds?.length)" class="flex flex-wrap gap-1 mb-2">
-                    <span v-for="id in entry.npcIds" :key="'npc-'+id" class="text-[0.6rem] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">👤 {{ getNpcName(id) }}</span>
-                    <span v-for="id in entry.linkedLocationIds" :key="'loc-'+id" class="text-[0.6rem] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">🏰 {{ getLocationName(id) }}</span>
-                    <span v-for="id in entry.linkedFeatureIds" :key="'feat-'+id" class="text-[0.6rem] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded border border-green-500/20">📌 {{ getFeatureName(id) }}</span>
+                  <div v-if="(entry.npcIds?.length || entry.linkedLocationIds?.length || entry.linkedFeatureIds?.length)" class="flex flex-wrap gap-1.5 mb-2">
+                    <span v-for="id in entry.npcIds" :key="'npc-'+id" class="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">👤 {{ getNpcName(id) }}</span>
+                    <span v-for="id in entry.linkedLocationIds" :key="'loc-'+id" class="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">🏰 {{ getLocationName(id) }}</span>
+                    <span v-for="id in entry.linkedFeatureIds" :key="'feat-'+id" class="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded border border-green-500/20">📌 {{ getFeatureName(id) }}</span>
                   </div>
                   <!-- Attachments -->
-                  <div v-if="entry.attachments?.length" class="flex flex-wrap gap-1 mb-2">
-                    <a v-for="att in entry.attachments" :key="att.url" :href="att.url" target="_blank" class="text-[0.6rem] text-zinc-500 hover:text-zinc-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/[0.06] transition-colors">📎 {{ att.name }}</a>
+                  <div v-if="entry.attachments?.length" class="flex flex-wrap gap-1.5 mb-2">
+                    <a v-for="att in entry.attachments" :key="att.url" :href="att.url" target="_blank" class="text-xs text-zinc-500 hover:text-zinc-300 bg-white/5 px-2 py-0.5 rounded border border-white/[0.06] transition-colors">📎 {{ att.name }}</a>
                   </div>
                 </div>
               </div>
               <!-- Comments section -->
-              <div class="border-t border-white/[0.04] px-3 py-1.5">
-                <button @click="toggleComments(entry.id)" class="text-[0.65rem] text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1">
+              <div class="border-t border-white/[0.04] px-4 py-2">
+                <button @click="toggleComments(entry.id)" class="text-xs text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1">
                   <span>{{ expandedComments.has(entry.id) ? '▾' : '▸' }}</span>
                   <span>💬 {{ entry.comments?.length || 0 }}</span>
                 </button>
-                <div v-if="expandedComments.has(entry.id)" class="mt-1.5 space-y-1.5">
-                  <div v-for="comment in (entry.comments || [])" :key="comment.id" class="pl-2 border-l border-white/[0.06]">
+                <div v-if="expandedComments.has(entry.id)" class="mt-2 space-y-2">
+                  <div v-for="comment in (entry.comments || [])" :key="comment.id" class="pl-2.5 border-l border-white/[0.06]">
                     <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-1">
-                        <span class="text-[0.65rem] text-[#ef233c]/80 font-medium">{{ comment.authorName }}</span>
-                        <span class="text-[0.6rem] text-zinc-600">{{ formatCommentDate(comment.createdAt) }}</span>
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-xs text-[#ef233c]/80 font-medium">{{ comment.authorName }}</span>
+                        <span class="text-[0.7rem] text-zinc-600">{{ formatCommentDate(comment.createdAt) }}</span>
                       </div>
-                      <button v-if="canDeleteComment(comment)" @click="deleteComment(entry.id, comment.id)" class="text-zinc-600 hover:text-red-400 text-[0.6rem] transition-colors">✕</button>
+                      <button v-if="canDeleteComment(comment)" @click="deleteComment(entry.id, comment.id)" class="text-zinc-600 hover:text-red-400 text-xs transition-colors">✕</button>
                     </div>
-                    <p class="text-[0.65rem] text-zinc-500 mt-0.5">{{ comment.content }}</p>
+                    <p class="text-xs text-zinc-500 mt-0.5">{{ comment.content }}</p>
                   </div>
-                  <div v-if="auth.isAuthenticated && !auth.isGuest" class="flex gap-1.5 mt-1">
-                    <input v-model="newCommentContent[entry.id]" type="text" placeholder="Comment..." class="input flex-1 !text-[0.65rem] !py-1 !px-2" @keydown.enter="addComment(entry.id)" />
-                    <button @click="addComment(entry.id)" :disabled="!newCommentContent[entry.id]?.trim()" class="btn-action !py-1 !text-[0.6rem]">Send</button>
+                  <div v-if="auth.isAuthenticated && !auth.isGuest" class="flex gap-1.5 mt-1.5">
+                    <input v-model="newCommentContent[entry.id]" type="text" placeholder="Comment..." class="input flex-1 !text-xs !py-1.5 !px-2.5" @keydown.enter="addComment(entry.id)" />
+                    <button @click="addComment(entry.id)" :disabled="!newCommentContent[entry.id]?.trim()" class="btn-action !py-1.5 !text-xs">Send</button>
                   </div>
                 </div>
               </div>
