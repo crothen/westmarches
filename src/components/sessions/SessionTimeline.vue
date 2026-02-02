@@ -256,7 +256,7 @@ function formatCommentDate(date: any): string {
     </div>
 
     <!-- Classic vertical timeline -->
-    <div v-if="entries.length > 0" class="relative pb-4 max-w-[1200px] mx-auto">
+    <div v-if="entries.length > 0" class="relative pb-4 max-w-[1200px]">
       <!-- Center line (desktop) -->
       <div class="hidden sm:block absolute left-1/2 top-0 bottom-0 w-0.5 bg-zinc-700 -translate-x-1/2" />
       <!-- Left line (mobile) -->
@@ -309,9 +309,9 @@ function formatCommentDate(date: any): string {
               @dragend="canEdit && onDragEnd()"
             >
               <!-- Card inner: image + content side by side on desktop -->
-              <div class="flex flex-col sm:flex-row" :class="idx % 2 === 0 ? '' : 'sm:flex-row-reverse'">
+              <div class="flex flex-col sm:flex-row" :class="idx % 2 === 0 ? 'sm:flex-row-reverse' : ''">
                 <!-- Image (outer edge side on desktop, top on mobile) -->
-                <div v-if="entry.imageUrl" class="sm:w-2/5 shrink-0 overflow-hidden cursor-pointer" :class="[idx % 2 === 0 ? 'sm:rounded-l-[inherit]' : 'sm:rounded-r-[inherit]', 'rounded-t-[inherit] sm:rounded-t-none']" @click="lightboxUrl = entry.imageUrl!">
+                <div v-if="entry.imageUrl" class="sm:w-2/5 shrink-0 overflow-hidden cursor-pointer" :class="[idx % 2 === 0 ? 'sm:rounded-r-[inherit]' : 'sm:rounded-l-[inherit]', 'rounded-t-[inherit] sm:rounded-t-none']" @click="lightboxUrl = entry.imageUrl!">
                   <img :src="entry.imageUrl" class="w-full h-full object-cover sm:min-h-full" :class="entry.imageUrl ? 'aspect-[3/1] sm:aspect-auto' : ''" draggable="false" />
                 </div>
                 <!-- Text content -->
