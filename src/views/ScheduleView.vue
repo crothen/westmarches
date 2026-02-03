@@ -346,28 +346,18 @@ async function deleteSession(session: ScheduledSession) {
             </div>
           </div>
 
-          <!-- Missions liked by participants -->
+          <!-- Missions liked by participants (compact) -->
           <div v-if="getParticipantLikedMissions(session).length > 0" class="border-t border-white/[0.06] pt-4">
-            <h4 class="text-zinc-300 font-medium mb-3" style="font-family: Manrope, sans-serif">⚔️ Missions Liked by Participants</h4>
-            <div class="space-y-2">
+            <h4 class="text-zinc-300 font-medium mb-2" style="font-family: Manrope, sans-serif">⚔️ Missions Liked by Participants</h4>
+            <div class="space-y-1">
               <div
                 v-for="item in getParticipantLikedMissions(session)" :key="item.mission.id"
-                :class="['flex items-start gap-3 p-3 rounded-lg border transition-all', item.mission.suggested ? 'bg-amber-500/[0.04] border-amber-500/20' : 'bg-white/[0.02] border-white/[0.06]']"
+                class="flex items-center gap-2 text-sm"
               >
-                <div class="shrink-0 flex flex-col items-center">
-                  <span class="text-lg font-bold text-[#ef233c]">{{ item.count }}</span>
-                  <span class="text-[0.6rem] text-zinc-600 uppercase">{{ item.count === 1 ? 'vote' : 'votes' }}</span>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 mb-0.5">
-                    <span :class="['tier', item.mission.tier === 2 ? 'tier-2' : item.mission.tier === 3 ? 'tier-3' : item.mission.tier === 4 ? 'tier-4' : 'tier-5']">T{{ item.mission.tier }}</span>
-                    <span v-if="item.mission.suggested" class="text-xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold">⭐</span>
-                    <span class="text-xs text-zinc-600">{{ item.mission.unitName }}</span>
-                  </div>
-                  <h5 class="text-sm font-medium text-zinc-200">{{ item.mission.title }}</h5>
-                  <p class="text-xs text-zinc-500 line-clamp-2 mt-0.5">{{ item.mission.description }}</p>
-                  <div class="text-[0.65rem] text-zinc-600 mt-1">👍 {{ item.voters.join(', ') }}</div>
-                </div>
+                <span class="text-[#ef233c] font-bold w-5 text-center shrink-0">{{ item.count }}</span>
+                <span :class="['tier shrink-0', item.mission.tier === 2 ? 'tier-2' : item.mission.tier === 3 ? 'tier-3' : item.mission.tier === 4 ? 'tier-4' : 'tier-5']">T{{ item.mission.tier }}</span>
+                <span class="text-zinc-200 truncate">{{ item.mission.title }}</span>
+                <span class="text-zinc-600 text-xs shrink-0">{{ item.mission.unitName }}</span>
               </div>
             </div>
           </div>
