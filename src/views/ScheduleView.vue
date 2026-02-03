@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
-import type { ScheduledSession, Mission } from '../types'
+import type { ScheduledSession, Mission, AppUser } from '../types'
 
 interface LocationEntry { label: string }
 type LocationsConfig = Record<string, LocationEntry>
@@ -11,6 +11,7 @@ type LocationsConfig = Record<string, LocationEntry>
 const auth = useAuthStore()
 const sessions = ref<ScheduledSession[]>([])
 const missions = ref<Mission[]>([])
+const users = ref<AppUser[]>([])
 const sessionLocations = ref<LocationsConfig>({})
 const loading = ref(true)
 const showCreateForm = ref(false)
@@ -28,6 +29,8 @@ const editLocationKey = ref('')
 const editStatus = ref<'upcoming' | 'in_progress' | 'completed' | 'cancelled'>('upcoming')
 const editSaving = ref(false)
 const deleteConfirmId = ref<string | null>(null)
+const addingPlayerToSession = ref<string | null>(null)
+const addPlayerUserId = ref('')
 const _unsubs: (() => void)[] = []
 
 const sortedLocations = computed(() => {
@@ -40,6 +43,10 @@ onMounted(() => {
   _unsubs.push(onSnapshot(doc(db, 'config', 'sessionLocations'), (snap) => {
     if (snap.exists()) sessionLocations.value = snap.data() as LocationsConfig
   }, (e) => console.error('Failed to load session locations:', e)))
+
+  _unsubs.push(onSnapshot(collection(db, 'users'), (snap) => {
+    users.value = snap.docs.map(d => ({ uid: d.id, ...d.data() } as AppUser))
+  }, (e) => console.error('Failed to load users:', e)))
 
   _unsubs.push(onSnapshot(collection(db, 'missions'), (snap) => {
     missions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Mission))
@@ -196,6 +203,40 @@ async function removeVote(session: ScheduledSession) {
   const sessionRef = doc(db, 'scheduledSessions', session.id)
   await updateDoc(sessionRef, {
     missionVotes: (session.missionVotes || []).filter(v => v.userId !== auth.firebaseUser!.uid),
+    updatedAt: Timestamp.now()
+  })
+}
+
+function getAvailablePlayers(session: ScheduledSession) {
+  const signedUpIds = new Set((session.signups || []).map(s => s.userId))
+  return users.value
+    .filter(u => !signedUpIds.has(u.uid) && u.roles?.includes('player'))
+    .sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''))
+}
+
+async function addPlayerToSession(session: ScheduledSession) {
+  if (!addPlayerUserId.value) return
+  const user = users.value.find(u => u.uid === addPlayerUserId.value)
+  if (!user) return
+  const sessionRef = doc(db, 'scheduledSessions', session.id)
+  const currentSignups = session.signups || []
+  await updateDoc(sessionRef, {
+    signups: [...currentSignups, {
+      userId: user.uid,
+      characterName: user.displayName || 'Unknown',
+      signedUpAt: Timestamp.now()
+    }],
+    updatedAt: Timestamp.now()
+  })
+  addPlayerUserId.value = ''
+  addingPlayerToSession.value = null
+}
+
+async function removePlayerFromSession(session: ScheduledSession, userId: string) {
+  const sessionRef = doc(db, 'scheduledSessions', session.id)
+  await updateDoc(sessionRef, {
+    signups: (session.signups || []).filter(s => s.userId !== userId),
+    missionVotes: (session.missionVotes || []).filter(v => v.userId !== userId),
     updatedAt: Timestamp.now()
   })
 }
@@ -376,10 +417,23 @@ async function deleteSession(session: ScheduledSession) {
               Signed up: {{ session.signups?.length || 0 }}{{ session.maxPlayers ? ` / ${session.maxPlayers}` : '' }}
             </h4>
             <div class="flex flex-wrap gap-2">
-              <span v-for="s in session.signups" :key="s.userId" class="bg-white/[0.05] text-zinc-200 text-sm px-2.5 py-1 rounded-lg border border-white/[0.06]">
+              <span v-for="s in session.signups" :key="s.userId" class="bg-white/[0.05] text-zinc-200 text-sm px-2.5 py-1 rounded-lg border border-white/[0.06] flex items-center gap-1.5">
                 {{ s.characterName }}
+                <button v-if="auth.isDm || auth.isAdmin" @click="removePlayerFromSession(session, s.userId)" class="text-zinc-600 hover:text-red-400 transition-colors text-xs" title="Remove player">✕</button>
               </span>
               <span v-if="!session.signups?.length" class="text-zinc-600 text-sm">No signups yet</span>
+            </div>
+            <!-- Admin/DM: Add player -->
+            <div v-if="auth.isDm || auth.isAdmin" class="mt-2">
+              <div v-if="addingPlayerToSession === session.id" class="flex items-center gap-2">
+                <select v-model="addPlayerUserId" class="input text-sm flex-1">
+                  <option value="" disabled>Select player...</option>
+                  <option v-for="u in getAvailablePlayers(session)" :key="u.uid" :value="u.uid">{{ u.displayName }}</option>
+                </select>
+                <button @click="addPlayerToSession(session)" :disabled="!addPlayerUserId" class="btn !text-xs !py-1.5">Add</button>
+                <button @click="addingPlayerToSession = null; addPlayerUserId = ''" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">Cancel</button>
+              </div>
+              <button v-else @click="addingPlayerToSession = session.id; addPlayerUserId = ''" class="text-xs text-zinc-600 hover:text-zinc-300 transition-colors mt-1">+ Add player</button>
             </div>
           </div>
 
