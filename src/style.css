@@ -96,6 +96,21 @@ select.input option {
   color: #e4e4e7;
 }
 
+/* Date input styling */
+input[type="date"].input {
+  color-scheme: dark;
+  cursor: pointer;
+}
+input[type="date"].input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7) sepia(1) saturate(3) hue-rotate(330deg);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+input[type="date"].input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
 /* Primary button */
 .btn {
   background: var(--accent);

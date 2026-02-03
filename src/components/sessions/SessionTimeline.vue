@@ -336,7 +336,7 @@ function formatCommentDate(date: any): string {
                     </div>
                   </div>
                   <!-- Description -->
-                  <div v-if="entry.description" class="text-sm text-zinc-400 leading-relaxed line-clamp-4 mb-2">
+                  <div v-if="entry.description" class="text-sm text-zinc-400 leading-relaxed mb-2">
                     <MentionText :text="entry.description" />
                   </div>
                   <!-- NPC / Location / Feature badges -->

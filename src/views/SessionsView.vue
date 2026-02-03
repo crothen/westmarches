@@ -1,16 +1,40 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { collection, query, orderBy, onSnapshot, addDoc, Timestamp } from 'firebase/firestore'
+import { collection, query, where, orderBy, onSnapshot, addDoc, deleteDoc, getDocs, doc, Timestamp } from 'firebase/firestore'
+import { renderMentionsHtml } from '../lib/mentionRenderer'
+import { useRoles } from '../composables/useRoles'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import SessionForm from '../components/sessions/SessionForm.vue'
 import type { SessionLog } from '../types'
 
 const auth = useAuthStore()
+const { isDm, isAdmin } = useRoles()
 const sessions = ref<SessionLog[]>([])
 const loading = ref(true)
 const showCreateForm = ref(false)
 const saving = ref(false)
+const deletingId = ref<string | null>(null)
+
+async function deleteSession(session: SessionLog) {
+  if (!confirm(`Delete Session ${session.sessionNumber}: "${session.title}"? This will also delete all timeline entries and notes.`)) return
+  deletingId.value = session.id
+  try {
+    // Delete timeline entries
+    const entriesSnap = await getDocs(query(collection(db, 'sessionEntries'), where('sessionId', '==', session.id)))
+    for (const d of entriesSnap.docs) await deleteDoc(d.ref)
+    // Delete notes
+    const notesSnap = await getDocs(query(collection(db, 'sessionNotes'), where('sessionId', '==', session.id)))
+    for (const d of notesSnap.docs) await deleteDoc(d.ref)
+    // Delete session
+    await deleteDoc(doc(db, 'sessions', session.id))
+  } catch (e: any) {
+    console.error('Failed to delete session:', e)
+    alert('Failed to delete session: ' + (e.message || 'Unknown error'))
+  } finally {
+    deletingId.value = null
+  }
+}
 
 let _unsub: (() => void) | null = null
 
@@ -108,7 +132,7 @@ async function handleCreate(data: Partial<SessionLog>) {
             <span v-if="session.sessionLocationName" class="text-zinc-600 text-xs">📍 {{ session.sessionLocationName }}</span>
           </div>
           <h2 class="text-zinc-100 font-semibold group-hover:text-[#ef233c] transition-colors text-sm">{{ session.title }}</h2>
-          <p class="text-zinc-500 text-xs mt-1.5 line-clamp-2">{{ session.summary }}</p>
+          <p class="text-zinc-500 text-xs mt-1.5 line-clamp-2" v-html="renderMentionsHtml(session.summary || '')" />
           <div class="flex items-center justify-between mt-3">
             <div class="text-zinc-600 text-xs">
               {{ session.participants?.length || 0 }} adventurers
@@ -121,6 +145,14 @@ async function handleCreate(data: Partial<SessionLog>) {
               >
                 📖 Read
               </RouterLink>
+              <button
+                v-if="isDm || isAdmin"
+                @click.prevent.stop="deleteSession(session)"
+                :disabled="deletingId === session.id"
+                class="text-[0.65rem] text-zinc-600 hover:text-red-400 transition-colors relative z-20"
+              >
+                {{ deletingId === session.id ? '...' : '🗑️' }}
+              </button>
               <div v-if="session.tags?.length" class="flex gap-1 flex-wrap justify-end">
                 <span v-for="tag in session.tags.slice(0, 3)" :key="tag" class="text-[0.6rem] bg-white/[0.05] text-zinc-500 px-1.5 py-0.5 rounded border border-white/[0.06]">{{ tag }}</span>
               </div>

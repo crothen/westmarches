@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { doc, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, Timestamp } from 'firebase/firestore'
+import { useRoute, useRouter } from 'vue-router'
+import { doc, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, getDocs, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
 import SessionForm from '../components/sessions/SessionForm.vue'
 import SessionTimeline from '../components/sessions/SessionTimeline.vue'
+import { renderMentionsHtml } from '../lib/mentionRenderer'
 import type { SessionLog, SessionNote, Character, Npc } from '../types'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const { generating: genLoading, error: genError, generateImageRaw, uploadImageData, cropToAspectRatio } = useImageGen()
 const session = ref<SessionLog | null>(null)
@@ -304,6 +306,29 @@ async function removeSessionArt() {
   await updateDoc(doc(db, 'sessions', session.value.id), { imageUrl: null })
 }
 
+const deleting = ref(false)
+async function deleteSession() {
+  if (!session.value || !confirm(`Delete Session ${session.value.sessionNumber}: "${session.value.title}"? This will also delete all timeline entries and notes.`)) return
+  deleting.value = true
+  try {
+    const sid = session.value.id
+    // Delete timeline entries
+    const entriesSnap = await getDocs(query(collection(db, 'sessionEntries'), where('sessionId', '==', sid)))
+    for (const d of entriesSnap.docs) await deleteDoc(d.ref)
+    // Delete notes
+    const notesSnap = await getDocs(query(collection(db, 'sessionNotes'), where('sessionId', '==', sid)))
+    for (const d of notesSnap.docs) await deleteDoc(d.ref)
+    // Delete session
+    await deleteDoc(doc(db, 'sessions', sid))
+    router.push('/sessions')
+  } catch (e: any) {
+    console.error('Failed to delete session:', e)
+    alert('Failed to delete session: ' + (e.message || 'Unknown error'))
+  } finally {
+    deleting.value = false
+  }
+}
+
 async function addReply(noteId: string) {
   if (!replyContent.value.trim() || !auth.firebaseUser) return
   const note = notes.value.find(n => n.id === noteId)
@@ -371,9 +396,10 @@ function canDeleteNote(note: SessionNote): boolean {
 
     <div v-else>
       <!-- View mode -->
-        <div class="flex items-center gap-3 mb-2">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
           <span class="text-[#ef233c] font-bold text-2xl" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
           <span class="text-zinc-600">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
+          <span v-if="session.dmName" class="text-zinc-600 text-sm">🎲 DM: {{ session.dmName }}</span>
           <span v-if="session.sessionLocationName" class="text-zinc-600 text-sm">📍 {{ session.sessionLocationName }}</span>
           <span v-if="session.startingPointName" class="text-zinc-600 text-sm">
             🚩 Starting:
@@ -381,7 +407,8 @@ function canDeleteNote(note: SessionNote): boolean {
             <RouterLink v-else-if="session.startingPointType === 'feature' && session.startingPointId" :to="`/features/${session.startingPointId}`" class="text-zinc-400 hover:text-[#ef233c] transition-colors">{{ session.startingPointName }}</RouterLink>
             <span v-else class="text-zinc-400">{{ session.startingPointName }}</span>
           </span>
-          <div class="flex items-center gap-2 ml-auto">
+        </div>
+        <div class="flex items-center gap-2 mb-4">
             <router-link :to="`/sessions/${session.id}/read`" class="btn-action !py-1.5">
               📖 Read
             </router-link>
@@ -392,7 +419,15 @@ function canDeleteNote(note: SessionNote): boolean {
             >
               ✏️ Edit
             </button>
-          </div>
+            <button
+              v-if="canEdit"
+              @click="deleteSession"
+              :disabled="deleting"
+              class="btn-action !py-1.5 text-red-400 hover:text-red-300 hover:!bg-red-500/15 hover:!border-red-500/20"
+            >
+              <svg v-if="deleting" class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              <span v-else>🗑️ Delete</span>
+            </button>
         </div>
         <h1 class="text-3xl font-bold text-white mb-6" style="font-family: Manrope, sans-serif">{{ session.title }}</h1>
 
@@ -458,7 +493,7 @@ function canDeleteNote(note: SessionNote): boolean {
         <div class="mb-6">
           <h2 class="text-lg font-semibold text-[#ef233c] mb-2" style="font-family: Manrope, sans-serif">📜 Summary</h2>
           <div class="card p-4 relative z-10">
-            <div class="relative z-10 text-zinc-300 whitespace-pre-wrap">{{ session.summary }}</div>
+            <div class="relative z-10 text-zinc-300 whitespace-pre-wrap" v-html="renderMentionsHtml(session.summary || '')" />
           </div>
         </div>
 

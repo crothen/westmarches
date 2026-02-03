@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, Timestamp } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import type { ScheduledSession, Mission } from '../types'
@@ -14,6 +14,14 @@ const newDate = ref('')
 const newTitle = ref('')
 const newDescription = ref('')
 const newMaxPlayers = ref<number | undefined>(undefined)
+const editingSessionId = ref<string | null>(null)
+const editDate = ref('')
+const editTitle = ref('')
+const editDescription = ref('')
+const editMaxPlayers = ref<number | undefined>(undefined)
+const editStatus = ref<'upcoming' | 'in_progress' | 'completed' | 'cancelled'>('upcoming')
+const editSaving = ref(false)
+const deleteConfirmId = ref<string | null>(null)
 const _unsubs: (() => void)[] = []
 
 onMounted(() => {
@@ -72,6 +80,25 @@ function getVoteCounts(session: ScheduledSession): Array<{ missionId: string; co
   return Object.entries(counts)
     .map(([missionId, count]) => ({ missionId, count }))
     .sort((a, b) => b.count - a.count)
+}
+
+/** Get missions liked by signed-up participants, ranked by count */
+function getParticipantLikedMissions(session: ScheduledSession): Array<{ mission: Mission; count: number; voters: string[] }> {
+  const signedUpUserIds = new Set((session.signups || []).map(s => s.userId))
+  if (signedUpUserIds.size === 0) return []
+
+  const results: Array<{ mission: Mission; count: number; voters: string[] }> = []
+  for (const m of availableMissions.value) {
+    const matchingVoters = (m.votes || []).filter(v => signedUpUserIds.has(v.userId))
+    if (matchingVoters.length > 0) {
+      results.push({
+        mission: m,
+        count: matchingVoters.length,
+        voters: matchingVoters.map(v => v.userName),
+      })
+    }
+  }
+  return results.sort((a, b) => b.count - a.count)
 }
 
 function formatDate(date: any): string {
@@ -152,13 +179,55 @@ async function removeVote(session: ScheduledSession) {
     updatedAt: Timestamp.now()
   })
 }
+
+function startEditing(session: ScheduledSession) {
+  editingSessionId.value = session.id
+  const d = (session.date as any).toDate ? (session.date as any).toDate() : new Date(session.date)
+  // Format as datetime-local value: YYYY-MM-DDTHH:mm
+  const pad = (n: number) => String(n).padStart(2, '0')
+  editDate.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  editTitle.value = session.title || ''
+  editDescription.value = session.description || ''
+  editMaxPlayers.value = session.maxPlayers || undefined
+  editStatus.value = session.status
+}
+
+function cancelEditing() {
+  editingSessionId.value = null
+  deleteConfirmId.value = null
+}
+
+async function saveEdit(session: ScheduledSession) {
+  if (!editDate.value) return
+  editSaving.value = true
+  try {
+    const sessionRef = doc(db, 'scheduledSessions', session.id)
+    await updateDoc(sessionRef, {
+      date: Timestamp.fromDate(new Date(editDate.value)),
+      title: editTitle.value || null,
+      description: editDescription.value || null,
+      maxPlayers: editMaxPlayers.value || null,
+      status: editStatus.value,
+      updatedAt: Timestamp.now()
+    })
+    editingSessionId.value = null
+  } finally {
+    editSaving.value = false
+  }
+}
+
+async function deleteSession(session: ScheduledSession) {
+  await deleteDoc(doc(db, 'scheduledSessions', session.id))
+  deleteConfirmId.value = null
+  editingSessionId.value = null
+}
 </script>
 
 <template>
   <div>
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">📅 Session Schedule</h1>
-      <button v-if="auth.isDm" @click="showCreateForm = !showCreateForm" class="btn text-sm">
+      <button v-if="auth.isDm || auth.isAdmin" @click="showCreateForm = !showCreateForm" class="btn text-sm">
         {{ showCreateForm ? 'Cancel' : '+ Schedule Session' }}
       </button>
     </div>
@@ -195,11 +264,63 @@ async function removeVote(session: ScheduledSession) {
     <div v-if="upcomingSessions.length > 0" class="space-y-4 mb-8">
       <div v-for="session in upcomingSessions" :key="session.id" class="card p-5 relative z-10">
         <div class="relative z-10">
+          <!-- Edit Form (Admin/DM) -->
+          <div v-if="editingSessionId === session.id" class="space-y-3">
+            <h3 class="text-zinc-200 font-semibold" style="font-family: Manrope, sans-serif">Edit Session</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="label block mb-1.5">Date *</label>
+                <input v-model="editDate" type="datetime-local" class="input w-full" />
+              </div>
+              <div>
+                <label class="label block mb-1.5">Title</label>
+                <input v-model="editTitle" type="text" placeholder="e.g. Session 2" class="input w-full" />
+              </div>
+              <div class="md:col-span-2">
+                <label class="label block mb-1.5">Description</label>
+                <textarea v-model="editDescription" rows="2" class="input w-full" />
+              </div>
+              <div>
+                <label class="label block mb-1.5">Max Players</label>
+                <input v-model.number="editMaxPlayers" type="number" min="1" class="input w-full" />
+              </div>
+              <div>
+                <label class="label block mb-1.5">Status</label>
+                <select v-model="editStatus" class="input w-full">
+                  <option value="upcoming">Upcoming</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 pt-1">
+              <button @click="saveEdit(session)" :disabled="!editDate || editSaving" class="btn text-sm">
+                {{ editSaving ? 'Saving...' : 'Save' }}
+              </button>
+              <button @click="cancelEditing" class="text-sm text-zinc-500 hover:text-zinc-300 transition-colors px-3 py-1.5">Cancel</button>
+              <div class="flex-1" />
+              <button v-if="deleteConfirmId !== session.id" @click="deleteConfirmId = session.id" class="text-sm text-red-500/60 hover:text-red-400 transition-colors px-3 py-1.5">
+                Delete
+              </button>
+              <div v-else class="flex items-center gap-2">
+                <span class="text-xs text-red-400">Are you sure?</span>
+                <button @click="deleteSession(session)" class="text-sm text-red-400 font-medium hover:text-red-300 transition-colors px-2 py-1">Yes, delete</button>
+                <button @click="deleteConfirmId = null" class="text-sm text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1">No</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Normal Display -->
+          <div v-else>
           <div class="flex items-start justify-between mb-3">
             <div>
               <div class="flex items-center gap-3">
                 <span class="text-xl font-bold text-zinc-100" style="font-family: Manrope, sans-serif">{{ session.title || 'Game Session' }}</span>
                 <span class="text-xs px-2 py-0.5 rounded-md bg-green-500/15 text-green-400">{{ session.status }}</span>
+                <button v-if="auth.isDm || auth.isAdmin" @click="startEditing(session)" class="text-zinc-600 hover:text-zinc-300 transition-colors" title="Edit session">
+                  ✏️
+                </button>
               </div>
               <p class="text-[#ef233c] font-medium mt-1">📅 {{ formatDate(session.date) }}</p>
               <p v-if="session.description" class="text-zinc-500 text-sm mt-1">{{ session.description }}</p>
@@ -225,39 +346,35 @@ async function removeVote(session: ScheduledSession) {
             </div>
           </div>
 
-          <!-- Mission Voting (only if signed up) -->
-          <div v-if="isSignedUp(session)" class="border-t border-white/[0.06] pt-4">
-            <h4 class="text-zinc-300 font-medium mb-2" style="font-family: Manrope, sans-serif">🗳️ Vote for a Mission</h4>
-
-            <div class="mb-3">
-              <select @change="(e: any) => { if (e.target.value) voteMission(session, e.target.value); e.target.value = '' }" class="input w-full max-w-lg text-sm">
-                <option value="">Select a mission to vote for...</option>
-                <optgroup v-for="(unitMissions, unitName) in missionsByUnit" :key="unitName" :label="unitName">
-                  <option v-for="m in unitMissions" :key="m.id" :value="m.id">
-                    [T{{ m.tier }}] {{ m.description.substring(0, 100) }}
-                  </option>
-                </optgroup>
-              </select>
-            </div>
-
-            <div v-if="getMyVote(session)" class="text-sm text-zinc-500 mb-2">
-              Your vote: <span class="text-[#ef233c]">{{ getMissionTitle(getMyVote(session)!) }}</span>
-              <button @click="removeVote(session)" class="text-red-400 hover:text-red-300 ml-2 transition-colors">(remove)</button>
-            </div>
-          </div>
-
-          <!-- Vote Results (visible to all) -->
-          <div v-if="getVoteCounts(session).length > 0" class="mt-3">
-            <h4 class="text-zinc-500 text-sm mb-2">Current Votes:</h4>
-            <div class="space-y-1">
-              <div v-for="vc in getVoteCounts(session)" :key="vc.missionId" class="flex items-center gap-2 text-sm">
-                <span class="text-[#ef233c] font-bold w-6 text-right">{{ vc.count }}</span>
-                <span class="text-zinc-700">|</span>
-                <span class="text-zinc-300">{{ getMissionTitle(vc.missionId) }}</span>
-                <span class="text-zinc-700 text-xs">({{ getMissionUnit(vc.missionId) }})</span>
+          <!-- Missions liked by participants -->
+          <div v-if="getParticipantLikedMissions(session).length > 0" class="border-t border-white/[0.06] pt-4">
+            <h4 class="text-zinc-300 font-medium mb-3" style="font-family: Manrope, sans-serif">⚔️ Missions Liked by Participants</h4>
+            <div class="space-y-2">
+              <div
+                v-for="item in getParticipantLikedMissions(session)" :key="item.mission.id"
+                :class="['flex items-start gap-3 p-3 rounded-lg border transition-all', item.mission.suggested ? 'bg-amber-500/[0.04] border-amber-500/20' : 'bg-white/[0.02] border-white/[0.06]']"
+              >
+                <div class="shrink-0 flex flex-col items-center">
+                  <span class="text-lg font-bold text-[#ef233c]">{{ item.count }}</span>
+                  <span class="text-[0.6rem] text-zinc-600 uppercase">{{ item.count === 1 ? 'vote' : 'votes' }}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-0.5">
+                    <span :class="['tier', item.mission.tier === 2 ? 'tier-2' : item.mission.tier === 3 ? 'tier-3' : item.mission.tier === 4 ? 'tier-4' : 'tier-5']">T{{ item.mission.tier }}</span>
+                    <span v-if="item.mission.suggested" class="text-xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold">⭐</span>
+                    <span class="text-xs text-zinc-600">{{ item.mission.unitName }}</span>
+                  </div>
+                  <h5 class="text-sm font-medium text-zinc-200">{{ item.mission.title }}</h5>
+                  <p class="text-xs text-zinc-500 line-clamp-2 mt-0.5">{{ item.mission.description }}</p>
+                  <div class="text-[0.65rem] text-zinc-600 mt-1">👍 {{ item.voters.join(', ') }}</div>
+                </div>
               </div>
             </div>
           </div>
+          <div v-else-if="(session.signups || []).length > 0" class="border-t border-white/[0.06] pt-4">
+            <p class="text-zinc-600 text-sm">No participants have liked any missions yet. Vote on the <RouterLink to="/missions" class="text-[#ef233c] hover:underline">Missions Board</RouterLink>!</p>
+          </div>
+          </div><!-- /v-else normal display -->
         </div>
       </div>
     </div>
@@ -265,7 +382,7 @@ async function removeVote(session: ScheduledSession) {
     <div v-if="!loading && upcomingSessions.length === 0" class="text-center py-12">
       <div class="text-4xl mb-3">📅</div>
       <p class="text-zinc-500">No sessions scheduled yet.</p>
-      <p v-if="auth.isDm" class="text-zinc-600 text-sm mt-1">Use the button above to schedule one!</p>
+      <p v-if="auth.isDm || auth.isAdmin" class="text-zinc-600 text-sm mt-1">Use the button above to schedule one!</p>
     </div>
   </div>
 </template>

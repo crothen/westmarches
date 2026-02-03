@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { collection, doc, updateDoc, query, orderBy, onSnapshot } from 'firebase/firestore'
+import { collection, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { useAuthStore } from '../../stores/auth'
 import type { UserRole } from '../../types'
@@ -72,6 +72,25 @@ async function toggleRole(user: UserRecord, role: UserRole) {
   }
 }
 
+const deletingUid = ref<string | null>(null)
+
+async function deleteUser(user: UserRecord) {
+  if (user.uid === auth.firebaseUser?.uid) {
+    alert("You can't delete your own account.")
+    return
+  }
+  if (!confirm(`Delete user "${user.displayName || user.email}"? This removes their profile from the app.`)) return
+  deletingUid.value = user.uid
+  try {
+    await deleteDoc(doc(db, 'users', user.uid))
+  } catch (e) {
+    console.error('Failed to delete user:', e)
+    alert('Failed to delete user.')
+  } finally {
+    deletingUid.value = null
+  }
+}
+
 function formatDate(date: any): string {
   if (!date) return '—'
   const d = date.toDate ? date.toDate() : new Date(date)
@@ -105,16 +124,17 @@ function getRoleToggleClass(role: string, active: boolean): string {
     <!-- Desktop table -->
     <div v-else class="card relative z-10 overflow-hidden hidden md:block">
       <div class="relative z-10">
-        <div class="grid grid-cols-[1fr_1fr_1fr_100px] gap-4 px-5 py-3 border-b border-white/[0.06] text-zinc-600">
+        <div class="grid grid-cols-[1fr_1fr_1fr_100px_40px] gap-4 px-5 py-3 border-b border-white/[0.06] text-zinc-600">
           <span class="label">Name</span>
           <span class="label">Email</span>
           <span class="label">Roles</span>
           <span class="label">Joined</span>
+          <span></span>
         </div>
         <div v-if="filteredUsers.length === 0" class="px-5 py-8 text-center text-zinc-600">No users found.</div>
         <div
           v-for="user in filteredUsers" :key="user.uid"
-          class="grid grid-cols-[1fr_1fr_1fr_100px] gap-4 px-5 py-3 border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors items-center"
+          class="grid grid-cols-[1fr_1fr_1fr_100px_40px] gap-4 px-5 py-3 border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors items-center"
         >
           <div>
             <span class="text-sm text-zinc-200 font-medium">{{ user.displayName || 'Unnamed' }}</span>
@@ -133,6 +153,17 @@ function getRoleToggleClass(role: string, active: boolean): string {
             </transition>
           </div>
           <span class="text-xs text-zinc-600">{{ formatDate(user.createdAt) }}</span>
+          <button
+            v-if="user.uid !== auth.firebaseUser?.uid"
+            @click="deleteUser(user)"
+            :disabled="deletingUid === user.uid"
+            class="text-zinc-600 hover:text-red-400 text-base transition-colors justify-self-center"
+            title="Delete user"
+          >
+            <span v-if="deletingUid === user.uid" class="inline-block w-3.5 h-3.5 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin"></span>
+            <span v-else>🗑️</span>
+          </button>
+          <span v-else></span>
         </div>
       </div>
     </div>
@@ -147,8 +178,20 @@ function getRoleToggleClass(role: string, active: boolean): string {
             <span class="text-sm text-zinc-200 font-medium">{{ user.displayName || 'Unnamed' }}</span>
             <span v-if="user.uid === auth.firebaseUser?.uid" class="text-[0.6rem] text-zinc-600 ml-1">(you)</span>
           </div>
-          <div class="flex gap-1">
-            <span v-for="r in user.roles" :key="r" :class="['badge', getRoleBadgeClass(r)]">{{ r }}</span>
+          <div class="flex items-center gap-2">
+            <div class="flex gap-1">
+              <span v-for="r in user.roles" :key="r" :class="['badge', getRoleBadgeClass(r)]">{{ r }}</span>
+            </div>
+            <button
+              v-if="user.uid !== auth.firebaseUser?.uid"
+              @click="deleteUser(user)"
+              :disabled="deletingUid === user.uid"
+              class="text-zinc-600 hover:text-red-400 text-base transition-colors"
+              title="Delete user"
+            >
+              <span v-if="deletingUid === user.uid" class="inline-block w-3.5 h-3.5 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin"></span>
+              <span v-else>🗑️</span>
+            </button>
           </div>
         </div>
         <div class="text-xs text-zinc-600 mb-3">{{ user.email }}</div>

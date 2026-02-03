@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { renderMentionsHtml, hasMentions, parseMentions } from '../../lib/mentionRenderer'
 import { useEntityExists } from '../../composables/useEntityExists'
+import { showTooltip, hideTooltip } from '../../composables/useEntityTooltip'
+import type { MentionKind } from '../../lib/mentionRenderer'
 
 const props = defineProps<{
   text: string
@@ -47,9 +49,28 @@ function onClick(e: MouseEvent) {
     if (href) router.push(href)
   }
 }
+
+function onMouseOver(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (target.classList.contains('mention-link') || target.classList.contains('mention-pin')) {
+    const kind = target.dataset.mentionKind as MentionKind
+    const id = target.dataset.mentionId
+    if (kind && id) {
+      const rect = target.getBoundingClientRect()
+      showTooltip(kind, id, rect.left, rect.bottom + 6)
+    }
+  }
+}
+
+function onMouseOut(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (target.classList.contains('mention-link') || target.classList.contains('mention-pin')) {
+    hideTooltip()
+  }
+}
 </script>
 
 <template>
-  <span v-if="containsMentions" v-html="renderedHtml" @click="onClick" />
+  <span v-if="containsMentions" v-html="renderedHtml" @click="onClick" @mouseover="onMouseOver" @mouseout="onMouseOut" />
   <span v-else>{{ text }}</span>
 </template>

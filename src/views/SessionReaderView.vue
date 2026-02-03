@@ -30,7 +30,7 @@ const fonts = [
   { key: 'fraktur', label: 'UnifrakturMaguntia', family: "'UnifrakturMaguntia', serif", importUrl: 'https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&display=swap' },
   { key: 'inter', label: 'Inter', family: "'Inter', sans-serif", importUrl: '' },
 ]
-const selectedFont = ref('meow')
+const selectedFont = ref('fraktur')
 
 const currentFontFamily = computed(() => {
   return fonts.find(f => f.key === selectedFont.value)?.family || "'Meow Script', cursive"
@@ -194,7 +194,7 @@ function getNpcName(id: string): string {
 
 // Strip @[Name](type:id) mention syntax to just the name
 function stripMentions(text: string): string {
-  return text.replace(/@\[([^\]]+)\]\((char|npc):[^)]+\)/g, '$1')
+  return text.replace(/[@#¦]\[([^\]]+)\]\((char|npc|location|feature|pin|org):[^)]+\)/g, '$1')
 }
 
 // Generate sketches for all images when data loads
@@ -318,7 +318,7 @@ onUnmounted(() => {
           <div v-if="currentPage === 0" class="relative h-full flex flex-col overflow-y-auto">
             <!-- Title at top -->
             <div class="px-10 sm:px-14 pt-8 pb-2" :style="{ fontFamily: currentFontFamily }">
-              <h1 class="text-7xl sm:text-8xl font-bold text-amber-950 leading-tight" :style="{ fontFamily: currentFontFamily }">
+              <h1 class="text-2xl sm:text-3xl font-bold text-amber-950 leading-tight" :style="{ fontFamily: currentFontFamily }">
                 {{ session.title }}
               </h1>
             </div>

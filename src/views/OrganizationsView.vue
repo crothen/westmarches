@@ -190,6 +190,28 @@ async function deleteOrg(org: Organization) {
               <p v-if="org.description" class="text-sm text-zinc-500 mt-1.5 line-clamp-2">{{ org.description }}</p>
             </div>
           </div>
+
+          <!-- Members list -->
+          <div v-if="(org.members || []).length > 0" class="mt-3 pt-3 border-t border-white/[0.05]">
+            <div class="flex flex-wrap gap-1.5">
+              <RouterLink
+                v-for="member in org.members" :key="member.entityId"
+                :to="member.entityType === 'npc' ? `/npcs/${member.entityId}` : `/characters/${member.entityId}`"
+                class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.06] transition-all group/member"
+                @click.stop
+              >
+                <span class="text-zinc-400 group-hover/member:text-zinc-200 transition-colors">{{ member.name }}</span>
+                <span class="text-[0.55rem] uppercase tracking-wider px-1 py-0.5 rounded font-semibold"
+                  :class="member.rank === 'leader' ? 'text-amber-400 bg-amber-500/10' :
+                    member.rank === 'subleader' ? 'text-amber-400/70 bg-amber-500/5' :
+                    member.rank === 'officer' ? 'text-blue-400 bg-blue-500/10' :
+                    member.rank === 'underofficer' ? 'text-blue-400/70 bg-blue-500/5' :
+                    member.rank === 'initiate' ? 'text-zinc-500 bg-white/[0.03]' :
+                    'text-zinc-500 bg-white/[0.03]'"
+                >{{ member.rank }}</span>
+              </RouterLink>
+            </div>
+          </div>
         </div>
       </RouterLink>
     </div>

@@ -11,6 +11,7 @@ const organizations = ref<Organization[]>([])
 const loading = ref(true)
 const filterTier = ref<number | null>(null)
 const filterUnit = ref<string | null>(null)
+const filterSuggested = ref(false)
 const sortBy = ref<'unit' | 'votes'>('unit')
 
 // CRUD state
@@ -65,6 +66,7 @@ const filteredMissions = computed(() => {
   return missions.value.filter(m => {
     if (filterTier.value && m.tier !== filterTier.value) return false
     if (filterUnit.value && m.unitName !== filterUnit.value) return false
+    if (filterSuggested.value && !m.suggested) return false
     return true
   })
 })
@@ -224,6 +226,16 @@ async function saveMission() {
   }
 }
 
+async function toggleSuggested(mission: Mission) {
+  try {
+    const newVal = !mission.suggested
+    await updateDoc(doc(db, 'missions', mission.id), { suggested: newVal })
+    mission.suggested = newVal
+  } catch (e) {
+    console.error('Failed to toggle suggested:', e)
+  }
+}
+
 async function deleteMission(mission: Mission) {
   if (!confirm(`Delete mission "${mission.title}"? This cannot be undone.`)) return
   deletingId.value = mission.id
@@ -255,6 +267,7 @@ async function deleteMission(mission: Mission) {
         <button @click="filterTier = null" :class="['px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-all duration-150', !filterTier ? 'bg-[#ef233c] text-white' : 'bg-white/[0.05] text-zinc-500 border border-white/10 hover:text-zinc-200']" style="font-family: Manrope, sans-serif">All</button>
         <button v-for="t in [2,3,4,5]" :key="t" @click="filterTier = filterTier === t ? null : t" :class="['px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-all duration-150', filterTier === t ? 'bg-[#ef233c] text-white' : 'bg-white/[0.05] text-zinc-500 border border-white/10 hover:text-zinc-200']" style="font-family: Manrope, sans-serif">T{{ t }}</button>
       </div>
+      <button @click="filterSuggested = !filterSuggested" :class="['px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-all duration-150', filterSuggested ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/30' : 'bg-white/[0.05] text-zinc-500 border border-white/10 hover:text-amber-400']" style="font-family: Manrope, sans-serif">⭐ Suggested</button>
       <div class="flex gap-1 ml-auto">
         <button @click="sortBy = 'unit'" :class="['px-3 py-1.5 rounded-full text-xs transition-all duration-150', sortBy === 'unit' ? 'bg-white/10 text-zinc-200' : 'text-zinc-600 hover:text-zinc-400']">By Unit</button>
         <button @click="sortBy = 'votes'" :class="['px-3 py-1.5 rounded-full text-xs transition-all duration-150', sortBy === 'votes' ? 'bg-white/10 text-zinc-200' : 'text-zinc-600 hover:text-zinc-400']">By Votes 👍</button>
@@ -281,7 +294,7 @@ async function deleteMission(mission: Mission) {
           </h2>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 px-5 pb-5">
-          <div v-for="mission in unitMissions" :key="mission.id" class="card p-4 relative z-10 flex flex-col">
+          <div v-for="mission in unitMissions" :key="mission.id" :class="['card p-4 relative z-10 flex flex-col', mission.suggested ? 'ring-1 ring-amber-500/30' : '']">
             <div class="relative z-10 flex items-start gap-3 flex-1">
               <!-- Vote button (left) -->
               <div v-if="auth.isAuthenticated && !auth.isGuest" class="shrink-0 flex flex-col items-center gap-1.5 pt-1">
@@ -294,11 +307,13 @@ async function deleteMission(mission: Mission) {
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
                   <span :class="tierBadgeClass[mission.tier] || 'tier'">T{{ mission.tier }}</span>
+                  <span v-if="mission.suggested" class="text-xs px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-400 font-semibold" style="font-family: Manrope, sans-serif">⭐ Suggested</span>
                   <span v-if="mission.status !== 'available'" :class="['text-xs px-2 py-0.5 rounded-md', mission.status === 'completed' ? 'bg-green-500/15 text-green-400' : mission.status === 'in_progress' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-red-500/15 text-red-400']">{{ mission.status.replace('_', ' ') }}</span>
                   <!-- Admin actions -->
                   <div v-if="canManage" class="ml-auto flex items-center gap-1.5">
-                    <button @click="openEdit(mission)" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors" title="Edit">✏️</button>
-                    <button @click="deleteMission(mission)" :disabled="deletingId === mission.id" class="text-zinc-600 hover:text-red-400 text-xs transition-colors" title="Delete">
+                    <button @click="toggleSuggested(mission)" :class="['text-base transition-colors', mission.suggested ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-amber-400']" :title="mission.suggested ? 'Remove suggestion' : 'Mark as suggested'">{{ mission.suggested ? '⭐' : '☆' }}</button>
+                    <button @click="openEdit(mission)" class="text-zinc-600 hover:text-zinc-300 text-base transition-colors" title="Edit">✏️</button>
+                    <button @click="deleteMission(mission)" :disabled="deletingId === mission.id" class="text-zinc-600 hover:text-red-400 text-base transition-colors" title="Delete">
                       <span v-if="deletingId === mission.id" class="inline-block w-3 h-3 border border-zinc-500 border-t-transparent rounded-full animate-spin"></span>
                       <span v-else>🗑️</span>
                     </button>
@@ -322,7 +337,7 @@ async function deleteMission(mission: Mission) {
 
     <!-- Sorted by votes -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-      <div v-for="mission in sortedByVotes" :key="mission.id" class="card p-4 relative z-10 flex flex-col">
+      <div v-for="mission in sortedByVotes" :key="mission.id" :class="['card p-4 relative z-10 flex flex-col', mission.suggested ? 'ring-1 ring-amber-500/30' : '']">
         <div class="relative z-10 flex items-start gap-3 flex-1">
           <!-- Vote button (left) -->
           <div v-if="auth.isAuthenticated && !auth.isGuest" class="shrink-0 flex flex-col items-center gap-1.5 pt-1">
@@ -336,11 +351,13 @@ async function deleteMission(mission: Mission) {
             <div class="flex items-center gap-2 mb-1">
               <span :class="tierBadgeClass[mission.tier] || 'tier'">T{{ mission.tier }}</span>
               <span class="text-xs text-zinc-600">{{ mission.unitName }}</span>
+              <span v-if="mission.suggested" class="text-xs px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-400 font-semibold" style="font-family: Manrope, sans-serif">⭐ Suggested</span>
               <span v-if="mission.status !== 'available'" :class="['text-xs px-2 py-0.5 rounded-md', mission.status === 'completed' ? 'bg-green-500/15 text-green-400' : mission.status === 'in_progress' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-red-500/15 text-red-400']">{{ mission.status.replace('_', ' ') }}</span>
               <!-- Admin actions -->
               <div v-if="canManage" class="ml-auto flex items-center gap-1.5">
-                <button @click="openEdit(mission)" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors" title="Edit">✏️</button>
-                <button @click="deleteMission(mission)" :disabled="deletingId === mission.id" class="text-zinc-600 hover:text-red-400 text-xs transition-colors" title="Delete">
+                <button @click="toggleSuggested(mission)" :class="['text-base transition-colors', mission.suggested ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-amber-400']" :title="mission.suggested ? 'Remove suggestion' : 'Mark as suggested'">{{ mission.suggested ? '⭐' : '☆' }}</button>
+                <button @click="openEdit(mission)" class="text-zinc-600 hover:text-zinc-300 text-base transition-colors" title="Edit">✏️</button>
+                <button @click="deleteMission(mission)" :disabled="deletingId === mission.id" class="text-zinc-600 hover:text-red-400 text-base transition-colors" title="Delete">
                   <span v-if="deletingId === mission.id" class="inline-block w-3 h-3 border border-zinc-500 border-t-transparent rounded-full animate-spin"></span>
                   <span v-else>🗑️</span>
                 </button>

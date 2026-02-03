@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import TagInput from '../common/TagInput.vue'
+import MentionTextarea from '../common/MentionTextarea.vue'
 import type { SessionLog, SessionParticipant, Character, Npc, CampaignLocation, LocationFeature } from '../../types'
 
 interface LocationEntry {
@@ -25,6 +26,7 @@ const emit = defineEmits<{
 const sessionNumber = ref(props.nextSessionNumber ?? 1)
 const title = ref('')
 const date = ref('')
+const dmName = ref('')
 const sessionLocationId = ref('')
 const summary = ref('')
 const selectedParticipants = ref<SessionParticipant[]>([])
@@ -53,6 +55,7 @@ watch(() => props.session, (s) => {
     title.value = s.title
     const d = (s.date as any)?.toDate ? (s.date as any).toDate() : new Date(s.date)
     date.value = d.toISOString().split('T')[0]!
+    dmName.value = s.dmName || ''
     sessionLocationId.value = s.sessionLocationId || ''
     summary.value = s.summary
     selectedParticipants.value = [...(s.participants || [])]
@@ -183,6 +186,7 @@ function handleSubmit() {
     sessionNumber: sessionNumber.value,
     title: title.value.trim(),
     date: new Date(date.value + 'T12:00:00'),
+    dmName: dmName.value.trim(),
     summary: summary.value.trim(),
     participants: selectedParticipants.value,
     npcsEncountered: selectedNpcIds.value,
@@ -224,15 +228,19 @@ const showNpcs = ref(true)
 
 <template>
   <div class="space-y-5">
-    <!-- Row: Session number + Date + Location -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <!-- Row: Session number + Date + DM + Location -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
       <div>
         <label class="text-sm font-semibold text-zinc-400">Session #</label>
         <input v-model.number="sessionNumber" type="number" min="1" class="input w-full" />
       </div>
       <div>
         <label class="text-sm font-semibold text-zinc-400">Date</label>
-        <input v-model="date" type="date" class="input w-full" />
+        <input v-model="date" type="date" class="input w-full" @click="($event.target as HTMLInputElement).showPicker?.()" />
+      </div>
+      <div>
+        <label class="text-sm font-semibold text-zinc-400">DM</label>
+        <input v-model="dmName" type="text" placeholder="Dungeon Master name" class="input w-full" />
       </div>
       <div>
         <label class="text-sm font-semibold text-zinc-400">Location</label>
@@ -286,7 +294,7 @@ const showNpcs = ref(true)
     <!-- Summary -->
     <div>
       <label class="text-sm font-semibold text-zinc-400">Summary</label>
-      <textarea v-model="summary" rows="5" placeholder="What happened this session..." class="input w-full" />
+      <MentionTextarea v-model="summary" :rows="5" placeholder="What happened this session... Use @ for characters/NPCs, # for locations/features, ¦ for organizations" />
     </div>
 
     <!-- Participants -->

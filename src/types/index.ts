@@ -216,6 +216,7 @@ export interface Mission {
     note?: string  // for "most likely more than 50 gold each" etc
   }
   votes?: MissionVoteEntry[]
+  suggested?: boolean
   status: MissionStatus
   createdAt: Date
   updatedAt: Date
