@@ -5,26 +5,42 @@ import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import type { ScheduledSession, Mission } from '../types'
 
+interface LocationEntry { label: string }
+type LocationsConfig = Record<string, LocationEntry>
+
 const auth = useAuthStore()
 const sessions = ref<ScheduledSession[]>([])
 const missions = ref<Mission[]>([])
+const sessionLocations = ref<LocationsConfig>({})
 const loading = ref(true)
 const showCreateForm = ref(false)
 const newDate = ref('')
 const newTitle = ref('')
 const newDescription = ref('')
 const newMaxPlayers = ref<number | undefined>(undefined)
+const newLocationKey = ref('')
 const editingSessionId = ref<string | null>(null)
 const editDate = ref('')
 const editTitle = ref('')
 const editDescription = ref('')
 const editMaxPlayers = ref<number | undefined>(undefined)
+const editLocationKey = ref('')
 const editStatus = ref<'upcoming' | 'in_progress' | 'completed' | 'cancelled'>('upcoming')
 const editSaving = ref(false)
 const deleteConfirmId = ref<string | null>(null)
 const _unsubs: (() => void)[] = []
 
+const sortedLocations = computed(() => {
+  return Object.entries(sessionLocations.value)
+    .map(([key, entry]) => ({ key, label: entry.label }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+})
+
 onMounted(() => {
+  _unsubs.push(onSnapshot(doc(db, 'config', 'sessionLocations'), (snap) => {
+    if (snap.exists()) sessionLocations.value = snap.data() as LocationsConfig
+  }, (e) => console.error('Failed to load session locations:', e)))
+
   _unsubs.push(onSnapshot(collection(db, 'missions'), (snap) => {
     missions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Mission))
   }, (e) => console.error('Failed to load missions:', e)))
@@ -109,11 +125,14 @@ function formatDate(date: any): string {
 
 async function createSession() {
   if (!newDate.value) return
+  const loc = sessionLocations.value[newLocationKey.value]
   await addDoc(collection(db, 'scheduledSessions'), {
     date: Timestamp.fromDate(new Date(newDate.value)),
     title: newTitle.value || null,
     description: newDescription.value || null,
     maxPlayers: newMaxPlayers.value || null,
+    sessionLocationKey: newLocationKey.value || null,
+    sessionLocationLabel: loc?.label || null,
     signups: [],
     missionVotes: [],
     status: 'upcoming',
@@ -124,6 +143,7 @@ async function createSession() {
   newTitle.value = ''
   newDescription.value = ''
   newMaxPlayers.value = undefined
+  newLocationKey.value = ''
   showCreateForm.value = false
 }
 
@@ -183,12 +203,12 @@ async function removeVote(session: ScheduledSession) {
 function startEditing(session: ScheduledSession) {
   editingSessionId.value = session.id
   const d = (session.date as any).toDate ? (session.date as any).toDate() : new Date(session.date)
-  // Format as datetime-local value: YYYY-MM-DDTHH:mm
   const pad = (n: number) => String(n).padStart(2, '0')
   editDate.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
   editTitle.value = session.title || ''
   editDescription.value = session.description || ''
   editMaxPlayers.value = session.maxPlayers || undefined
+  editLocationKey.value = session.sessionLocationKey || ''
   editStatus.value = session.status
 }
 
@@ -201,12 +221,15 @@ async function saveEdit(session: ScheduledSession) {
   if (!editDate.value) return
   editSaving.value = true
   try {
+    const loc = sessionLocations.value[editLocationKey.value]
     const sessionRef = doc(db, 'scheduledSessions', session.id)
     await updateDoc(sessionRef, {
       date: Timestamp.fromDate(new Date(editDate.value)),
       title: editTitle.value || null,
       description: editDescription.value || null,
       maxPlayers: editMaxPlayers.value || null,
+      sessionLocationKey: editLocationKey.value || null,
+      sessionLocationLabel: loc?.label || null,
       status: editStatus.value,
       updatedAt: Timestamp.now()
     })
@@ -253,6 +276,13 @@ async function deleteSession(session: ScheduledSession) {
             <label class="label block mb-1.5">Max Players (optional)</label>
             <input v-model.number="newMaxPlayers" type="number" min="1" class="input w-full" />
           </div>
+          <div>
+            <label class="label block mb-1.5">Location (optional)</label>
+            <select v-model="newLocationKey" class="input w-full">
+              <option value="">— None —</option>
+              <option v-for="loc in sortedLocations" :key="loc.key" :value="loc.key">{{ loc.label }}</option>
+            </select>
+          </div>
         </div>
         <button @click="createSession" :disabled="!newDate" class="btn text-sm mt-3">Create</button>
       </div>
@@ -293,6 +323,13 @@ async function deleteSession(session: ScheduledSession) {
                   <option value="cancelled">Cancelled</option>
                 </select>
               </div>
+              <div>
+                <label class="label block mb-1.5">Location</label>
+                <select v-model="editLocationKey" class="input w-full">
+                  <option value="">— None —</option>
+                  <option v-for="loc in sortedLocations" :key="loc.key" :value="loc.key">{{ loc.label }}</option>
+                </select>
+              </div>
             </div>
             <div class="flex items-center gap-2 pt-1">
               <button @click="saveEdit(session)" :disabled="!editDate || editSaving" class="btn text-sm">
@@ -322,7 +359,7 @@ async function deleteSession(session: ScheduledSession) {
                   ✏️
                 </button>
               </div>
-              <p class="text-[#ef233c] font-medium mt-1">📅 {{ formatDate(session.date) }}</p>
+              <p class="text-[#ef233c] font-medium mt-1">📅 {{ formatDate(session.date) }}<span v-if="session.sessionLocationLabel" class="text-zinc-500 ml-2">📍 {{ session.sessionLocationLabel }}</span></p>
               <p v-if="session.description" class="text-zinc-500 text-sm mt-1">{{ session.description }}</p>
             </div>
             <button @click="toggleSignup(session)" :class="[

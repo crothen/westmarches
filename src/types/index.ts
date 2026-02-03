@@ -228,6 +228,8 @@ export interface ScheduledSession {
   title?: string
   description?: string
   maxPlayers?: number
+  sessionLocationKey?: string
+  sessionLocationLabel?: string
   signups: SessionSignup[]
   missionVotes: MissionVote[]
   selectedMissionId?: string
