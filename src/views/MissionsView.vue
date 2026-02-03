@@ -154,18 +154,18 @@ function openCreate() {
 function openEdit(mission: Mission) {
   editingMission.value = mission.id
   form.value = {
-    unitId: mission.unitId,
-    title: mission.title,
-    description: mission.description,
-    tier: mission.tier,
+    unitId: mission.unitId || '',
+    title: mission.title || '',
+    description: mission.description || '',
+    tier: mission.tier || 2,
     expectedDurationDays: mission.expectedDurationDays,
     missionDurationDays: mission.missionDurationDays,
     durationNote: mission.durationNote || '',
-    payAmount: mission.pay.amount,
-    payType: mission.pay.type,
-    payCurrency: mission.pay.currency,
-    payNote: mission.pay.note || '',
-    status: mission.status,
+    payAmount: mission.pay?.amount || 0,
+    payType: mission.pay?.type || 'each',
+    payCurrency: mission.pay?.currency || 'gold',
+    payNote: mission.pay?.note || '',
+    status: mission.status || 'available',
   }
   showModal.value = true
 }
@@ -180,7 +180,7 @@ const selectedOrg = computed(() => {
 })
 
 async function saveMission() {
-  if (!form.value.unitId || !form.value.title.trim() || !form.value.description.trim()) return
+  if (!form.value.unitId || !(form.value.title || '').trim() || !(form.value.description || '').trim()) return
   const org = selectedOrg.value
   if (!org) return
 
@@ -189,14 +189,14 @@ async function saveMission() {
     const data: Record<string, unknown> = {
       unitId: form.value.unitId,
       unitName: org.name,
-      title: form.value.title.trim(),
-      description: form.value.description.trim(),
+      title: (form.value.title || '').trim(),
+      description: (form.value.description || '').trim(),
       tier: form.value.tier,
       pay: {
         amount: form.value.payAmount,
         type: form.value.payType,
         currency: form.value.payCurrency,
-        ...(form.value.payNote.trim() ? { note: form.value.payNote.trim() } : {}),
+        ...((form.value.payNote || '').trim() ? { note: (form.value.payNote || '').trim() } : {}),
       },
       status: form.value.status,
       updatedAt: new Date(),
@@ -206,7 +206,7 @@ async function saveMission() {
     else data.expectedDurationDays = null
     if (form.value.missionDurationDays) data.missionDurationDays = form.value.missionDurationDays
     else data.missionDurationDays = null
-    if (form.value.durationNote.trim()) data.durationNote = form.value.durationNote.trim()
+    if ((form.value.durationNote || '').trim()) data.durationNote = (form.value.durationNote || '').trim()
     else data.durationNote = null
 
     if (editingMission.value) {
@@ -484,7 +484,7 @@ async function deleteMission(mission: Mission) {
             <div class="flex gap-2 mt-6">
               <button
                 @click="saveMission"
-                :disabled="saving || !form.unitId || !form.title.trim() || !form.description.trim()"
+                :disabled="saving || !form.unitId || !(form.title || '').trim() || !(form.description || '').trim()"
                 class="btn text-sm flex items-center gap-2"
               >
                 <span v-if="saving" class="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
