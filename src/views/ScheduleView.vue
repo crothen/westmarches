@@ -442,7 +442,7 @@ async function deleteSession(session: ScheduledSession) {
             <h4 class="text-zinc-300 font-medium mb-2" style="font-family: Manrope, sans-serif">⚔️ Missions Liked by Participants</h4>
             <div class="grid gap-y-1 text-sm" style="grid-template-columns: 2rem 2.5rem 1fr auto auto">
               <template v-for="item in getParticipantLikedMissions(session)" :key="item.mission.id">
-                <span class="text-[#ef233c] font-bold text-center">{{ item.count }}</span>
+                <span class="text-[#ef233c] font-bold text-center cursor-default" :title="item.voters.join(', ')">{{ item.count }}</span>
                 <span :class="['tier', item.mission.tier === 2 ? 'tier-2' : item.mission.tier === 3 ? 'tier-3' : item.mission.tier === 4 ? 'tier-4' : 'tier-5']">T{{ item.mission.tier }}</span>
                 <span class="text-zinc-200 truncate px-1">{{ item.mission.title }}</span>
                 <span class="text-zinc-600 text-xs px-2 self-center">{{ item.mission.unitName }}</span>
