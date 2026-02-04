@@ -332,7 +332,7 @@ async function deleteSession(session: ScheduledSession) {
     <div v-if="loading" class="text-zinc-500 animate-pulse">Loading schedule...</div>
 
     <!-- Upcoming Sessions -->
-    <div v-if="upcomingSessions.length > 0" class="space-y-4 mb-8">
+    <div v-if="upcomingSessions.length > 0" class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
       <div v-for="session in upcomingSessions" :key="session.id" class="card p-5 relative z-10">
         <div class="relative z-10">
           <!-- Edit Form (Admin/DM) -->
@@ -444,10 +444,10 @@ async function deleteSession(session: ScheduledSession) {
               <template v-for="item in getParticipantLikedMissions(session)" :key="item.mission.id">
                 <span class="relative group text-[#ef233c] font-bold text-center cursor-default">
                   {{ item.count }}
-                  <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-3 py-2 rounded-lg bg-zinc-800 border border-white/10 shadow-xl text-xs text-zinc-200 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-20">
+                  <div class="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 rounded-lg bg-zinc-800 border border-white/10 shadow-xl text-xs text-zinc-200 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-20">
                     <div class="font-semibold text-zinc-400 mb-1">Liked by</div>
                     <div v-for="name in item.voters" :key="name" class="text-zinc-200">{{ name }}</div>
-                    <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-zinc-800"></div>
+                    <div class="absolute right-full top-1/2 -translate-y-1/2 -mr-px border-4 border-transparent border-r-zinc-800"></div>
                   </div>
                 </span>
                 <span :class="['tier', item.mission.tier === 2 ? 'tier-2' : item.mission.tier === 3 ? 'tier-3' : item.mission.tier === 4 ? 'tier-4' : 'tier-5']">T{{ item.mission.tier }}</span>
