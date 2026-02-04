@@ -442,7 +442,14 @@ async function deleteSession(session: ScheduledSession) {
             <h4 class="text-zinc-300 font-medium mb-2" style="font-family: Manrope, sans-serif">⚔️ Missions Liked by Participants</h4>
             <div class="grid gap-y-1 text-sm" style="grid-template-columns: 2rem 2.5rem 1fr auto auto">
               <template v-for="item in getParticipantLikedMissions(session)" :key="item.mission.id">
-                <span class="text-[#ef233c] font-bold text-center cursor-default" :title="item.voters.join(', ')">{{ item.count }}</span>
+                <span class="relative group text-[#ef233c] font-bold text-center cursor-default">
+                  {{ item.count }}
+                  <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-3 py-2 rounded-lg bg-zinc-800 border border-white/10 shadow-xl text-xs text-zinc-200 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-20">
+                    <div class="font-semibold text-zinc-400 mb-1">Liked by</div>
+                    <div v-for="name in item.voters" :key="name" class="text-zinc-200">{{ name }}</div>
+                    <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-zinc-800"></div>
+                  </div>
+                </span>
                 <span :class="['tier', item.mission.tier === 2 ? 'tier-2' : item.mission.tier === 3 ? 'tier-3' : item.mission.tier === 4 ? 'tier-4' : 'tier-5']">T{{ item.mission.tier }}</span>
                 <span class="text-zinc-200 truncate px-1">{{ item.mission.title }}</span>
                 <span class="text-zinc-600 text-xs px-2 self-center">{{ item.mission.unitName }}</span>
