@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { collection, query, orderBy, doc, updateDoc, onSnapshot } from 'firebase/firestore'
+import { collection, query, orderBy, doc, updateDoc, addDoc, onSnapshot, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import { useImageGen } from '../composables/useImageGen'
@@ -111,6 +111,20 @@ function getDefaultPortraitPrompt(npc: Npc): string {
 }
 
 // --- Edit Modal ---
+function openCreateModal() {
+  editingNpcData.value = null
+  editForm.value = {
+    name: '',
+    race: '',
+    description: '',
+    appearance: '',
+    locationEncountered: '',
+    tags: [],
+  }
+  portraitPrompt.value = ''
+  showEditModal.value = true
+}
+
 function openEditModal(npc: Npc) {
   editingNpcData.value = npc
   editForm.value = {
@@ -131,11 +145,10 @@ function closeEditModal() {
 }
 
 async function saveEdit() {
-  if (!editingNpcData.value) return
-  const npc = editingNpcData.value
+  if (!editForm.value.name.trim()) return
   savingEdit.value = true
 
-  const updates: Partial<Npc> = {
+  const data: Partial<Npc> = {
     name: editForm.value.name.trim(),
     race: editForm.value.race.trim(),
     description: editForm.value.description.trim(),
@@ -146,8 +159,19 @@ async function saveEdit() {
   }
 
   try {
-    await updateDoc(doc(db, 'npcs', npc.id), updates as any)
-    Object.assign(npc, updates)
+    if (editingNpcData.value) {
+      // Update existing NPC
+      await updateDoc(doc(db, 'npcs', editingNpcData.value.id), data as any)
+      Object.assign(editingNpcData.value, data)
+    } else {
+      // Create new NPC
+      const newNpc = {
+        ...data,
+        organizationIds: [],
+        createdAt: Timestamp.now(),
+      }
+      await addDoc(collection(db, 'npcs'), newNpc)
+    }
     closeEditModal()
   } catch (e) {
     console.error('Failed to save NPC:', e)
@@ -180,7 +204,10 @@ async function generatePortrait() {
   <div>
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">👤 Known NPCs</h1>
-      <span class="text-zinc-600 text-sm">{{ filteredNpcs.length }} contacts</span>
+      <div class="flex items-center gap-3">
+        <span class="text-zinc-600 text-sm">{{ filteredNpcs.length }} contacts</span>
+        <button v-if="auth.isAuthenticated && !auth.isGuest" @click="openCreateModal" class="btn text-sm">+ New NPC</button>
+      </div>
     </div>
 
     <!-- Search and filters -->
@@ -229,7 +256,7 @@ async function generatePortrait() {
                 <span v-if="getUnitAbbrev(npc)" class="badge bg-white/5 text-zinc-400">{{ getUnitAbbrev(npc) }}</span>
                 <span v-if="isDeceased(npc)" class="badge bg-zinc-800 text-zinc-500">☠️ Dead</span>
                 <button
-                  v-if="auth.isDm || auth.isAdmin"
+                  v-if="auth.isAuthenticated && !auth.isGuest"
                   @click.prevent="openEditModal(npc)"
                   class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors ml-1"
                   title="Edit NPC"
@@ -281,7 +308,7 @@ async function generatePortrait() {
                     <span v-if="getUnitAbbrev(npc)" class="badge bg-white/5 text-zinc-400">{{ getUnitAbbrev(npc) }}</span>
                     <span class="badge bg-zinc-800 text-zinc-500">☠️ Dead</span>
                     <button
-                      v-if="auth.isDm || auth.isAdmin"
+                      v-if="auth.isAuthenticated && !auth.isGuest"
                       @click.prevent="openEditModal(npc)"
                       class="text-zinc-600 hover:text-zinc-300 text-sm transition-colors ml-1"
                       title="Edit NPC"
@@ -307,16 +334,16 @@ async function generatePortrait() {
         leave-active-class="transition-opacity duration-150"
         leave-from-class="opacity-100" leave-to-class="opacity-0"
       >
-        <div v-if="showEditModal && editingNpcData" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="closeEditModal" />
           <div class="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl p-6 space-y-4 z-10">
             <div class="flex items-center justify-between">
-              <h3 class="text-lg font-semibold text-white" style="font-family: Manrope, sans-serif">✏️ Edit {{ editingNpcData.name }}</h3>
+              <h3 class="text-lg font-semibold text-white" style="font-family: Manrope, sans-serif">{{ editingNpcData ? `✏️ Edit ${editingNpcData.name}` : '✨ New NPC' }}</h3>
               <button @click="closeEditModal" class="text-zinc-500 hover:text-white transition-colors text-lg">✕</button>
             </div>
 
             <!-- Current portrait -->
-            <div v-if="editingNpcData.imageUrl" class="overflow-hidden rounded-xl">
+            <div v-if="editingNpcData?.imageUrl" class="overflow-hidden rounded-xl">
               <img :src="editingNpcData.imageUrl" class="w-full h-48 object-cover" />
             </div>
 
@@ -346,8 +373,8 @@ async function generatePortrait() {
                 <TagInput v-model="editForm.tags" />
               </div>
 
-              <!-- Portrait Generation -->
-              <div class="pt-2 border-t border-white/[0.06]">
+              <!-- Portrait Generation (only for existing NPCs) -->
+              <div v-if="editingNpcData" class="pt-2 border-t border-white/[0.06]">
                 <label class="label text-xs mb-1 block">🎨 Portrait Generation Prompt</label>
                 <textarea v-model="portraitPrompt" class="input w-full text-xs" rows="3" />
                 <button
@@ -368,7 +395,7 @@ async function generatePortrait() {
             <div class="flex justify-end gap-2 pt-2">
               <button @click="closeEditModal" class="btn !bg-white/5 !text-zinc-400 text-sm">Cancel</button>
               <button @click="saveEdit" :disabled="savingEdit || !editForm.name.trim()" class="btn text-sm">
-                {{ savingEdit ? 'Saving...' : '💾 Save' }}
+                {{ savingEdit ? 'Saving...' : (editingNpcData ? '💾 Save' : '✨ Create NPC') }}
               </button>
             </div>
           </div>
