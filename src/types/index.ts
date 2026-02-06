@@ -8,6 +8,7 @@ export interface AppUser {
   /** @deprecated Use `roles` array instead. Kept for backward compat during migration. */
   role?: UserRole
   characterId?: string
+  discordId?: string
   createdAt: Date
 }
 

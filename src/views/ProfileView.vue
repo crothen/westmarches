@@ -47,6 +47,32 @@ async function saveName() {
   }
 }
 
+// Discord ID linking
+const editingDiscord = ref(false)
+const newDiscordId = ref('')
+const savingDiscord = ref(false)
+
+function startEditDiscord() {
+  newDiscordId.value = auth.appUser?.discordId || ''
+  editingDiscord.value = true
+}
+
+async function saveDiscord() {
+  if (!auth.firebaseUser) return
+  savingDiscord.value = true
+  try {
+    const discordId = newDiscordId.value.trim() || null
+    await updateDoc(doc(db, 'users', auth.firebaseUser.uid), { discordId })
+    if (auth.appUser) (auth.appUser as any).discordId = discordId
+    editingDiscord.value = false
+  } catch (e) {
+    console.error('Failed to update Discord ID:', e)
+    alert('Failed to save Discord ID.')
+  } finally {
+    savingDiscord.value = false
+  }
+}
+
 // Password change
 const isEmail = computed(() => isEmailUser())
 const showPasswordForm = ref(false)
@@ -156,6 +182,27 @@ const memberSince = computed(() => {
         <div v-if="memberSince">
           <label class="label text-xs mb-1">Member Since</label>
           <span class="text-zinc-400">{{ memberSince }}</span>
+        </div>
+
+        <!-- Discord ID -->
+        <div>
+          <label class="label text-xs mb-1">Discord ID <span class="text-zinc-600 font-normal">(for notifications)</span></label>
+          <div v-if="!editingDiscord" class="flex items-center gap-3">
+            <span v-if="auth.appUser?.discordId" class="text-zinc-400 font-mono text-sm">{{ auth.appUser.discordId }}</span>
+            <span v-else class="text-zinc-600 text-sm">Not linked</span>
+            <button @click="startEditDiscord" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">{{ auth.appUser?.discordId ? '✏️ Edit' : '🔗 Link' }}</button>
+          </div>
+          <div v-else class="space-y-2">
+            <input v-model="newDiscordId" class="input w-full font-mono text-sm" placeholder="Your Discord user ID (e.g. 123456789012345678)" @keyup.enter="saveDiscord" />
+            <p class="text-xs text-zinc-600">Right-click your name in Discord → Copy User ID (enable Developer Mode in Discord settings first)</p>
+            <div class="flex items-center gap-2">
+              <button @click="saveDiscord" :disabled="savingDiscord" class="btn !text-xs flex items-center gap-1.5">
+                <span v-if="savingDiscord" class="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                Save
+              </button>
+              <button @click="editingDiscord = false" class="btn !bg-white/5 !text-zinc-400 !text-xs">Cancel</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
