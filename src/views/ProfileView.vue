@@ -47,13 +47,13 @@ async function saveName() {
   }
 }
 
-// Discord ID linking
+// Discord username linking
 const editingDiscord = ref(false)
-const newDiscordId = ref('')
+const newDiscordUsername = ref('')
 const savingDiscord = ref(false)
 
 function startEditDiscord() {
-  newDiscordId.value = auth.appUser?.discordId || ''
+  newDiscordUsername.value = auth.appUser?.discordUsername || ''
   editingDiscord.value = true
 }
 
@@ -61,13 +61,13 @@ async function saveDiscord() {
   if (!auth.firebaseUser) return
   savingDiscord.value = true
   try {
-    const discordId = newDiscordId.value.trim() || null
-    await updateDoc(doc(db, 'users', auth.firebaseUser.uid), { discordId })
-    if (auth.appUser) (auth.appUser as any).discordId = discordId
+    const discordUsername = newDiscordUsername.value.trim() || null
+    await updateDoc(doc(db, 'users', auth.firebaseUser.uid), { discordUsername })
+    if (auth.appUser) (auth.appUser as any).discordUsername = discordUsername
     editingDiscord.value = false
   } catch (e) {
-    console.error('Failed to update Discord ID:', e)
-    alert('Failed to save Discord ID.')
+    console.error('Failed to update Discord username:', e)
+    alert('Failed to save Discord username.')
   } finally {
     savingDiscord.value = false
   }
@@ -184,17 +184,17 @@ const memberSince = computed(() => {
           <span class="text-zinc-400">{{ memberSince }}</span>
         </div>
 
-        <!-- Discord ID -->
+        <!-- Discord Username -->
         <div>
-          <label class="label text-xs mb-1">Discord ID <span class="text-zinc-600 font-normal">(for notifications)</span></label>
+          <label class="label text-xs mb-1">Discord <span class="text-zinc-600 font-normal">(for notifications)</span></label>
           <div v-if="!editingDiscord" class="flex items-center gap-3">
-            <span v-if="auth.appUser?.discordId" class="text-zinc-400 font-mono text-sm">{{ auth.appUser.discordId }}</span>
+            <span v-if="auth.appUser?.discordUsername" class="text-zinc-400 text-sm">{{ auth.appUser.discordUsername }}</span>
             <span v-else class="text-zinc-600 text-sm">Not linked</span>
-            <button @click="startEditDiscord" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">{{ auth.appUser?.discordId ? '✏️ Edit' : '🔗 Link' }}</button>
+            <button @click="startEditDiscord" class="text-zinc-600 hover:text-zinc-300 text-xs transition-colors">{{ auth.appUser?.discordUsername ? '✏️ Edit' : '🔗 Link' }}</button>
           </div>
           <div v-else class="space-y-2">
-            <input v-model="newDiscordId" class="input w-full font-mono text-sm" placeholder="Your Discord user ID (e.g. 123456789012345678)" @keyup.enter="saveDiscord" />
-            <p class="text-xs text-zinc-600">Right-click your name in Discord → Copy User ID (enable Developer Mode in Discord settings first)</p>
+            <input v-model="newDiscordUsername" class="input w-full text-sm" placeholder="Your Discord username (e.g. chrigugigu)" @keyup.enter="saveDiscord" />
+            <p class="text-xs text-zinc-600">Enter your Discord username — you'll be tagged in session notifications</p>
             <div class="flex items-center gap-2">
               <button @click="saveDiscord" :disabled="savingDiscord" class="btn !text-xs flex items-center gap-1.5">
                 <span v-if="savingDiscord" class="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
