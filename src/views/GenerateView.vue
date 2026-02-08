@@ -909,7 +909,7 @@ async function generateEntityImage() {
                   class="card-flat p-3 flex gap-3"
                 >
                   <div class="shrink-0 w-6 text-center">
-                    <span class="text-xs font-bold text-zinc-500">{{ i + 1 }}</span>
+                    <span class="text-xs font-bold text-zinc-500">{{ Number(i) + 1 }}</span>
                   </div>
                   <div class="flex-1 min-w-0 space-y-1">
                     <div class="flex items-center gap-2 flex-wrap">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { collection, doc, query, orderBy, onSnapshot, updateDoc } from 'firebase/firestore'
+import { collection, doc, query, orderBy, onSnapshot, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import type { SessionLog, Character } from '../types'
@@ -112,8 +112,7 @@ function getDowntimeDays(character: Character): number {
     .filter(s => s.inGameStartDate)
     .sort((a, b) => a.inGameStartDate!.localeCompare(b.inGameStartDate!))
   
-  for (let i = 0; i < sortedSessions.length; i++) {
-    const session = sortedSessions[i]
+  for (const session of sortedSessions) {
     const wasPresent = session.participants?.some(p => p.characterId === character.id)
     
     if (!wasPresent) {
@@ -138,13 +137,13 @@ function startEditConfig() {
 async function saveConfig() {
   savingConfig.value = true
   try {
-    await updateDoc(doc(db, 'config', 'campaign'), {
+    await setDoc(doc(db, 'config', 'campaign'), {
       startDate: editStartDate.value || null,
-    })
+    }, { merge: true })
     editingConfig.value = false
   } catch (e) {
     console.error('Failed to save config:', e)
-    alert('Failed to save. You may need to create the config document first.')
+    alert('Failed to save: ' + (e as Error).message)
   } finally {
     savingConfig.value = false
   }

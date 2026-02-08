@@ -67,42 +67,8 @@ onUnmounted(() => _unsubs.forEach(fn => fn()))
 const upcomingSessions = computed(() => sessions.value.filter(s => s.status === 'upcoming' || s.status === 'in_progress'))
 const availableMissions = computed(() => missions.value.filter(m => m.status === 'available'))
 
-const missionsByUnit = computed(() => {
-  const groups: Record<string, Mission[]> = {}
-  for (const m of availableMissions.value) {
-    if (!groups[m.unitName]) groups[m.unitName] = []
-    groups[m.unitName]!.push(m)
-  }
-  return groups
-})
-
 function isSignedUp(session: ScheduledSession): boolean {
   return session.signups?.some(s => s.userId === auth.firebaseUser?.uid) || false
-}
-
-function getMyVote(session: ScheduledSession): string | null {
-  const vote = session.missionVotes?.find(v => v.userId === auth.firebaseUser?.uid)
-  return vote?.missionId || null
-}
-
-function getMissionTitle(missionId: string): string {
-  const m = missions.value.find(m => m.id === missionId)
-  return m ? `[T${m.tier}] ${m.description.substring(0, 80)}${m.description.length > 80 ? '...' : ''}` : missionId
-}
-
-function getMissionUnit(missionId: string): string {
-  const m = missions.value.find(m => m.id === missionId)
-  return m?.unitName || ''
-}
-
-function getVoteCounts(session: ScheduledSession): Array<{ missionId: string; count: number }> {
-  const counts: Record<string, number> = {}
-  for (const v of session.missionVotes || []) {
-    counts[v.missionId] = (counts[v.missionId] || 0) + 1
-  }
-  return Object.entries(counts)
-    .map(([missionId, count]) => ({ missionId, count }))
-    .sort((a, b) => b.count - a.count)
 }
 
 /** Get missions liked by signed-up participants, ranked by count */
@@ -180,31 +146,6 @@ async function toggleSignup(session: ScheduledSession) {
       updatedAt: Timestamp.now()
     })
   }
-}
-
-async function voteMission(session: ScheduledSession, missionId: string) {
-  if (!auth.firebaseUser || !isSignedUp(session)) return
-  const sessionRef = doc(db, 'scheduledSessions', session.id)
-  const currentVotes = session.missionVotes || []
-  const otherVotes = currentVotes.filter(v => v.userId !== auth.firebaseUser!.uid)
-
-  await updateDoc(sessionRef, {
-    missionVotes: [...otherVotes, {
-      userId: auth.firebaseUser.uid,
-      missionId,
-      votedAt: Timestamp.now()
-    }],
-    updatedAt: Timestamp.now()
-  })
-}
-
-async function removeVote(session: ScheduledSession) {
-  if (!auth.firebaseUser) return
-  const sessionRef = doc(db, 'scheduledSessions', session.id)
-  await updateDoc(sessionRef, {
-    missionVotes: (session.missionVotes || []).filter(v => v.userId !== auth.firebaseUser!.uid),
-    updatedAt: Timestamp.now()
-  })
 }
 
 function getAvailablePlayers(session: ScheduledSession) {
