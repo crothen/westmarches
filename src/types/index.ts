@@ -47,6 +47,7 @@ export interface Character {
   galleryUrls?: string[]  // additional images, first = hero portrait
   characterUrl?: string  // external character sheet URL (e.g. D&D Beyond)
   isActive: boolean
+  downtimeDaysUsed?: number  // downtime days the player has spent
   createdAt: Date
   updatedAt: Date
 }
@@ -150,6 +151,8 @@ export interface SessionLog {
   sessionNumber: number
   title: string
   date: Date
+  inGameStartDate?: string  // in-game date (YYYY-MM-DD format)
+  inGameDurationDays?: number  // how many in-game days the session spans
   summary: string
   dmId?: string
   dmName?: string

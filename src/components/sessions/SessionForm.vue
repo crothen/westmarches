@@ -26,6 +26,8 @@ const emit = defineEmits<{
 const sessionNumber = ref(props.nextSessionNumber ?? 1)
 const title = ref('')
 const date = ref('')
+const inGameStartDate = ref('')
+const inGameDurationDays = ref<number | undefined>(undefined)
 const dmName = ref('')
 const sessionLocationId = ref('')
 const summary = ref('')
@@ -55,6 +57,8 @@ watch(() => props.session, (s) => {
     title.value = s.title
     const d = (s.date as any)?.toDate ? (s.date as any).toDate() : new Date(s.date)
     date.value = d.toISOString().split('T')[0]!
+    inGameStartDate.value = s.inGameStartDate || ''
+    inGameDurationDays.value = s.inGameDurationDays || undefined
     dmName.value = s.dmName || ''
     sessionLocationId.value = s.sessionLocationId || ''
     summary.value = s.summary
@@ -186,6 +190,8 @@ function handleSubmit() {
     sessionNumber: sessionNumber.value,
     title: title.value.trim(),
     date: new Date(date.value + 'T12:00:00'),
+    inGameStartDate: inGameStartDate.value || null,
+    inGameDurationDays: inGameDurationDays.value || null,
     dmName: dmName.value.trim(),
     summary: summary.value.trim(),
     participants: selectedParticipants.value,
@@ -248,6 +254,18 @@ const showNpcs = ref(true)
           <option value="">— Select —</option>
           <option v-for="loc in sortedLocations" :key="loc.key" :value="loc.key">{{ loc.label }}</option>
         </select>
+      </div>
+    </div>
+
+    <!-- Row: In-game date + duration -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="text-sm font-semibold text-zinc-400">🗓️ In-Game Date</label>
+        <input v-model="inGameStartDate" type="date" class="input w-full" @click="($event.target as HTMLInputElement).showPicker?.()" placeholder="When does this session take place in-game?" />
+      </div>
+      <div>
+        <label class="text-sm font-semibold text-zinc-400">⏱️ Duration (days)</label>
+        <input v-model.number="inGameDurationDays" type="number" min="1" class="input w-full" placeholder="How many in-game days?" />
       </div>
     </div>
 
