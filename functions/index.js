@@ -138,6 +138,7 @@ export const generateImage = onCall(
     timeoutSeconds: 120,
     memory: "512MiB",
     invoker: "public",  // Allow Firebase SDK to invoke (auth handled at app level)
+    cors: [/westmarches-dnd\.web\.app$/, /localhost/],  // Enable CORS for web clients
   },
   async (request) => {
     // Require authentication
