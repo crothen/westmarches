@@ -273,7 +273,7 @@ async function saveDowntime(character: Character) {
     </div>
 
     <!-- All Characters Downtime -->
-    <div v-if="activeCharacters.length > 0" class="card p-5 relative z-10">
+    <div v-if="activeCharacters.length > 0" class="card p-5 relative z-10 max-w-[1200px]">
       <div class="relative z-10">
         <h3 class="text-zinc-200 font-semibold mb-4" style="font-family: Manrope, sans-serif">⏳ Character Downtime</h3>
         

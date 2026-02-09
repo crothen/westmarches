@@ -373,6 +373,15 @@ function formatDate(date: any): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
+// Format in-game date for display
+const FR_MONTHS = ['Hammer', 'Alturiak', 'Ches', 'Tarsakh', 'Mirtul', 'Kythorn', 'Flamerule', 'Eleasis', 'Eleint', 'Marpenoth', 'Uktar', 'Nightal']
+function formatInGameDate(dateStr: string | undefined): string {
+  if (!dateStr) return ''
+  const [year, month, day] = dateStr.split('-').map(Number)
+  if (!year || !month || !day) return dateStr
+  return `${day} ${FR_MONTHS[month - 1]} ${year} DR`
+}
+
 /** Only author can edit their own notes */
 function canEditNote(note: SessionNote): boolean {
   return note.userId === auth.firebaseUser?.uid && !(note as any).deleted
@@ -394,10 +403,10 @@ function canDeleteNote(note: SessionNote): boolean {
       <p class="text-zinc-500">Session not found.</p>
     </div>
 
-    <div v-else>
+    <div v-else class="max-w-[1200px]">
       <!-- View mode -->
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
-          <span class="text-[#ef233c] font-bold text-2xl" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
+          <span class="font-bold text-2xl" :style="{ color: session.color || '#ef233c' }" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
           <span class="text-zinc-600">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
           <span v-if="session.dmName" class="text-zinc-600 text-sm">🎲 DM: {{ session.dmName }}</span>
           <span v-if="session.sessionLocationName" class="text-zinc-600 text-sm">📍 {{ session.sessionLocationName }}</span>
@@ -407,6 +416,11 @@ function canDeleteNote(note: SessionNote): boolean {
             <RouterLink v-else-if="session.startingPointType === 'feature' && session.startingPointId" :to="`/features/${session.startingPointId}`" class="text-zinc-400 hover:text-[#ef233c] transition-colors">{{ session.startingPointName }}</RouterLink>
             <span v-else class="text-zinc-400">{{ session.startingPointName }}</span>
           </span>
+        </div>
+        <!-- In-game date & duration -->
+        <div v-if="session.inGameStartDate" class="flex items-center gap-2 text-sm text-zinc-500 mb-2">
+          <span>🗓️ {{ formatInGameDate(session.inGameStartDate) }}</span>
+          <span v-if="session.inGameDurationDays">({{ session.inGameDurationDays }} {{ session.inGameDurationDays === 1 ? 'day' : 'days' }})</span>
         </div>
         <div class="flex items-center gap-2 mb-4">
             <router-link :to="`/sessions/${session.id}/read`" class="btn-action !py-1.5">

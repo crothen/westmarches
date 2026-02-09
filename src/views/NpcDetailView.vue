@@ -163,7 +163,7 @@ async function deleteNpc() {
       <p class="text-zinc-500">NPC not found.</p>
     </div>
 
-    <div v-else>
+    <div v-else class="max-w-[1200px]">
       <!-- Hero section -->
       <div class="flex flex-col md:flex-row gap-6 mb-8">
         <!-- Portrait -->

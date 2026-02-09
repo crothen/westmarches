@@ -327,7 +327,7 @@ async function deleteOrg() {
       <RouterLink to="/organizations" class="text-[#ef233c] text-sm mt-2 inline-block">← Back to organizations</RouterLink>
     </div>
 
-    <div v-else>
+    <div v-else class="max-w-[1200px]">
       <!-- Hero section -->
       <div class="flex flex-col md:flex-row gap-6 mb-8">
         <!-- Sigil -->

@@ -247,7 +247,7 @@ async function deleteCharacter() {
       </div>
     </div>
 
-    <div v-else class="mt-2">
+    <div v-else class="mt-2 max-w-[1200px]">
       <!-- Header -->
       <div class="flex flex-col md:flex-row gap-6 mb-6">
         <!-- Portrait -->

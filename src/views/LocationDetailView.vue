@@ -503,7 +503,7 @@ async function toggleFeatureHidden(feat: LocationFeature) {
     <div v-if="loading" class="text-zinc-500 animate-pulse">Loading...</div>
     <div v-else-if="!location" class="card p-10 text-center relative z-10"><div class="relative z-10 text-zinc-600">Location not found.</div></div>
 
-    <div v-else>
+    <div v-else class="max-w-[1200px]">
       <!-- Header -->
       <div class="flex items-center gap-3 mb-2">
         <img :src="getIconUrl(location.type)" class="w-8 h-8 object-contain" :alt="location.type" />

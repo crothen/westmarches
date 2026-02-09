@@ -208,7 +208,7 @@ function formatSessionDate(date: any): string {
       <div class="relative z-10 text-zinc-600">Feature not found.</div>
     </div>
 
-    <div v-else>
+    <div v-else class="max-w-[1200px]">
       <!-- Hidden banner -->
       <div v-if="feature.hidden && (auth.isDm || auth.isAdmin)" class="bg-amber-500/20 border border-amber-500/30 text-amber-400 text-sm font-bold uppercase tracking-widest text-center py-2 rounded-xl mb-4" style="font-family: Manrope, sans-serif">🚫 Hidden from players</div>
 
