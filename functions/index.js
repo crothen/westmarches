@@ -4,10 +4,10 @@ import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleAuth } from "google-auth-library";
 
 // Define secrets
-const geminiApiKey = defineSecret("GEMINI_API_KEY");
+const vertexServiceAccount = defineSecret("VERTEX_SERVICE_ACCOUNT");
 
 initializeApp();
 const db = getFirestore();
@@ -143,10 +143,10 @@ function setCorsHeaders(res, origin) {
   res.set("Access-Control-Max-Age", "3600");
 }
 
-// Image generation via Gemini (using onRequest for better CORS control)
+// Image generation via Vertex AI Imagen 3
 export const generateImage = onRequest(
   { 
-    secrets: [geminiApiKey],
+    secrets: [vertexServiceAccount],
     timeoutSeconds: 120,
     memory: "512MiB",
   },
@@ -181,7 +181,7 @@ export const generateImage = onRequest(
       return;
     }
 
-    const { prompt, model = "gemini-2.0-flash-exp-image-generation" } = req.body.data || req.body;
+    const { prompt } = req.body.data || req.body;
 
     if (!prompt || typeof prompt !== "string") {
       res.status(400).json({ error: "Prompt is required" });
@@ -189,36 +189,60 @@ export const generateImage = onRequest(
     }
 
     try {
-      const genAI = new GoogleGenerativeAI(geminiApiKey.value());
-      const imageModel = genAI.getGenerativeModel({
-        model,
-        generationConfig: { responseModalities: ["Text", "Image"] },
+      // Parse service account credentials
+      const credentials = JSON.parse(vertexServiceAccount.value());
+      const projectId = credentials.project_id;
+      const location = "us-central1";
+      
+      // Get access token using service account
+      const auth = new GoogleAuth({
+        credentials,
+        scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+      });
+      const accessToken = await auth.getAccessToken();
+
+      // Call Imagen 3 API directly
+      const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-generate-001:predict`;
+      
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          instances: [{ prompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: "1:1",
+            safetyFilterLevel: "block_only_high",
+          },
+        }),
       });
 
-      const result = await imageModel.generateContent(prompt);
-      const response = result.response;
-
-      // Extract image from response
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          res.json({
-            result: {
-              success: true,
-              image: {
-                mimeType: part.inlineData.mimeType,
-                data: part.inlineData.data,
-              },
-            },
-          });
-          return;
-        }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Imagen API error:", errorText);
+        throw new Error(`Imagen API error: ${response.status}`);
       }
 
-      // No image in response
-      const textParts = response.candidates?.[0]?.content?.parts?.filter(p => p.text) || [];
-      const textResponse = textParts.map(p => p.text).join("\n");
+      const result = await response.json();
       
-      res.status(500).json({ error: textResponse || "No image generated" });
+      if (result.predictions && result.predictions.length > 0) {
+        const prediction = result.predictions[0];
+        res.json({
+          result: {
+            success: true,
+            image: {
+              mimeType: "image/png",
+              data: prediction.bytesBase64Encoded,
+            },
+          },
+        });
+        return;
+      }
+
+      res.status(500).json({ error: "No image generated" });
     } catch (err) {
       console.error("Image generation failed:", err);
       res.status(500).json({ error: err.message || "Image generation failed" });
