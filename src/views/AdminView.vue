@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const sections = [
+  { to: '/admin/campaign', icon: '🎲', label: 'Campaign Settings', desc: 'Configure campaign start date and global settings.' },
   { to: '/admin/users', icon: '👥', label: 'User Management', desc: 'Manage users, assign roles (player, DM, admin).' },
   { to: '/admin/markers', icon: '📌', label: 'Marker Management', desc: 'Edit marker types, labels, and icons for locations, features, and hex tags.' },
   { to: '/admin/tiles', icon: '🗺️', label: 'Tile Management', desc: 'Manage terrain types, colors, and textures. Generate textures with AI.' },

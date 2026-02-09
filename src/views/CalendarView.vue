@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { collection, doc, query, orderBy, onSnapshot, setDoc, updateDoc } from 'firebase/firestore'
+import { collection, doc, query, orderBy, onSnapshot, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
 import type { SessionLog, Character } from '../types'
 
 interface CampaignConfig {
   startDate?: string  // YYYY-MM-DD
-  startYear?: number
 }
 
 const auth = useAuthStore()
@@ -18,11 +17,6 @@ const loading = ref(true)
 const currentMonth = ref(new Date().getMonth())  // 0-11
 const currentYear = ref(new Date().getFullYear())
 const _unsubs: (() => void)[] = []
-
-// Admin editing state
-const editingConfig = ref(false)
-const editStartDate = ref('')
-const savingConfig = ref(false)
 
 onMounted(() => {
   // Load campaign config
@@ -104,23 +98,17 @@ function nextMonth() {
 
 // Calculate downtime for a character
 function getDowntimeDays(character: Character): number {
-  // Find all sessions and calculate days the character was NOT present
   let totalDowntime = 0
-  
-  // Sort sessions by in-game date
   const sortedSessions = [...sessions.value]
     .filter(s => s.inGameStartDate)
     .sort((a, b) => a.inGameStartDate!.localeCompare(b.inGameStartDate!))
   
   for (const session of sortedSessions) {
     const wasPresent = session.participants?.some(p => p.characterId === character.id)
-    
     if (!wasPresent) {
-      // Add the session's duration to downtime
       totalDowntime += session.inGameDurationDays || 1
     }
   }
-  
   return totalDowntime
 }
 
@@ -128,51 +116,41 @@ function getAvailableDowntime(character: Character): number {
   return getDowntimeDays(character) - (character.downtimeDaysUsed || 0)
 }
 
-// Admin functions
-function startEditConfig() {
-  editStartDate.value = config.value.startDate || ''
-  editingConfig.value = true
-}
-
-async function saveConfig() {
-  savingConfig.value = true
-  try {
-    await setDoc(doc(db, 'config', 'campaign'), {
-      startDate: editStartDate.value || null,
-    }, { merge: true })
-    editingConfig.value = false
-  } catch (e) {
-    console.error('Failed to save config:', e)
-    alert('Failed to save: ' + (e as Error).message)
-  } finally {
-    savingConfig.value = false
-  }
-}
-
-// My character's downtime
-const myCharacter = computed(() => {
-  if (!auth.firebaseUser) return null
-  return characters.value.find(c => c.userId === auth.firebaseUser!.uid && c.isActive)
+// All active characters sorted by name
+const activeCharacters = computed(() => {
+  return characters.value
+    .filter(c => c.isActive)
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 })
 
-const editingDowntime = ref(false)
+// Check if user can edit a character's downtime
+function canEditDowntime(character: Character): boolean {
+  if (auth.isAdmin || auth.isDm) return true
+  return character.userId === auth.firebaseUser?.uid
+}
+
+// Downtime editing state
+const editingDowntimeCharacterId = ref<string | null>(null)
 const newDowntimeUsed = ref(0)
 const savingDowntime = ref(false)
 
-function startEditDowntime() {
-  newDowntimeUsed.value = myCharacter.value?.downtimeDaysUsed || 0
-  editingDowntime.value = true
+function startEditDowntime(character: Character) {
+  editingDowntimeCharacterId.value = character.id
+  newDowntimeUsed.value = character.downtimeDaysUsed || 0
 }
 
-async function saveDowntime() {
-  if (!myCharacter.value) return
+function cancelEditDowntime() {
+  editingDowntimeCharacterId.value = null
+}
+
+async function saveDowntime(character: Character) {
   savingDowntime.value = true
   try {
-    await updateDoc(doc(db, 'characters', myCharacter.value.id), {
+    await updateDoc(doc(db, 'characters', character.id), {
       downtimeDaysUsed: newDowntimeUsed.value,
       updatedAt: new Date(),
     })
-    editingDowntime.value = false
+    editingDowntimeCharacterId.value = null
   } catch (e) {
     console.error('Failed to save downtime:', e)
     alert('Failed to save.')
@@ -184,61 +162,12 @@ async function saveDowntime() {
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">📅 Campaign Calendar</h1>
-      <button v-if="auth.isAdmin" @click="startEditConfig" class="btn text-sm">⚙️ Settings</button>
-    </div>
-
-    <!-- Admin Config -->
-    <div v-if="editingConfig" class="card p-5 mb-6 relative z-10">
-      <div class="relative z-10">
-        <h3 class="text-zinc-200 font-semibold mb-3" style="font-family: Manrope, sans-serif">Campaign Settings</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label class="label block mb-1.5">Campaign Start Date</label>
-            <input v-model="editStartDate" type="date" class="input w-full" />
-            <p class="text-xs text-zinc-600 mt-1">The in-game date when the campaign begins</p>
-          </div>
-        </div>
-        <div class="flex gap-2 mt-3">
-          <button @click="saveConfig" :disabled="savingConfig" class="btn text-sm">
-            {{ savingConfig ? 'Saving...' : 'Save' }}
-          </button>
-          <button @click="editingConfig = false" class="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">Cancel</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- My Downtime Card -->
-    <div v-if="myCharacter" class="card p-5 mb-6 relative z-10">
-      <div class="relative z-10">
-        <h3 class="text-zinc-200 font-semibold mb-2" style="font-family: Manrope, sans-serif">⏳ {{ myCharacter.name }}'s Downtime</h3>
-        <div class="flex items-center gap-6">
-          <div>
-            <div class="text-3xl font-bold text-[#ef233c]">{{ getAvailableDowntime(myCharacter) }}</div>
-            <div class="text-xs text-zinc-600 uppercase tracking-wider">Available Days</div>
-          </div>
-          <div class="text-zinc-600">
-            <div class="text-sm">Total earned: {{ getDowntimeDays(myCharacter) }} days</div>
-            <div class="text-sm">Used: {{ myCharacter.downtimeDaysUsed || 0 }} days</div>
-          </div>
-          <div class="flex-1" />
-          <div v-if="!editingDowntime">
-            <button @click="startEditDowntime" class="btn !text-xs">Update Used</button>
-          </div>
-          <div v-else class="flex items-center gap-2">
-            <input v-model.number="newDowntimeUsed" type="number" min="0" :max="getDowntimeDays(myCharacter)" class="input w-20 text-sm" />
-            <button @click="saveDowntime" :disabled="savingDowntime" class="btn !text-xs">Save</button>
-            <button @click="editingDowntime = false" class="text-xs text-zinc-500">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <h1 class="text-2xl font-bold tracking-tight text-white mb-6" style="font-family: Manrope, sans-serif">📅 Campaign Calendar</h1>
 
     <div v-if="loading" class="text-zinc-500 animate-pulse">Loading calendar...</div>
 
     <!-- Calendar -->
-    <div v-else class="card p-5 relative z-10">
+    <div v-else class="card p-5 mb-6 relative z-10">
       <div class="relative z-10">
         <!-- Month Navigation -->
         <div class="flex items-center justify-between mb-4">
@@ -259,7 +188,7 @@ async function saveDowntime() {
         <!-- Calendar Grid -->
         <div class="grid grid-cols-7 gap-1">
           <!-- Empty cells for days before month starts -->
-          <div v-for="_ in firstDayOfWeek" :key="'empty-' + _" class="aspect-square" />
+          <div v-for="n in firstDayOfWeek" :key="'empty-' + n" class="aspect-square" />
           
           <!-- Day cells -->
           <div
@@ -301,6 +230,66 @@ async function saveDowntime() {
               </div>
             </RouterLink>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- All Characters Downtime -->
+    <div v-if="activeCharacters.length > 0" class="card p-5 relative z-10">
+      <div class="relative z-10">
+        <h3 class="text-zinc-200 font-semibold mb-4" style="font-family: Manrope, sans-serif">⏳ Character Downtime</h3>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-zinc-500 border-b border-white/[0.06]">
+                <th class="pb-2 font-medium">Character</th>
+                <th class="pb-2 font-medium text-right">Earned</th>
+                <th class="pb-2 font-medium text-right">Used</th>
+                <th class="pb-2 font-medium text-right">Available</th>
+                <th class="pb-2 w-24"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="char in activeCharacters" :key="char.id" class="border-b border-white/[0.03]">
+                <td class="py-3">
+                  <RouterLink :to="`/characters/${char.id}`" class="text-zinc-200 hover:text-[#ef233c] transition-colors">
+                    {{ char.name }}
+                  </RouterLink>
+                </td>
+                <td class="py-3 text-right text-zinc-400">{{ getDowntimeDays(char) }}</td>
+                <td class="py-3 text-right">
+                  <template v-if="editingDowntimeCharacterId === char.id">
+                    <input
+                      v-model.number="newDowntimeUsed"
+                      type="number"
+                      min="0"
+                      :max="getDowntimeDays(char)"
+                      class="input w-16 text-sm text-right"
+                    />
+                  </template>
+                  <span v-else class="text-zinc-400">{{ char.downtimeDaysUsed || 0 }}</span>
+                </td>
+                <td class="py-3 text-right">
+                  <span :class="getAvailableDowntime(char) > 0 ? 'text-[#ef233c] font-semibold' : 'text-zinc-500'">
+                    {{ getAvailableDowntime(char) }}
+                  </span>
+                </td>
+                <td class="py-3 text-right">
+                  <template v-if="canEditDowntime(char)">
+                    <template v-if="editingDowntimeCharacterId === char.id">
+                      <button @click="saveDowntime(char)" :disabled="savingDowntime" class="btn !text-xs !px-2 !py-1 mr-1">
+                        <span v-if="savingDowntime" class="inline-block w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></span>
+                        <span v-else>Save</span>
+                      </button>
+                      <button @click="cancelEditDowntime" class="text-xs text-zinc-500 hover:text-zinc-300">Cancel</button>
+                    </template>
+                    <button v-else @click="startEditDowntime(char)" class="text-xs text-zinc-500 hover:text-zinc-300">Edit</button>
+                  </template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

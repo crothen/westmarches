@@ -30,6 +30,7 @@ const routes = [
   { path: '/admin/markers', name: 'admin-markers', component: () => import('../views/AdminMarkersView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/admin/tiles', name: 'admin-tiles', component: () => import('../views/AdminTilesView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/admin/session-locations', name: 'admin-session-locations', component: () => import('../views/AdminSessionLocationsView.vue'), meta: { auth: true, role: 'admin' } },
+  { path: '/admin/campaign', name: 'admin-campaign', component: () => import('../views/AdminCampaignView.vue'), meta: { auth: true, role: 'dm' } },
   { path: '/generate', name: 'generate', component: () => import('../views/GenerateView.vue'), meta: { auth: true } },
   { path: '/dm', name: 'dm', component: () => import('../views/DmView.vue'), meta: { auth: true, role: 'dm' } },
 ]
