@@ -69,7 +69,7 @@ const filteredMissions = computed(() => {
     const status = m.status || 'available'
     if (filterStatus.value === 'available' && status !== 'available' && status !== 'in_progress') return false
     if (filterStatus.value === 'completed' && status !== 'completed') return false
-    if (filterStatus.value === 'unavailable' && status !== 'unavailable') return false
+    if (filterStatus.value === 'unavailable' && status !== 'unavailable' && status !== 'resolved' && status !== 'failed') return false
     
     if (filterTier.value && m.tier !== filterTier.value) return false
     if (filterUnit.value && m.unitName !== filterUnit.value) return false
@@ -82,7 +82,7 @@ const filteredMissions = computed(() => {
 const statusCounts = computed(() => ({
   available: missions.value.filter(m => !m.status || m.status === 'available' || m.status === 'in_progress').length,
   completed: missions.value.filter(m => m.status === 'completed').length,
-  unavailable: missions.value.filter(m => m.status === 'unavailable').length,
+  unavailable: missions.value.filter(m => m.status === 'unavailable' || m.status === 'resolved' || m.status === 'failed').length,
 }))
 
 const groupedMissions = computed(() => {
@@ -353,7 +353,7 @@ async function deleteMission(mission: Mission) {
                 <div class="flex items-center gap-2 mb-1">
                   <span :class="tierBadgeClass[mission.tier] || 'tier'">T{{ mission.tier }}</span>
                   <span v-if="mission.suggested" class="text-xs px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-400 font-semibold" style="font-family: Manrope, sans-serif">⭐ Suggested</span>
-                  <span v-if="mission.status !== 'available'" :class="['text-xs px-2 py-0.5 rounded-md', mission.status === 'completed' ? 'bg-green-500/15 text-green-400' : mission.status === 'in_progress' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-red-500/15 text-red-400']">{{ mission.status.replace('_', ' ') }}</span>
+                  <span v-if="mission.status && mission.status !== 'available'" :class="['text-xs px-2 py-0.5 rounded-md', mission.status === 'completed' ? 'bg-green-500/15 text-green-400' : mission.status === 'in_progress' ? 'bg-[#ef233c]/15 text-[#ef233c]' : mission.status === 'resolved' ? 'bg-purple-500/15 text-purple-400' : 'bg-zinc-500/15 text-zinc-400']">{{ mission.status === 'resolved' ? 'resolved (others)' : mission.status.replace('_', ' ') }}</span>
                   <!-- Admin actions -->
                   <div v-if="canManage" class="ml-auto flex items-center gap-1.5">
                     <button @click="toggleSuggested(mission)" :class="['text-base transition-colors', mission.suggested ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-amber-400']" :title="mission.suggested ? 'Remove suggestion' : 'Mark as suggested'">{{ mission.suggested ? '⭐' : '☆' }}</button>
@@ -397,7 +397,7 @@ async function deleteMission(mission: Mission) {
               <span :class="tierBadgeClass[mission.tier] || 'tier'">T{{ mission.tier }}</span>
               <span class="text-xs text-zinc-600">{{ mission.unitName }}</span>
               <span v-if="mission.suggested" class="text-xs px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-400 font-semibold" style="font-family: Manrope, sans-serif">⭐ Suggested</span>
-              <span v-if="mission.status !== 'available'" :class="['text-xs px-2 py-0.5 rounded-md', mission.status === 'completed' ? 'bg-green-500/15 text-green-400' : mission.status === 'in_progress' ? 'bg-[#ef233c]/15 text-[#ef233c]' : 'bg-red-500/15 text-red-400']">{{ mission.status.replace('_', ' ') }}</span>
+              <span v-if="mission.status && mission.status !== 'available'" :class="['text-xs px-2 py-0.5 rounded-md', mission.status === 'completed' ? 'bg-green-500/15 text-green-400' : mission.status === 'in_progress' ? 'bg-[#ef233c]/15 text-[#ef233c]' : mission.status === 'resolved' ? 'bg-purple-500/15 text-purple-400' : 'bg-zinc-500/15 text-zinc-400']">{{ mission.status === 'resolved' ? 'resolved (others)' : mission.status.replace('_', ' ') }}</span>
               <!-- Admin actions -->
               <div v-if="canManage" class="ml-auto flex items-center gap-1.5">
                 <button @click="toggleSuggested(mission)" :class="['text-base transition-colors', mission.suggested ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-amber-400']" :title="mission.suggested ? 'Remove suggestion' : 'Mark as suggested'">{{ mission.suggested ? '⭐' : '☆' }}</button>
@@ -473,7 +473,9 @@ async function deleteMission(mission: Mission) {
                     <option value="available">Available</option>
                     <option value="in_progress">In Progress</option>
                     <option value="completed">Completed</option>
+                    <option value="resolved">Resolved (by others)</option>
                     <option value="failed">Failed</option>
+                    <option value="unavailable">Unavailable</option>
                   </select>
                 </div>
               </div>
