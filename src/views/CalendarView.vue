@@ -65,16 +65,49 @@ const sessionsInMonth = computed(() => {
   })
 })
 
+// Parse YYYY-MM-DD to { year, month, day }
+function parseDate(dateStr: string): { year: number; month: number; day: number } | null {
+  const parts = dateStr.split('-').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return null
+  const [year, month, day] = parts as [number, number, number]
+  return { year, month, day }
+}
+
+// Convert to comparable number (for date math)
+function dateToNum(year: number, month: number, day: number): number {
+  return year * 10000 + month * 100 + day
+}
+
 // Get sessions for a specific day
 function getSessionsForDay(day: number): SessionLog[] {
-  const dateStr = `${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const checkNum = dateToNum(currentYear.value, currentMonth.value + 1, day)
+  
   return sessions.value.filter(s => {
     if (!s.inGameStartDate) return false
-    const startDate = new Date(s.inGameStartDate)
-    const endDate = new Date(startDate)
-    endDate.setDate(endDate.getDate() + (s.inGameDurationDays || 1) - 1)
-    const checkDate = new Date(dateStr)
-    return checkDate >= startDate && checkDate <= endDate
+    const start = parseDate(s.inGameStartDate)
+    if (!start) return false
+    
+    const startNum = dateToNum(start.year, start.month, start.day)
+    const duration = s.inGameDurationDays || 1
+    
+    // Calculate end date (simple day addition - doesn't handle month overflow perfectly but good enough)
+    let endDay = start.day + duration - 1
+    let endMonth = start.month
+    let endYear = start.year
+    
+    // Simple overflow handling
+    const daysInStartMonth = new Date(2000, start.month, 0).getDate() // use 2000 as proxy year
+    while (endDay > daysInStartMonth) {
+      endDay -= daysInStartMonth
+      endMonth++
+      if (endMonth > 12) {
+        endMonth = 1
+        endYear++
+      }
+    }
+    
+    const endNum = dateToNum(endYear, endMonth, endDay)
+    return checkNum >= startNum && checkNum <= endNum
   })
 }
 

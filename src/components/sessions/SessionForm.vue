@@ -4,6 +4,7 @@ import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import TagInput from '../common/TagInput.vue'
 import MentionTextarea from '../common/MentionTextarea.vue'
+import InGameDateInput from '../InGameDateInput.vue'
 import type { SessionLog, SessionParticipant, Character, Npc, CampaignLocation, LocationFeature } from '../../types'
 
 interface LocationEntry {
@@ -261,7 +262,7 @@ const showNpcs = ref(true)
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div>
         <label class="text-sm font-semibold text-zinc-400">🗓️ In-Game Date</label>
-        <input v-model="inGameStartDate" type="date" class="input w-full" @click="($event.target as HTMLInputElement).showPicker?.()" placeholder="When does this session take place in-game?" />
+        <InGameDateInput v-model="inGameStartDate" />
       </div>
       <div>
         <label class="text-sm font-semibold text-zinc-400">⏱️ Duration (days)</label>
