@@ -12,6 +12,7 @@ const loading = ref(true)
 const filterTier = ref<number | null>(null)
 const filterUnit = ref<string | null>(null)
 const filterSuggested = ref(false)
+const filterStatus = ref<'available' | 'completed' | 'unavailable'>('available')
 const sortBy = ref<'unit' | 'votes'>('unit')
 
 // CRUD state
@@ -64,12 +65,25 @@ const units = computed(() => {
 
 const filteredMissions = computed(() => {
   return missions.value.filter(m => {
+    // Status filter
+    const status = m.status || 'available'
+    if (filterStatus.value === 'available' && status !== 'available' && status !== 'in_progress') return false
+    if (filterStatus.value === 'completed' && status !== 'completed') return false
+    if (filterStatus.value === 'unavailable' && status !== 'unavailable') return false
+    
     if (filterTier.value && m.tier !== filterTier.value) return false
     if (filterUnit.value && m.unitName !== filterUnit.value) return false
     if (filterSuggested.value && !m.suggested) return false
     return true
   })
 })
+
+// Counts for tabs
+const statusCounts = computed(() => ({
+  available: missions.value.filter(m => !m.status || m.status === 'available' || m.status === 'in_progress').length,
+  completed: missions.value.filter(m => m.status === 'completed').length,
+  unavailable: missions.value.filter(m => m.status === 'unavailable').length,
+}))
 
 const groupedMissions = computed(() => {
   const groups: Record<string, Mission[]> = {}
@@ -255,6 +269,37 @@ async function deleteMission(mission: Mission) {
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">⚔️ Missions Board</h1>
       <button v-if="canManage" @click="openCreate" class="btn text-sm">+ New Mission</button>
+    </div>
+
+    <!-- Status Tabs -->
+    <div class="flex gap-1 mb-4 border-b border-white/[0.06] pb-3">
+      <button
+        @click="filterStatus = 'available'"
+        :class="[
+          'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+          filterStatus === 'available' ? 'bg-[#ef233c]/10 text-[#ef233c]' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]'
+        ]"
+      >
+        ⚔️ Available <span class="ml-1 text-xs opacity-60">({{ statusCounts.available }})</span>
+      </button>
+      <button
+        @click="filterStatus = 'completed'"
+        :class="[
+          'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+          filterStatus === 'completed' ? 'bg-green-500/10 text-green-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]'
+        ]"
+      >
+        ✅ Completed <span class="ml-1 text-xs opacity-60">({{ statusCounts.completed }})</span>
+      </button>
+      <button
+        @click="filterStatus = 'unavailable'"
+        :class="[
+          'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+          filterStatus === 'unavailable' ? 'bg-zinc-500/10 text-zinc-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]'
+        ]"
+      >
+        🚫 Unavailable <span class="ml-1 text-xs opacity-60">({{ statusCounts.unavailable }})</span>
+      </button>
     </div>
 
     <!-- Filters -->

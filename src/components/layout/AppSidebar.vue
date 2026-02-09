@@ -69,6 +69,7 @@ const sections: NavSection[] = [
     items: [
       { to: '/generate', label: 'Generate', icon: '✨', show: 'player' },
       { to: '/admin', label: 'Admin', icon: '⚙️', show: 'admin' },
+      { to: '/admin/campaign', label: 'Campaign', icon: '🎲', show: 'dm', sub: true },
       { to: '/admin/users', label: 'Users', icon: '👥', show: 'admin', sub: true },
       { to: '/admin/markers', label: 'Markers', icon: '📌', show: 'admin', sub: true },
       { to: '/admin/tiles', label: 'Tiles', icon: '🗺️', show: 'admin', sub: true },

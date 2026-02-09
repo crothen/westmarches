@@ -196,7 +196,7 @@ export interface SessionNote {
   updatedAt: Date
 }
 
-export type MissionStatus = 'available' | 'in_progress' | 'completed' | 'failed'
+export type MissionStatus = 'available' | 'in_progress' | 'completed' | 'failed' | 'unavailable'
 
 export interface MissionVoteEntry {
   userId: string
