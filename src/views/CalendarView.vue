@@ -200,7 +200,7 @@ async function saveDowntime(character: Character) {
     <div v-if="loading" class="text-zinc-500 animate-pulse">Loading calendar...</div>
 
     <!-- Calendar -->
-    <div v-else class="card p-5 mb-6 relative z-10">
+    <div v-else class="card p-5 mb-6 relative z-10 max-w-[1200px]">
       <div class="relative z-10">
         <!-- Month Navigation -->
         <div class="flex items-center justify-between mb-4">
@@ -229,11 +229,12 @@ async function saveDowntime(character: Character) {
             :key="day"
             :class="[
               'aspect-square rounded-lg border transition-colors p-1 min-h-[60px]',
-              getSessionsForDay(day).length > 0 ? 'border-[#ef233c]/30 bg-[#ef233c]/5' : 'border-white/5 bg-white/[0.02]'
+              getSessionsForDay(day).length > 0 ? 'border-white/10' : 'border-white/5 bg-white/[0.02]'
             ]"
+            :style="getSessionsForDay(day).length > 0 ? { backgroundColor: (getSessionsForDay(day)[0]?.color || '#ef233c') + '15', borderColor: (getSessionsForDay(day)[0]?.color || '#ef233c') + '40' } : {}"
           >
             <div class="text-xs text-zinc-500 mb-0.5">{{ day }}</div>
-            <div v-for="session in getSessionsForDay(day).slice(0, 2)" :key="session.id" class="text-[0.6rem] text-[#ef233c] truncate">
+            <div v-for="session in getSessionsForDay(day).slice(0, 2)" :key="session.id" class="text-[0.6rem] truncate" :style="{ color: session.color || '#ef233c' }">
               {{ session.title || `Session ${session.sessionNumber}` }}
             </div>
             <div v-if="getSessionsForDay(day).length > 2" class="text-[0.5rem] text-zinc-600">
@@ -250,10 +251,14 @@ async function saveDowntime(character: Character) {
               v-for="session in sessionsInMonth"
               :key="session.id"
               :to="`/sessions/${session.id}`"
-              class="block p-3 rounded-lg bg-white/[0.02] border border-white/[0.06] hover:border-[#ef233c]/30 transition-colors"
+              class="block p-3 rounded-lg bg-white/[0.02] border transition-colors"
+              :style="{ borderColor: (session.color || '#ef233c') + '30' }"
             >
               <div class="flex items-center justify-between">
-                <span class="text-zinc-200 font-medium">{{ session.title || `Session ${session.sessionNumber}` }}</span>
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full" :style="{ backgroundColor: session.color || '#ef233c' }"></span>
+                  <span class="text-zinc-200 font-medium">{{ session.title || `Session ${session.sessionNumber}` }}</span>
+                </div>
                 <span class="text-xs text-zinc-600">
                   {{ session.inGameStartDate?.split('-')[2] }} {{ monthNames[currentMonth] }}
                   <span v-if="session.inGameDurationDays && session.inGameDurationDays > 1">

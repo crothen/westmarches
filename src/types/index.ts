@@ -153,6 +153,7 @@ export interface SessionLog {
   date: Date
   inGameStartDate?: string  // in-game date (YYYY-MM-DD format)
   inGameDurationDays?: number  // how many in-game days the session spans
+  color?: string  // hex color for calendar display
   summary: string
   dmId?: string
   dmName?: string

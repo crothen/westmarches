@@ -53,6 +53,15 @@ onUnmounted(() => _unsub?.())
 
 const canCreate = computed(() => auth.isDm || auth.isAdmin)
 
+// Format in-game date for display
+const FR_MONTHS = ['Hammer', 'Alturiak', 'Ches', 'Tarsakh', 'Mirtul', 'Kythorn', 'Flamerule', 'Eleasis', 'Eleint', 'Marpenoth', 'Uktar', 'Nightal']
+function formatInGameDate(dateStr: string | undefined): string {
+  if (!dateStr) return ''
+  const [year, month, day] = dateStr.split('-').map(Number)
+  if (!year || !month || !day) return dateStr
+  return `${day} ${FR_MONTHS[month - 1]} ${year} DR`
+}
+
 const nextSessionNumber = computed(() => {
   if (sessions.value.length === 0) return 1
   return Math.max(...sessions.value.map(s => s.sessionNumber)) + 1
@@ -127,9 +136,14 @@ async function handleCreate(data: Partial<SessionLog>) {
 
         <div class="relative z-10 p-4">
           <div class="flex items-center gap-2 mb-1 flex-wrap">
-            <span class="text-[#ef233c] font-bold text-sm" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
+            <span class="font-bold text-sm" :style="{ color: session.color || '#ef233c' }" style="font-family: Manrope, sans-serif">Session {{ session.sessionNumber }}</span>
             <span class="text-zinc-600 text-xs">{{ (session.date as any)?.toDate ? new Date((session.date as any).toDate()).toLocaleDateString() : '' }}</span>
             <span v-if="session.sessionLocationName" class="text-zinc-600 text-xs">📍 {{ session.sessionLocationName }}</span>
+          </div>
+          <!-- In-game date & duration -->
+          <div v-if="session.inGameStartDate" class="flex items-center gap-2 text-xs text-zinc-500 mb-1">
+            <span>🗓️ {{ formatInGameDate(session.inGameStartDate) }}</span>
+            <span v-if="session.inGameDurationDays && session.inGameDurationDays > 1">({{ session.inGameDurationDays }} days)</span>
           </div>
           <h2 class="text-zinc-100 font-semibold group-hover:text-[#ef233c] transition-colors text-sm">{{ session.title }}</h2>
           <p class="text-zinc-500 text-xs mt-1.5 line-clamp-2" v-html="renderMentionsHtml(session.summary || '')" />

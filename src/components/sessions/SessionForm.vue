@@ -23,12 +23,25 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
+// Session color palette
+const SESSION_COLORS = [
+  '#ef233c', // red (default)
+  '#f97316', // orange
+  '#eab308', // yellow
+  '#22c55e', // green
+  '#06b6d4', // cyan
+  '#3b82f6', // blue
+  '#8b5cf6', // purple
+  '#ec4899', // pink
+]
+
 // Form state
 const sessionNumber = ref(props.nextSessionNumber ?? 1)
 const title = ref('')
 const date = ref('')
 const inGameStartDate = ref('')
 const inGameDurationDays = ref<number | undefined>(undefined)
+const color = ref('#ef233c')
 const dmName = ref('')
 const sessionLocationId = ref('')
 const summary = ref('')
@@ -51,6 +64,9 @@ const loading = ref(true)
 
 const _unsubs: (() => void)[] = []
 
+// Load all sessions for defaulting in-game date
+const allSessions = ref<SessionLog[]>([])
+
 // Pre-fill form from existing session for editing
 watch(() => props.session, (s) => {
   if (s) {
@@ -60,6 +76,7 @@ watch(() => props.session, (s) => {
     date.value = d.toISOString().split('T')[0]!
     inGameStartDate.value = s.inGameStartDate || ''
     inGameDurationDays.value = s.inGameDurationDays || undefined
+    color.value = s.color || '#ef233c'
     dmName.value = s.dmName || ''
     sessionLocationId.value = s.sessionLocationId || ''
     summary.value = s.summary
@@ -71,7 +88,47 @@ watch(() => props.session, (s) => {
   }
 }, { immediate: true })
 
+// Compute the default in-game date from last session's end date
+const lastSessionEndDate = computed(() => {
+  if (props.session) return null // Don't default when editing
+  
+  const sorted = [...allSessions.value]
+    .filter(s => s.inGameStartDate)
+    .sort((a, b) => (b.inGameStartDate || '').localeCompare(a.inGameStartDate || ''))
+  
+  if (sorted.length === 0) return null
+  
+  const last = sorted[0]!
+  if (!last.inGameStartDate) return null
+  
+  // Calculate end date
+  const [year, month, day] = last.inGameStartDate.split('-').map(Number) as [number, number, number]
+  const duration = last.inGameDurationDays || 1
+  const startDate = new Date(year, month - 1, day)
+  const endDate = new Date(startDate)
+  endDate.setDate(endDate.getDate() + duration - 1)
+  
+  // Return as YYYY-MM-DD
+  const y = String(endDate.getFullYear()).padStart(4, '0')
+  const m = String(endDate.getMonth() + 1).padStart(2, '0')
+  const d = String(endDate.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+})
+
+// Set default in-game date when creating new session
+watch(lastSessionEndDate, (val) => {
+  if (val && !props.session && !inGameStartDate.value) {
+    inGameStartDate.value = val
+  }
+}, { immediate: true })
+
 onMounted(() => {
+  // Load all sessions for defaulting in-game date
+  const sessionsQ = query(collection(db, 'sessions'), orderBy('sessionNumber', 'desc'))
+  _unsubs.push(onSnapshot(sessionsQ, (snap) => {
+    allSessions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as SessionLog))
+  }))
+
   // Load characters
   const charsQ = query(collection(db, 'characters'), orderBy('name'))
   _unsubs.push(onSnapshot(charsQ, (snap) => {
@@ -193,6 +250,7 @@ function handleSubmit() {
     date: new Date(date.value + 'T12:00:00'),
     inGameStartDate: inGameStartDate.value || null,
     inGameDurationDays: inGameDurationDays.value || null,
+    color: color.value,
     dmName: dmName.value.trim(),
     summary: summary.value.trim(),
     participants: selectedParticipants.value,
@@ -258,15 +316,32 @@ const showNpcs = ref(true)
       </div>
     </div>
 
-    <!-- Row: In-game date + duration -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <!-- Row: In-game date + duration + color -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div>
         <label class="text-sm font-semibold text-zinc-400">🗓️ In-Game Date</label>
         <InGameDateInput v-model="inGameStartDate" />
+        <p v-if="lastSessionEndDate && !session" class="text-xs text-zinc-600 mt-1">Defaulted to last session's end date</p>
       </div>
       <div>
         <label class="text-sm font-semibold text-zinc-400">⏱️ Duration (days)</label>
         <input v-model.number="inGameDurationDays" type="number" min="1" class="input w-full" placeholder="How many in-game days?" />
+      </div>
+      <div>
+        <label class="text-sm font-semibold text-zinc-400">🎨 Calendar Color</label>
+        <div class="flex gap-1.5 mt-2">
+          <button
+            v-for="c in SESSION_COLORS"
+            :key="c"
+            @click="color = c"
+            :class="[
+              'w-6 h-6 rounded-full border-2 transition-all',
+              color === c ? 'border-white scale-110' : 'border-transparent hover:scale-105'
+            ]"
+            :style="{ backgroundColor: c }"
+            type="button"
+          />
+        </div>
       </div>
     </div>
 
