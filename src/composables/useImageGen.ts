@@ -1,9 +1,10 @@
 import { ref } from 'vue'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { storage } from '../firebase/config'
+import { storage, app } from '../firebase/config'
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+const functions = getFunctions(app)
+const generateImageFn = httpsCallable<{ prompt: string; model?: string }, { success: boolean; image: { mimeType: string; data: string } }>(functions, 'generateImage')
 
 const TEXTURE_STYLE_SYSTEM = `You are a texture prompt engineer for a fantasy RPG hex map.
 Given a terrain name and its color (hex code), generate a concise image generation prompt.
@@ -29,14 +30,17 @@ export function useImageGen() {
 
   /**
    * Auto-generate a texture prompt for a terrain type using the text model.
+   * Note: This still uses client-side API key for text generation (lower risk).
    */
   async function generateTexturePrompt(terrainName: string, fallbackColor: string): Promise<string | null> {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
     if (!apiKey) {
       error.value = 'Gemini API key not configured'
       return null
     }
 
     try {
+      const { GoogleGenerativeAI } = await import('@google/generative-ai')
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
@@ -98,54 +102,34 @@ export function useImageGen() {
   }
 
   /**
-   * Generate an image and return the raw data (no upload).
+   * Generate an image via Cloud Function and return the raw data (no upload).
    * Use for preview/crop workflows.
    */
   async function generateImageRaw(prompt: string): Promise<{ data: Uint8Array; mimeType: string; objectUrl: string } | null> {
-    if (!apiKey) {
-      error.value = 'Gemini API key not configured'
-      return null
-    }
-
     generating.value = true
     error.value = null
 
     try {
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash-image',
-        generationConfig: {
-          // @ts-ignore
-          responseModalities: ['TEXT', 'IMAGE'],
-        },
-      })
-
-      const result = await model.generateContent(prompt)
-      let imageData: Uint8Array | null = null
-      let mimeType = 'image/png'
-
-      for (const candidate of result.response.candidates || []) {
-        for (const part of candidate.content?.parts || []) {
-          if (part.inlineData) {
-            const binaryString = atob(part.inlineData.data!)
-            mimeType = part.inlineData.mimeType || 'image/png'
-            const bytes = new Uint8Array(binaryString.length)
-            for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
-            imageData = bytes
-            break
-          }
-        }
-        if (imageData) break
-      }
-
-      if (!imageData) {
+      const result = await generateImageFn({ prompt })
+      
+      if (!result.data.success || !result.data.image) {
         error.value = 'No image was generated. Try a different prompt.'
         return null
       }
 
-      const blob = new Blob([imageData as BlobPart], { type: mimeType })
+      const { mimeType, data: base64 } = result.data.image
+      
+      // Convert base64 to Uint8Array
+      const binaryString = atob(base64)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+
+      const blob = new Blob([bytes as BlobPart], { type: mimeType })
       const objectUrl = URL.createObjectURL(blob)
-      return { data: imageData, mimeType, objectUrl }
+      
+      return { data: bytes, mimeType, objectUrl }
     } catch (e: any) {
       console.error('Image generation failed:', e)
       error.value = e.message || 'Image generation failed'
@@ -165,59 +149,35 @@ export function useImageGen() {
     return getDownloadURL(fileRef)
   }
 
+  /**
+   * Generate an image via Cloud Function and upload to Firebase Storage.
+   */
   async function generateImage(prompt: string, storagePath: string, options?: { cropAspectRatio?: number }): Promise<string | null> {
-    if (!apiKey) {
-      error.value = 'Gemini API key not configured'
-      return null
-    }
-
     generating.value = true
     error.value = null
 
     try {
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash-image',
-        generationConfig: {
-          // @ts-ignore - responseModalities is valid for image generation
-          responseModalities: ['TEXT', 'IMAGE'],
-        },
-      })
-
-      const result = await model.generateContent(prompt)
-      const response = result.response
-
-      // Extract image from response
-      let imageData: Uint8Array | null = null
-      let mimeType = 'image/png'
-
-      for (const candidate of response.candidates || []) {
-        for (const part of candidate.content?.parts || []) {
-          if (part.inlineData) {
-            // Convert base64 to Uint8Array
-            const base64 = part.inlineData.data
-            mimeType = part.inlineData.mimeType || 'image/png'
-            const binaryString = atob(base64!)
-            const bytes = new Uint8Array(binaryString.length)
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i)
-            }
-            imageData = bytes
-            break
-          }
-        }
-        if (imageData) break
-      }
-
-      if (!imageData) {
+      const result = await generateImageFn({ prompt })
+      
+      if (!result.data.success || !result.data.image) {
         error.value = 'No image was generated. Try a different prompt.'
         return null
       }
 
+      const { mimeType: rawMimeType, data: base64 } = result.data.image
+      let mimeType = rawMimeType
+      
+      // Convert base64 to Uint8Array
+      const binaryString = atob(base64)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+
       // Post-process: center-crop to target aspect ratio if requested
-      let uploadData: Uint8Array | Blob = imageData
+      let uploadData: Uint8Array | Blob = bytes
       if (options?.cropAspectRatio) {
-        uploadData = await cropToAspectRatio(imageData, mimeType, options.cropAspectRatio)
+        uploadData = await cropToAspectRatio(bytes, mimeType, options.cropAspectRatio)
         mimeType = 'image/png'
       }
 
@@ -239,6 +199,7 @@ export function useImageGen() {
 
   /**
    * Generate a focused image prompt for a session timeline entry using the text model.
+   * Note: This still uses client-side API key for text generation (lower risk).
    */
   async function generateEntryImagePrompt(context: {
     title: string
@@ -247,12 +208,14 @@ export function useImageGen() {
     characters: { name: string; race?: string; class?: string; appearance?: string }[]
     npcs: { name: string; race?: string; appearance?: string }[]
   }): Promise<string | null> {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
     if (!apiKey) {
       error.value = 'Gemini API key not configured'
       return null
     }
 
     try {
+      const { GoogleGenerativeAI } = await import('@google/generative-ai')
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 

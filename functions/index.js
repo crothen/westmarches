@@ -1,6 +1,12 @@
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// Define secrets
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
 initializeApp();
 const db = getFirestore();
@@ -121,6 +127,61 @@ export const onScheduledSessionUpdated = onDocumentUpdated(
         currentSignups: afterSignups.length,
         maxPlayers: after.maxPlayers || null,
       });
+    }
+  }
+);
+
+// Image generation via Gemini
+export const generateImage = onCall(
+  { 
+    secrets: [geminiApiKey],
+    timeoutSeconds: 120,
+    memory: "512MiB",
+  },
+  async (request) => {
+    // Require authentication
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be logged in to generate images");
+    }
+
+    const { prompt, model = "gemini-2.0-flash-exp-image-generation" } = request.data;
+
+    if (!prompt || typeof prompt !== "string") {
+      throw new HttpsError("invalid-argument", "Prompt is required");
+    }
+
+    try {
+      const genAI = new GoogleGenerativeAI(geminiApiKey.value());
+      const imageModel = genAI.getGenerativeModel({
+        model,
+        generationConfig: { responseModalities: ["Text", "Image"] },
+      });
+
+      const result = await imageModel.generateContent(prompt);
+      const response = result.response;
+
+      // Extract image from response
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+          return {
+            success: true,
+            image: {
+              mimeType: part.inlineData.mimeType,
+              data: part.inlineData.data,
+            },
+          };
+        }
+      }
+
+      // No image in response
+      const textParts = response.candidates?.[0]?.content?.parts?.filter(p => p.text) || [];
+      const textResponse = textParts.map(p => p.text).join("\n");
+      
+      throw new HttpsError("internal", textResponse || "No image generated");
+    } catch (err) {
+      console.error("Image generation failed:", err);
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError("internal", err.message || "Image generation failed");
     }
   }
 );
