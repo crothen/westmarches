@@ -137,6 +137,7 @@ export const generateImage = onCall(
     secrets: [geminiApiKey],
     timeoutSeconds: 120,
     memory: "512MiB",
+    invoker: "public",  // Allow Firebase SDK to invoke (auth handled at app level)
   },
   async (request) => {
     // Require authentication
