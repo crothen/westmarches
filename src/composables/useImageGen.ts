@@ -3,7 +3,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage, app } from '../firebase/config'
 
-const functions = getFunctions(app)
+const functions = getFunctions(app, 'us-central1')
 const generateImageFn = httpsCallable<{ prompt: string; model?: string }, { success: boolean; image: { mimeType: string; data: string } }>(functions, 'generateImage')
 
 const TEXTURE_STYLE_SYSTEM = `You are a texture prompt engineer for a fantasy RPG hex map.
