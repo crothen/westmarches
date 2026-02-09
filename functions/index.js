@@ -1,8 +1,9 @@
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Define secrets
@@ -131,25 +132,60 @@ export const onScheduledSessionUpdated = onDocumentUpdated(
   }
 );
 
-// Image generation via Gemini
-export const generateImage = onCall(
+// CORS headers helper
+function setCorsHeaders(res, origin) {
+  const allowedOrigins = ["https://westmarches-dnd.web.app", "https://westmarches-dnd.firebaseapp.com", "http://localhost:5173"];
+  if (allowedOrigins.includes(origin)) {
+    res.set("Access-Control-Allow-Origin", origin);
+  }
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.set("Access-Control-Max-Age", "3600");
+}
+
+// Image generation via Gemini (using onRequest for better CORS control)
+export const generateImage = onRequest(
   { 
     secrets: [geminiApiKey],
     timeoutSeconds: 120,
     memory: "512MiB",
-    invoker: "public",  // Allow Firebase SDK to invoke (auth handled at app level)
-    cors: [/westmarches-dnd\.web\.app$/, /localhost/],  // Enable CORS for web clients
   },
-  async (request) => {
-    // Require authentication
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Must be logged in to generate images");
+  async (req, res) => {
+    const origin = req.headers.origin || "";
+    setCorsHeaders(res, origin);
+
+    // Handle preflight
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
     }
 
-    const { prompt, model = "gemini-2.0-flash-exp-image-generation" } = request.data;
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    // Verify Firebase Auth token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    try {
+      const token = authHeader.split("Bearer ")[1];
+      await getAuth().verifyIdToken(token);
+    } catch (err) {
+      console.error("Auth verification failed:", err);
+      res.status(401).json({ error: "Invalid token" });
+      return;
+    }
+
+    const { prompt, model = "gemini-2.0-flash-exp-image-generation" } = req.body.data || req.body;
 
     if (!prompt || typeof prompt !== "string") {
-      throw new HttpsError("invalid-argument", "Prompt is required");
+      res.status(400).json({ error: "Prompt is required" });
+      return;
     }
 
     try {
@@ -165,13 +201,16 @@ export const generateImage = onCall(
       // Extract image from response
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
-          return {
-            success: true,
-            image: {
-              mimeType: part.inlineData.mimeType,
-              data: part.inlineData.data,
+          res.json({
+            result: {
+              success: true,
+              image: {
+                mimeType: part.inlineData.mimeType,
+                data: part.inlineData.data,
+              },
             },
-          };
+          });
+          return;
         }
       }
 
@@ -179,11 +218,10 @@ export const generateImage = onCall(
       const textParts = response.candidates?.[0]?.content?.parts?.filter(p => p.text) || [];
       const textResponse = textParts.map(p => p.text).join("\n");
       
-      throw new HttpsError("internal", textResponse || "No image generated");
+      res.status(500).json({ error: textResponse || "No image generated" });
     } catch (err) {
       console.error("Image generation failed:", err);
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError("internal", err.message || "Image generation failed");
+      res.status(500).json({ error: err.message || "Image generation failed" });
     }
   }
 );

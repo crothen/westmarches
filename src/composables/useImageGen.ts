@@ -1,10 +1,31 @@
 import { ref } from 'vue'
-import { getFunctions, httpsCallable } from 'firebase/functions'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { storage, app } from '../firebase/config'
+import { storage, auth } from '../firebase/config'
 
-const functions = getFunctions(app, 'us-central1')
-const generateImageFn = httpsCallable<{ prompt: string; model?: string }, { success: boolean; image: { mimeType: string; data: string } }>(functions, 'generateImage')
+const FUNCTION_URL = 'https://us-central1-westmarches-dnd.cloudfunctions.net/generateImage'
+
+async function callGenerateImage(prompt: string): Promise<{ success: boolean; image: { mimeType: string; data: string } }> {
+  const user = auth.currentUser
+  if (!user) throw new Error('Not authenticated')
+  
+  const token = await user.getIdToken()
+  const response = await fetch(FUNCTION_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ prompt }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(error.error || `HTTP ${response.status}`)
+  }
+
+  const data = await response.json()
+  return data.result
+}
 
 const TEXTURE_STYLE_SYSTEM = `You are a texture prompt engineer for a fantasy RPG hex map.
 Given a terrain name and its color (hex code), generate a concise image generation prompt.
@@ -110,14 +131,14 @@ export function useImageGen() {
     error.value = null
 
     try {
-      const result = await generateImageFn({ prompt })
+      const result = await callGenerateImage(prompt)
       
-      if (!result.data.success || !result.data.image) {
+      if (!result.success || !result.image) {
         error.value = 'No image was generated. Try a different prompt.'
         return null
       }
 
-      const { mimeType, data: base64 } = result.data.image
+      const { mimeType, data: base64 } = result.image
       
       // Convert base64 to Uint8Array
       const binaryString = atob(base64)
@@ -157,14 +178,14 @@ export function useImageGen() {
     error.value = null
 
     try {
-      const result = await generateImageFn({ prompt })
+      const result = await callGenerateImage(prompt)
       
-      if (!result.data.success || !result.data.image) {
+      if (!result.success || !result.image) {
         error.value = 'No image was generated. Try a different prompt.'
         return null
       }
 
-      const { mimeType: rawMimeType, data: base64 } = result.data.image
+      const { mimeType: rawMimeType, data: base64 } = result.image
       let mimeType = rawMimeType
       
       // Convert base64 to Uint8Array
