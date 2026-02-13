@@ -17,6 +17,12 @@ const currentPage = ref(0)
 const transitioning = ref(false)
 const transitionDir = ref<'left' | 'right'>('right')
 const showFontPicker = ref(false)
+const isFullscreen = ref(false)
+
+// Touch handling
+const touchStartX = ref(0)
+const touchStartY = ref(0)
+const touchStartTime = ref(0)
 
 // Sketch image cache: entryId/cover → objectUrl
 const sketchCache = ref<Record<string, string>>({})
@@ -179,7 +185,73 @@ function prevPage() { goToPage(currentPage.value - 1) }
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); nextPage() }
   else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); prevPage() }
-  else if (e.key === 'Escape') { router.push(`/sessions/${sessionId.value}`) }
+  else if (e.key === 'Escape') { exitFullscreenAndClose() }
+}
+
+// Fullscreen handling
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().then(() => {
+      isFullscreen.value = true
+    }).catch(() => {})
+  } else {
+    document.exitFullscreen().then(() => {
+      isFullscreen.value = false
+    }).catch(() => {})
+  }
+}
+
+function exitFullscreenAndClose() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen().then(() => {
+      router.push(`/sessions/${sessionId.value}`)
+    })
+  } else {
+    router.push(`/sessions/${sessionId.value}`)
+  }
+}
+
+function onFullscreenChange() {
+  isFullscreen.value = !!document.fullscreenElement
+}
+
+// Touch handling for swipe navigation
+function onTouchStart(e: TouchEvent) {
+  const touch = e.touches[0]
+  if (!touch) return
+  touchStartX.value = touch.clientX
+  touchStartY.value = touch.clientY
+  touchStartTime.value = Date.now()
+}
+
+function onTouchEnd(e: TouchEvent) {
+  const touch = e.changedTouches[0]
+  if (!touch) return
+
+  const deltaX = touch.clientX - touchStartX.value
+  const deltaY = touch.clientY - touchStartY.value
+  const deltaTime = Date.now() - touchStartTime.value
+
+  // Require a minimum swipe distance and speed, and mostly horizontal
+  const minSwipeDistance = 50
+  const maxSwipeTime = 300
+  const isHorizontal = Math.abs(deltaX) > Math.abs(deltaY) * 1.5
+
+  if (Math.abs(deltaX) > minSwipeDistance && deltaTime < maxSwipeTime && isHorizontal) {
+    if (deltaX < 0) {
+      nextPage()
+    } else {
+      prevPage()
+    }
+  }
+}
+
+// Prevent default touch behaviors (pull-to-refresh, back gesture, etc.)
+function preventDefaultTouch(e: TouchEvent) {
+  // Allow vertical scrolling within the page content
+  const target = e.target as HTMLElement
+  if (target?.closest('.overflow-y-auto')) return
+  e.preventDefault()
 }
 
 function formatDate(date: any): string {
@@ -212,6 +284,10 @@ watch([session, entries], generateSketches, { deep: true })
 onMounted(() => {
   fonts.forEach(f => ensureFontLoaded(f.key))
   window.addEventListener('keydown', onKeydown)
+  document.addEventListener('fullscreenchange', onFullscreenChange)
+
+  // Prevent browser back gesture and pull-to-refresh
+  document.body.style.overscrollBehavior = 'none'
 
   _unsubs.push(onSnapshot(doc(db, 'sessions', sessionId.value), (snap) => {
     if (snap.exists()) {
@@ -238,14 +314,25 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
+  document.body.style.overscrollBehavior = ''
   _unsubs.forEach(fn => fn())
   // Revoke sketch blob URLs
   Object.values(sketchCache.value).forEach(url => URL.revokeObjectURL(url))
+  // Exit fullscreen if active
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {})
+  }
 })
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 bg-[#1a1410] flex flex-col items-center justify-center select-none pt-[env(safe-area-inset-top,0px)]">
+  <div
+    class="fixed inset-0 z-50 bg-[#1a1410] flex flex-col items-center justify-center select-none pt-[env(safe-area-inset-top,0px)] touch-pan-y"
+    @touchstart.passive="onTouchStart"
+    @touchend.passive="onTouchEnd"
+    @touchmove="preventDefaultTouch"
+  >
     <!-- Top bar controls -->
     <div class="absolute top-4 right-4 z-20 flex items-center gap-2 mt-[env(safe-area-inset-top,0px)]">
       <!-- Font picker -->
@@ -270,8 +357,21 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
+      <!-- Fullscreen toggle -->
       <button
-        @click="router.push(`/sessions/${sessionId}`)"
+        @click="toggleFullscreen"
+        class="text-zinc-300 hover:text-white bg-black/40 hover:bg-black/60 backdrop-blur-sm text-lg w-10 h-10 flex items-center justify-center rounded-lg border border-white/15 transition-all"
+        :title="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+      >
+        <svg v-if="!isFullscreen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+        </svg>
+        <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4H4m0 5l5-5m6 5h5V4m-5 5l5-5M9 15v5H4m5-5l-5 5m11-5h5v5m-5-5l5 5" />
+        </svg>
+      </button>
+      <button
+        @click="exitFullscreenAndClose"
         class="text-zinc-300 hover:text-white bg-black/40 hover:bg-black/60 backdrop-blur-sm text-lg w-10 h-10 flex items-center justify-center rounded-lg border border-white/15 transition-all"
         title="Close (Esc)"
       >✕</button>
@@ -417,7 +517,7 @@ onUnmounted(() => {
           :class="[
             'transition-all duration-200 rounded-lg text-sm font-medium',
             currentPage === page - 1
-              ? 'bg-white/20 text-white px-3.5 py-1.5 shadow-lg'
+              ? 'bg-amber-700 text-white px-3.5 py-1.5 shadow-lg ring-2 ring-amber-500/50'
               : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 px-3 py-1.5'
           ]"
           style="font-family: Manrope, sans-serif"
@@ -451,5 +551,17 @@ onUnmounted(() => {
   opacity: 0.9;
   font-size: 1.5rem;
   line-height: 1 !important;
+}
+
+/* Prevent overscroll/bounce and back gesture on mobile */
+:deep(.fixed) {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
+}
+
+/* Disable touch-action for horizontal swipes on main container */
+.touch-pan-y {
+  touch-action: pan-y pinch-zoom;
+  overscroll-behavior-x: none;
 }
 </style>
