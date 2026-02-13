@@ -4,7 +4,7 @@
 :root {
   --wm-accent: #ef233c;
   --wm-accent-hover: #d91e36;
-  --wm-bg: #1a1a1a;
+  --wm-bg: #1c1c1e;
   --wm-bg-secondary: #252525;
   --wm-text: #e4e4e4;
   --wm-text-muted: #888;
@@ -15,6 +15,88 @@
 /* Hidden state */
 .wm-hidden {
   display: none !important;
+}
+
+/* ============================================
+   Bottom Navigation Bar
+   ============================================ */
+
+.wm-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--wm-bg);
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  z-index: 99999;
+  border-top: 1px solid #333;
+  touch-action: manipulation;
+}
+
+.wm-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.wm-nav-divider {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid #444;
+}
+
+.wm-nav-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--wm-accent);
+  border: 3px solid transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  transition: all 0.15s ease;
+}
+
+.wm-nav-btn:hover {
+  transform: scale(1.05);
+}
+
+.wm-nav-btn.active {
+  border-color: #ff6b6b;
+  background: #8b0000;
+}
+
+.wm-nav-btn svg {
+  width: 100%;
+  height: 100%;
+  fill: white;
+}
+
+.wm-nav-btn svg * {
+  fill: white !important;
+  stroke: none !important;
+}
+
+.wm-nav-fs {
+  background: #444;
+}
+
+.wm-nav-label {
+  color: white;
+  font-size: 10px;
+  text-align: center;
+  transition: color 0.15s ease;
+}
+
+.wm-nav-label.active {
+  color: #ff6b6b;
 }
 
 /* ============================================

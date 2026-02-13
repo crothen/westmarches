@@ -4,19 +4,182 @@
 let commandPaletteOpen = false
 let sidebarOpen = false
 let currentUser = null
+let settings = {
+  bottomNavEnabled: true,
+  fabEnabled: true,
+  paletteEnabled: true,
+  darkMode: true
+}
 
 // Initialize
 async function init() {
-  // Get current user
-  const result = await chrome.storage.local.get(['user'])
-  currentUser = result.user
+  // Get current user and settings
+  const [userResult, settingsResult] = await Promise.all([
+    chrome.storage.local.get(['user']),
+    chrome.storage.local.get(['settings'])
+  ])
+  currentUser = userResult.user
+  settings = { ...settings, ...settingsResult.settings }
   
-  // Create UI containers
-  createCommandPalette()
+  // Create UI components based on settings
+  if (settings.paletteEnabled) createCommandPalette()
+  if (settings.fabEnabled) createQuickActionButton()
   createSidebar()
-  createQuickActionButton()
+  
+  // Create bottom nav on character sheets
+  if (settings.bottomNavEnabled) {
+    // Wait a bit for D&D Beyond to fully load
+    setTimeout(() => createBottomNav(), 1000)
+  }
   
   console.log('West Marches extension loaded on D&D Beyond')
+}
+
+// ============================================
+// Bottom Navigation Bar (from bookmarklet)
+// ============================================
+
+function createBottomNav() {
+  // Only on character pages
+  if (!window.location.pathname.includes('/characters/')) return
+  
+  // Don't create if already exists
+  if (document.getElementById('wm-bottom-nav')) return
+  
+  // Find the section nav dialog
+  const dialog = document.querySelector('dialog[class*="sectionNav"]')
+  if (!dialog) {
+    // Try again later if dialog not found yet
+    setTimeout(() => createBottomNav(), 2000)
+    return
+  }
+  
+  const labels = ['Abilities', 'Actions', 'Inventory', 'Spells', 'Features', 'Background', 'Notes', 'Extras']
+  
+  const navBar = document.createElement('div')
+  navBar.id = 'wm-bottom-nav'
+  navBar.className = 'wm-bottom-nav'
+  
+  document.body.style.overscrollBehavior = 'none'
+  document.documentElement.style.overscrollBehavior = 'none'
+  
+  const seen = new Set()
+  let idx = 0
+  let activeBtn = null
+  
+  dialog.querySelectorAll('button[class*="sectionButton"]').forEach(btn => {
+    if (btn.className.includes('mobile')) return
+    const svg = btn.querySelector('svg')
+    if (!svg) return
+    const title = btn.textContent.trim().split(',')[0]
+    if (seen.has(title)) return
+    seen.add(title)
+    
+    const wrapper = document.createElement('div')
+    wrapper.className = 'wm-nav-item'
+    
+    const clone = document.createElement('button')
+    clone.className = 'wm-nav-btn'
+    clone.innerHTML = svg.outerHTML
+    clone.title = labels[idx] || title
+    clone.dataset.btnTitle = title
+    
+    const cloneSvg = clone.querySelector('svg')
+    cloneSvg.querySelectorAll('*').forEach(el => {
+      el.removeAttribute('fill')
+      el.removeAttribute('stroke')
+    })
+    
+    const label = document.createElement('span')
+    label.className = 'wm-nav-label'
+    label.textContent = labels[idx] || title
+    
+    wrapper.appendChild(clone)
+    wrapper.appendChild(label)
+    
+    clone.addEventListener('click', () => {
+      // Re-query the dialog to find fresh button references
+      const dlg = document.querySelector('dialog[class*="sectionNav"]')
+      if (!dlg) return
+      
+      const targetTitle = clone.dataset.btnTitle
+      let found = null
+      dlg.querySelectorAll('button[class*="sectionButton"]').forEach(b => {
+        if (b.className.includes('mobile')) return
+        const t = b.textContent.trim().split(',')[0]
+        if (t === targetTitle) found = b
+      })
+      
+      if (found) found.click()
+      
+      // Update active state
+      if (activeBtn) {
+        activeBtn.btn.classList.remove('active')
+        activeBtn.label.classList.remove('active')
+      }
+      clone.classList.add('active')
+      label.classList.add('active')
+      activeBtn = { btn: clone, label }
+    })
+    
+    navBar.appendChild(wrapper)
+    idx++
+  })
+  
+  // Fullscreen toggle
+  const fsWrapper = document.createElement('div')
+  fsWrapper.className = 'wm-nav-item wm-nav-divider'
+  
+  const fsBtn = document.createElement('button')
+  fsBtn.className = 'wm-nav-btn wm-nav-fs'
+  fsBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>'
+  fsBtn.title = 'Fullscreen'
+  
+  const fsLabel = document.createElement('span')
+  fsLabel.className = 'wm-nav-label'
+  fsLabel.textContent = 'Fullscreen'
+  
+  fsWrapper.appendChild(fsBtn)
+  fsWrapper.appendChild(fsLabel)
+  
+  fsBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen()
+      fsBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>'
+    } else {
+      document.exitFullscreen()
+      fsBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>'
+    }
+  })
+  
+  navBar.appendChild(fsWrapper)
+  document.body.appendChild(navBar)
+  
+  // Add padding to sheet
+  const sheet = document.querySelector('.ct-character-sheet')
+  if (sheet) sheet.style.paddingBottom = '100px'
+  
+  // Hide original toggle
+  const toggle = document.querySelector('button[class*="navToggle"]')
+  if (toggle) toggle.style.display = 'none'
+  
+  // Handle fullscreen change
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      fsBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>'
+    }
+  })
+}
+
+function destroyBottomNav() {
+  const nav = document.getElementById('wm-bottom-nav')
+  if (nav) nav.remove()
+  
+  const sheet = document.querySelector('.ct-character-sheet')
+  if (sheet) sheet.style.paddingBottom = ''
+  
+  const toggle = document.querySelector('button[class*="navToggle"]')
+  if (toggle) toggle.style.display = ''
 }
 
 // ============================================
@@ -24,6 +187,8 @@ async function init() {
 // ============================================
 
 function createCommandPalette() {
+  if (document.getElementById('wm-command-palette')) return
+  
   const palette = document.createElement('div')
   palette.id = 'wm-command-palette'
   palette.className = 'wm-command-palette wm-hidden'
@@ -71,6 +236,8 @@ function createCommandPalette() {
 }
 
 function toggleCommandPalette(show = !commandPaletteOpen) {
+  if (!settings.paletteEnabled && show) return
+  
   commandPaletteOpen = show
   const palette = document.getElementById('wm-command-palette')
   if (!palette) return
@@ -87,7 +254,6 @@ function toggleCommandPalette(show = !commandPaletteOpen) {
 }
 
 function showDefaultResults(container) {
-  // Show quick actions when palette opens with no search
   const quickActions = [
     { icon: '🗺️', label: 'Open Map', action: () => toggleSidebar(true) },
     { icon: '👤', label: 'Quick NPC', action: () => showQuickNpcModal() },
@@ -107,10 +273,6 @@ function showDefaultResults(container) {
     </div>
   `
   
-  // Store actions for selection
-  container.dataset.actions = JSON.stringify(quickActions.map(a => a.action.toString()))
-  
-  // Click handlers
   container.querySelectorAll('.wm-result-item').forEach((item, i) => {
     item.addEventListener('click', () => {
       quickActions[i].action()
@@ -128,7 +290,6 @@ async function handleSearch(query, container) {
   const q = query.toLowerCase()
   const results = []
   
-  // D&D Beyond navigation
   const ddbPages = [
     { icon: '👤', label: 'My Characters', url: '/my-characters' },
     { icon: '📖', label: 'My Campaigns', url: '/my-campaigns' },
@@ -142,9 +303,6 @@ async function handleSearch(query, container) {
     { icon: '✨', label: 'Feats', url: '/feats' },
   ]
   
-  const matchingPages = ddbPages.filter(p => p.label.toLowerCase().includes(q))
-  
-  // West Marches navigation
   const wmPages = [
     { icon: '🗺️', label: 'WM: Map', url: 'https://westmarches-dnd.web.app/map' },
     { icon: '📖', label: 'WM: Sessions', url: 'https://westmarches-dnd.web.app/sessions' },
@@ -154,9 +312,9 @@ async function handleSearch(query, container) {
     { icon: '⚔️', label: 'WM: Missions', url: 'https://westmarches-dnd.web.app/missions' },
   ]
   
+  const matchingPages = ddbPages.filter(p => p.label.toLowerCase().includes(q))
   const matchingWmPages = wmPages.filter(p => p.label.toLowerCase().includes(q))
   
-  // Search results HTML
   let html = ''
   
   if (matchingPages.length > 0) {
@@ -195,7 +353,6 @@ async function handleSearch(query, container) {
   
   container.innerHTML = html
   
-  // Click handlers
   container.querySelectorAll('.wm-result-item').forEach((item) => {
     item.addEventListener('click', () => {
       const url = item.dataset.url
@@ -223,9 +380,7 @@ function navigateResults(direction) {
 
 function selectResult() {
   const selected = document.querySelector('.wm-result-item.wm-selected')
-  if (selected) {
-    selected.click()
-  }
+  if (selected) selected.click()
 }
 
 // ============================================
@@ -233,6 +388,8 @@ function selectResult() {
 // ============================================
 
 function createSidebar() {
+  if (document.getElementById('wm-sidebar')) return
+  
   const sidebar = document.createElement('div')
   sidebar.id = 'wm-sidebar'
   sidebar.className = 'wm-sidebar wm-hidden'
@@ -260,7 +417,6 @@ function createSidebar() {
   `
   document.body.appendChild(sidebar)
   
-  // Event listeners
   sidebar.querySelector('.wm-sidebar-close').addEventListener('click', () => toggleSidebar(false))
   
   sidebar.querySelectorAll('.wm-tab').forEach(tab => {
@@ -272,9 +428,9 @@ function createSidebar() {
     })
   })
   
-  sidebar.querySelector('#wm-quick-npc').addEventListener('click', showQuickNpcModal)
-  sidebar.querySelector('#wm-quick-note').addEventListener('click', showQuickNoteModal)
-  sidebar.querySelector('#wm-quick-marker').addEventListener('click', showQuickMarkerModal)
+  sidebar.querySelector('#wm-quick-npc')?.addEventListener('click', showQuickNpcModal)
+  sidebar.querySelector('#wm-quick-note')?.addEventListener('click', showQuickNoteModal)
+  sidebar.querySelector('#wm-quick-marker')?.addEventListener('click', showQuickMarkerModal)
 }
 
 function toggleSidebar(show = !sidebarOpen) {
@@ -294,6 +450,8 @@ function toggleSidebar(show = !sidebarOpen) {
 // ============================================
 
 function createQuickActionButton() {
+  if (document.getElementById('wm-quick-btn')) return
+  
   const btn = document.createElement('button')
   btn.id = 'wm-quick-btn'
   btn.className = 'wm-quick-action-btn'
@@ -302,6 +460,11 @@ function createQuickActionButton() {
   document.body.appendChild(btn)
   
   btn.addEventListener('click', () => toggleCommandPalette(true))
+}
+
+function destroyQuickActionButton() {
+  const btn = document.getElementById('wm-quick-btn')
+  if (btn) btn.remove()
 }
 
 // ============================================
@@ -422,8 +585,6 @@ function showQuickNoteModal() {
       return
     }
     
-    // For now, just copy to clipboard and show toast
-    // TODO: Save to Firestore scratchpad collection
     await navigator.clipboard.writeText(content)
     showToast('Note copied to clipboard!')
     closeModal()
@@ -469,17 +630,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     toggleSidebar()
   } else if (request.action === 'authStateChanged') {
     currentUser = request.user
+  } else if (request.action === 'settingsChanged') {
+    settings[request.key] = request.value
+    handleSettingChange(request.key, request.value)
   }
 })
 
-// Keyboard shortcuts (backup if commands don't work)
+function handleSettingChange(key, value) {
+  if (key === 'bottomNavEnabled') {
+    if (value) {
+      createBottomNav()
+    } else {
+      destroyBottomNav()
+    }
+  } else if (key === 'fabEnabled') {
+    if (value) {
+      createQuickActionButton()
+    } else {
+      destroyQuickActionButton()
+    }
+  }
+}
+
+// Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-  // Cmd/Ctrl + K for command palette
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault()
     toggleCommandPalette()
   }
-  // Escape to close
   if (e.key === 'Escape') {
     if (commandPaletteOpen) toggleCommandPalette(false)
     if (sidebarOpen) toggleSidebar(false)

@@ -16,7 +16,11 @@ const OAUTH_CLIENT_ID = '1084465200262-r01sd51huantpkto1tvv9j7uir9fvvmg.apps.goo
 // Message handler
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'login') {
-    handleLogin().then(sendResponse)
+    if (request.method === 'email') {
+      handleEmailLogin(request.email, request.password).then(sendResponse)
+    } else {
+      handleGoogleLogin().then(sendResponse)
+    }
     return true // async response
   }
   if (request.action === 'logout') {
@@ -27,14 +31,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.storage.local.get(['user', 'token']).then(sendResponse)
     return true
   }
+  if (request.action === 'getSettings') {
+    chrome.storage.local.get(['settings']).then(result => {
+      sendResponse(result.settings || {})
+    })
+    return true
+  }
+  if (request.action === 'broadcast') {
+    broadcastToContentScripts(request.payload)
+    sendResponse({ success: true })
+    return false
+  }
   if (request.action === 'firestore') {
     handleFirestoreRequest(request).then(sendResponse)
     return true
   }
 })
 
-// Handle login via Chrome identity API
-async function handleLogin() {
+// Handle Google login via Chrome identity API
+async function handleGoogleLogin() {
   try {
     // Use chrome.identity for OAuth flow
     const redirectUrl = chrome.identity.getRedirectURL()
@@ -65,10 +80,10 @@ async function handleLogin() {
     const userInfo = await userInfoResponse.json()
     
     // Exchange Google token for Firebase token
-    const firebaseToken = await exchangeForFirebaseToken(accessToken)
+    const firebaseToken = await exchangeGoogleTokenForFirebase(accessToken)
     
     const user = {
-      uid: userInfo.id,
+      uid: firebaseToken.localId,
       email: userInfo.email,
       displayName: userInfo.name,
       photoURL: userInfo.picture
@@ -77,22 +92,72 @@ async function handleLogin() {
     // Store in chrome.storage
     await chrome.storage.local.set({ 
       user, 
-      token: firebaseToken,
-      accessToken 
+      token: firebaseToken.idToken,
+      refreshToken: firebaseToken.refreshToken
     })
     
     // Notify content scripts
-    notifyContentScripts({ action: 'authStateChanged', user })
+    broadcastToContentScripts({ action: 'authStateChanged', user })
     
     return { success: true, user }
   } catch (err) {
-    console.error('Login failed:', err)
+    console.error('Google login failed:', err)
+    return { success: false, error: err.message }
+  }
+}
+
+// Handle email/password login
+async function handleEmailLogin(email, password) {
+  try {
+    const response = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_CONFIG.apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          returnSecureToken: true
+        })
+      }
+    )
+    
+    const data = await response.json()
+    if (data.error) {
+      let errorMessage = data.error.message
+      // Make error messages more user-friendly
+      if (errorMessage === 'EMAIL_NOT_FOUND') errorMessage = 'Email not found'
+      if (errorMessage === 'INVALID_PASSWORD') errorMessage = 'Invalid password'
+      if (errorMessage === 'INVALID_LOGIN_CREDENTIALS') errorMessage = 'Invalid email or password'
+      throw new Error(errorMessage)
+    }
+    
+    const user = {
+      uid: data.localId,
+      email: data.email,
+      displayName: data.displayName || data.email.split('@')[0],
+      photoURL: data.profilePicture || null
+    }
+    
+    // Store in chrome.storage
+    await chrome.storage.local.set({ 
+      user, 
+      token: data.idToken,
+      refreshToken: data.refreshToken
+    })
+    
+    // Notify content scripts
+    broadcastToContentScripts({ action: 'authStateChanged', user })
+    
+    return { success: true, user }
+  } catch (err) {
+    console.error('Email login failed:', err)
     return { success: false, error: err.message }
   }
 }
 
 // Exchange Google OAuth token for Firebase ID token
-async function exchangeForFirebaseToken(googleAccessToken) {
+async function exchangeGoogleTokenForFirebase(googleAccessToken) {
   const response = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${FIREBASE_CONFIG.apiKey}`,
     {
@@ -112,18 +177,18 @@ async function exchangeForFirebaseToken(googleAccessToken) {
     throw new Error(data.error.message)
   }
   
-  return data.idToken
+  return data
 }
 
 // Handle logout
 async function handleLogout() {
-  await chrome.storage.local.remove(['user', 'token', 'accessToken'])
-  notifyContentScripts({ action: 'authStateChanged', user: null })
+  await chrome.storage.local.remove(['user', 'token', 'refreshToken'])
+  broadcastToContentScripts({ action: 'authStateChanged', user: null })
   return { success: true }
 }
 
-// Notify all content scripts of state changes
-async function notifyContentScripts(message) {
+// Broadcast message to all D&D Beyond content scripts
+async function broadcastToContentScripts(message) {
   const tabs = await chrome.tabs.query({ url: ['https://www.dndbeyond.com/*', 'https://*.dndbeyond.com/*'] })
   for (const tab of tabs) {
     try {
@@ -188,13 +253,15 @@ function convertToFirestoreFields(obj) {
     if (typeof value === 'string') {
       fields[key] = { stringValue: value }
     } else if (typeof value === 'number') {
-      fields[key] = Number.isInteger(value) ? { integerValue: value } : { doubleValue: value }
+      fields[key] = Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value }
     } else if (typeof value === 'boolean') {
       fields[key] = { booleanValue: value }
     } else if (Array.isArray(value)) {
       fields[key] = { arrayValue: { values: value.map(v => ({ stringValue: String(v) })) } }
     } else if (value === null) {
       fields[key] = { nullValue: null }
+    } else if (value instanceof Date) {
+      fields[key] = { timestampValue: value.toISOString() }
     }
   }
   return fields
