@@ -387,6 +387,26 @@ function selectResult() {
 // Sidebar (Map + Quick Actions)
 // ============================================
 
+// Load web component script
+let wcLoaded = false
+function loadWebComponent() {
+  if (wcLoaded) return Promise.resolve()
+  return new Promise((resolve) => {
+    const script = document.createElement('script')
+    script.src = 'https://westmarches-dnd.web.app/wc/westmarches.js'
+    script.type = 'module'
+    script.onload = () => {
+      wcLoaded = true
+      resolve()
+    }
+    script.onerror = () => {
+      console.warn('Failed to load WM web components, falling back to iframe')
+      resolve()
+    }
+    document.head.appendChild(script)
+  })
+}
+
 function createSidebar() {
   if (document.getElementById('wm-sidebar')) return
   
@@ -399,12 +419,16 @@ function createSidebar() {
       <button class="wm-sidebar-close">✕</button>
     </div>
     <div class="wm-sidebar-tabs">
-      <button class="wm-tab wm-tab-active" data-tab="map">Browse</button>
+      <button class="wm-tab wm-tab-active" data-tab="map">Map</button>
+      <button class="wm-tab" data-tab="browse">Browse</button>
       <button class="wm-tab" data-tab="quick">Quick Add</button>
     </div>
     <div class="wm-sidebar-content">
       <div class="wm-tab-panel wm-tab-panel-active" data-panel="map">
-        <iframe src="https://westmarches-dnd.web.app/map?embed=true" class="wm-map-iframe"></iframe>
+        <div id="wm-map-container" class="wm-map-container"></div>
+      </div>
+      <div class="wm-tab-panel" data-panel="browse">
+        <iframe src="https://westmarches-dnd.web.app?embed=true" class="wm-map-iframe"></iframe>
       </div>
       <div class="wm-tab-panel" data-panel="quick">
         <div class="wm-quick-section">
@@ -431,6 +455,34 @@ function createSidebar() {
   sidebar.querySelector('#wm-quick-npc')?.addEventListener('click', showQuickNpcModal)
   sidebar.querySelector('#wm-quick-note')?.addEventListener('click', showQuickNoteModal)
   sidebar.querySelector('#wm-quick-marker')?.addEventListener('click', showQuickMarkerModal)
+
+  // Load web component and create map
+  loadWebComponent().then(async () => {
+    if (wcLoaded && customElements.get('wm-map')) {
+      const container = document.getElementById('wm-map-container')
+      if (container) {
+        const map = document.createElement('wm-map')
+        
+        // Get auth token and user info
+        const result = await chrome.storage.local.get(['token', 'user'])
+        if (result.token) {
+          map.authToken = result.token
+        }
+        if (result.user) {
+          map.userId = result.user.uid || ''
+          map.userName = result.user.displayName || 'Anonymous'
+        }
+        
+        container.appendChild(map)
+      }
+    } else {
+      // Fallback to iframe if WC failed to load
+      const container = document.getElementById('wm-map-container')
+      if (container) {
+        container.innerHTML = '<iframe src="https://westmarches-dnd.web.app/map?embed=true" class="wm-map-iframe"></iframe>'
+      }
+    }
+  })
 }
 
 function toggleSidebar(show = !sidebarOpen, url = null) {
@@ -441,17 +493,17 @@ function toggleSidebar(show = !sidebarOpen, url = null) {
   if (show) {
     sidebar.classList.remove('wm-hidden')
     
-    // If URL provided, load it in the iframe
+    // If URL provided, load it in the Browse tab iframe
     if (url) {
-      const iframe = sidebar.querySelector('.wm-map-iframe')
+      const iframe = sidebar.querySelector('[data-panel="browse"] .wm-map-iframe')
       if (iframe) {
         iframe.src = url + (url.includes('?') ? '&' : '?') + 'embed=true'
       }
-      // Switch to map tab (which contains the iframe)
+      // Switch to Browse tab
       sidebar.querySelectorAll('.wm-tab').forEach(t => t.classList.remove('wm-tab-active'))
       sidebar.querySelectorAll('.wm-tab-panel').forEach(p => p.classList.remove('wm-tab-panel-active'))
-      sidebar.querySelector('[data-tab="map"]')?.classList.add('wm-tab-active')
-      sidebar.querySelector('[data-panel="map"]')?.classList.add('wm-tab-panel-active')
+      sidebar.querySelector('[data-tab="browse"]')?.classList.add('wm-tab-active')
+      sidebar.querySelector('[data-panel="browse"]')?.classList.add('wm-tab-panel-active')
     }
   } else {
     sidebar.classList.add('wm-hidden')

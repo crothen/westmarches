@@ -352,6 +352,16 @@
   border: none;
 }
 
+.wm-map-container {
+  width: 100%;
+  height: 100%;
+}
+
+.wm-map-container wm-map {
+  width: 100%;
+  height: 100%;
+}
+
 .wm-quick-section {
   padding: 16px;
   display: flex;
