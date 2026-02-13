@@ -18,6 +18,82 @@ function copyToClipboard() {
       <h1 class="text-3xl font-bold text-red-500 mb-2">Tools</h1>
       <p class="text-zinc-400 mb-8">Useful utilities for your adventuring needs.</p>
 
+      <!-- Chrome Extension -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+        <div class="flex items-start gap-4 mb-4">
+          <div class="w-12 h-12 bg-red-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+            <span class="text-2xl">🐉</span>
+          </div>
+          <div>
+            <h2 class="text-xl font-semibold text-white mb-1">West Marches Companion</h2>
+            <p class="text-zinc-400 text-sm">Chrome extension for D&D Beyond integration — quick nav, map sidebar, and more.</p>
+          </div>
+        </div>
+
+        <div class="bg-zinc-950 rounded-lg p-4 mb-4">
+          <h3 class="text-sm font-medium text-zinc-300 mb-3">Features</h3>
+          <ul class="text-sm text-zinc-400 space-y-2">
+            <li class="flex items-start gap-2">
+              <span class="text-red-500 mt-0.5">•</span>
+              <span><strong class="text-zinc-200">Command Palette</strong> (Ctrl+K) — Quick search for D&D Beyond pages and West Marches content</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-red-500 mt-0.5">•</span>
+              <span><strong class="text-zinc-200">Map Sidebar</strong> (Ctrl+Shift+M) — View the hex map without leaving D&D Beyond</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-red-500 mt-0.5">•</span>
+              <span><strong class="text-zinc-200">Quick NPC</strong> — Create NPCs on the fly during sessions</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-red-500 mt-0.5">•</span>
+              <span><strong class="text-zinc-200">Quick Notes</strong> — Jot down notes that sync to West Marches</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="bg-zinc-950 rounded-lg p-4 mb-4">
+          <h3 class="text-sm font-medium text-zinc-300 mb-3">How to Install</h3>
+          <ol class="text-sm text-zinc-400 space-y-3">
+            <li class="flex items-start gap-3">
+              <span class="w-5 h-5 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">1</span>
+              <span><strong class="text-zinc-200">Download</strong> the extension zip file using the button below.</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-5 h-5 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">2</span>
+              <span><strong class="text-zinc-200">Extract</strong> the zip to a folder on your computer.</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-5 h-5 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">3</span>
+              <span>Open Chrome and go to <code class="bg-zinc-800 px-1.5 py-0.5 rounded text-red-400">chrome://extensions</code></span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-5 h-5 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">4</span>
+              <span><strong class="text-zinc-200">Enable Developer mode</strong> (toggle in top right corner).</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-5 h-5 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">5</span>
+              <span>Click <strong class="text-zinc-200">"Load unpacked"</strong> and select the extracted folder.</span>
+            </li>
+          </ol>
+        </div>
+
+        <a
+          href="/downloads/westmarches-companion.zip"
+          download
+          class="w-full py-3 px-4 rounded-lg font-medium bg-red-600 hover:bg-red-500 text-white transition-all flex items-center justify-center gap-2"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Download Extension (.zip)
+        </a>
+
+        <p class="text-xs text-zinc-500 mt-3 text-center">
+          Works on Chrome, Edge, Brave, and other Chromium browsers.
+        </p>
+      </div>
+
       <!-- D&D Beyond Nav Bookmarklet -->
       <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
         <div class="flex items-start gap-4 mb-4">
