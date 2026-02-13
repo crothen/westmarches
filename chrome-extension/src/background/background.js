@@ -11,8 +11,7 @@ const FIREBASE_CONFIG = {
 }
 
 // Google OAuth Client ID (for Chrome extension)
-// You'll need to create this in Google Cloud Console
-const OAUTH_CLIENT_ID = '1084465200262-EXTENSION_CLIENT_ID.apps.googleusercontent.com'
+const OAUTH_CLIENT_ID = '1084465200262-r01sd51huantpkto1tvv9j7uir9fvvmg.apps.googleusercontent.com'
 
 // Message handler
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
