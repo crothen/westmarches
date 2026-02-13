@@ -32,6 +32,7 @@ const routes = [
   { path: '/admin/session-locations', name: 'admin-session-locations', component: () => import('../views/AdminSessionLocationsView.vue'), meta: { auth: true, role: 'admin' } },
   { path: '/admin/campaign', name: 'admin-campaign', component: () => import('../views/AdminCampaignView.vue'), meta: { auth: true, role: 'dm' } },
   { path: '/generate', name: 'generate', component: () => import('../views/GenerateView.vue'), meta: { auth: true } },
+  { path: '/tools', name: 'tools', component: () => import('../views/ToolsView.vue'), meta: { auth: true } },
   { path: '/dm', name: 'dm', component: () => import('../views/DmView.vue'), meta: { auth: true, role: 'dm' } },
 ]
 
