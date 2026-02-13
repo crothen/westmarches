@@ -395,11 +395,11 @@ function createSidebar() {
   sidebar.className = 'wm-sidebar wm-hidden'
   sidebar.innerHTML = `
     <div class="wm-sidebar-header">
-      <span class="wm-sidebar-title">🗺️ West Marches</span>
+      <span class="wm-sidebar-title">🐉 West Marches</span>
       <button class="wm-sidebar-close">✕</button>
     </div>
     <div class="wm-sidebar-tabs">
-      <button class="wm-tab wm-tab-active" data-tab="map">Map</button>
+      <button class="wm-tab wm-tab-active" data-tab="map">Browse</button>
       <button class="wm-tab" data-tab="quick">Quick Add</button>
     </div>
     <div class="wm-sidebar-content">
@@ -433,13 +433,26 @@ function createSidebar() {
   sidebar.querySelector('#wm-quick-marker')?.addEventListener('click', showQuickMarkerModal)
 }
 
-function toggleSidebar(show = !sidebarOpen) {
+function toggleSidebar(show = !sidebarOpen, url = null) {
   sidebarOpen = show
   const sidebar = document.getElementById('wm-sidebar')
   if (!sidebar) return
   
   if (show) {
     sidebar.classList.remove('wm-hidden')
+    
+    // If URL provided, load it in the iframe
+    if (url) {
+      const iframe = sidebar.querySelector('.wm-map-iframe')
+      if (iframe) {
+        iframe.src = url + (url.includes('?') ? '&' : '?') + 'embed=true'
+      }
+      // Switch to map tab (which contains the iframe)
+      sidebar.querySelectorAll('.wm-tab').forEach(t => t.classList.remove('wm-tab-active'))
+      sidebar.querySelectorAll('.wm-tab-panel').forEach(p => p.classList.remove('wm-tab-panel-active'))
+      sidebar.querySelector('[data-tab="map"]')?.classList.add('wm-tab-active')
+      sidebar.querySelector('[data-panel="map"]')?.classList.add('wm-tab-panel-active')
+    }
   } else {
     sidebar.classList.add('wm-hidden')
   }
@@ -628,6 +641,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     toggleCommandPalette()
   } else if (request.action === 'toggleSidebar') {
     toggleSidebar()
+  } else if (request.action === 'openSidebar') {
+    toggleSidebar(true, request.url)
   } else if (request.action === 'authStateChanged') {
     currentUser = request.user
   } else if (request.action === 'settingsChanged') {

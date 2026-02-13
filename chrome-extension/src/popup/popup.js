@@ -60,6 +60,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.key === 'Enter') loginWithEmail()
   })
 
+  // Quick links - open in sidebar
+  document.querySelectorAll('.quick-link[data-url]').forEach(link => {
+    link.addEventListener('click', async () => {
+      const url = link.dataset.url
+      // Send message to active tab to open sidebar with this URL
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { action: 'openSidebar', url })
+        window.close() // Close popup after clicking
+      }
+    })
+  })
+
   // Check auth state and load settings
   await Promise.all([checkAuthState(), loadSettings()])
   
