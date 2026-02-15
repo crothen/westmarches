@@ -3,28 +3,23 @@ import { ref, watch, onMounted } from 'vue'
 // @ts-ignore - virtual module from vite-plugin-pwa
 import { useRegisterSW } from 'virtual:pwa-register/vue'
 
-const JUST_UPDATED_KEY = 'pwa-just-updated'
-const COOLDOWN_MS = 10000 // 10 seconds cooldown after update
+const UPDATED_AT_KEY = 'pwa-updated-at'
+const SUPPRESS_DURATION_MS = 60 * 60 * 1000 // 1 hour - don't show update prompt again within this period
 
 const showPrompt = ref(false)
 const isUpdating = ref(false)
 const dismissed = ref(false)
-const inCooldown = ref(false)
+const suppressed = ref(false)
 
-// Check if we just updated (within cooldown period)
+// Check if we recently updated (within suppression period)
 onMounted(() => {
-  const justUpdatedAt = sessionStorage.getItem(JUST_UPDATED_KEY)
-  if (justUpdatedAt) {
-    const elapsed = Date.now() - parseInt(justUpdatedAt, 10)
-    if (elapsed < COOLDOWN_MS) {
-      inCooldown.value = true
-      // Clear cooldown after remaining time
-      setTimeout(() => {
-        inCooldown.value = false
-        sessionStorage.removeItem(JUST_UPDATED_KEY)
-      }, COOLDOWN_MS - elapsed)
+  const updatedAt = localStorage.getItem(UPDATED_AT_KEY)
+  if (updatedAt) {
+    const elapsed = Date.now() - parseInt(updatedAt, 10)
+    if (elapsed < SUPPRESS_DURATION_MS) {
+      suppressed.value = true
     } else {
-      sessionStorage.removeItem(JUST_UPDATED_KEY)
+      localStorage.removeItem(UPDATED_AT_KEY)
     }
   }
 })
@@ -46,9 +41,9 @@ const {
   }
 })
 
-// Show prompt when update is available (unless dismissed or in cooldown)
-watch([needRefresh, inCooldown], ([needsRefresh, cooling]) => {
-  if (needsRefresh && !dismissed.value && !cooling) {
+// Show prompt when update is available (unless dismissed or suppressed)
+watch(needRefresh, (needsRefresh) => {
+  if (needsRefresh && !dismissed.value && !suppressed.value) {
     showPrompt.value = true
   }
 }, { immediate: true })
@@ -56,19 +51,22 @@ watch([needRefresh, inCooldown], ([needsRefresh, cooling]) => {
 async function handleUpdate() {
   if (isUpdating.value) return
   isUpdating.value = true
+  showPrompt.value = false
   
-  // Mark that we're updating to prevent immediate re-trigger
-  sessionStorage.setItem(JUST_UPDATED_KEY, Date.now().toString())
+  // Mark that we're updating - suppress prompts for 1 hour
+  localStorage.setItem(UPDATED_AT_KEY, Date.now().toString())
+  
+  // Reset needRefresh to prevent re-showing
+  needRefresh.value = false
   
   try {
     await updateServiceWorker(true)
-    // Force reload if updateServiceWorker doesn't trigger it
+    // updateServiceWorker(true) should reload, but give it a moment
     setTimeout(() => {
       window.location.reload()
-    }, 500)
+    }, 1000)
   } catch (e) {
     console.error('Update failed:', e)
-    // Fallback: force reload
     window.location.reload()
   }
 }
@@ -76,6 +74,9 @@ async function handleUpdate() {
 function dismiss() {
   showPrompt.value = false
   dismissed.value = true
+  // Also suppress for 1 hour when dismissed
+  localStorage.setItem(UPDATED_AT_KEY, Date.now().toString())
+  needRefresh.value = false
 }
 </script>
 
