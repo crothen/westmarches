@@ -1,22 +1,31 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, watch, onMounted, nextTick, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Home, Settings, Star } from 'lucide-vue-next'
+import GameIcon from '../icons/GameIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
 const navRef = ref<HTMLElement | null>(null)
 
-const navItems = [
-  { to: '/', icon: '🏠', label: 'Home' },
-  { to: '/map', icon: '🗺️', label: 'Map' },
-  { to: '/sessions', icon: '📖', label: 'Sessions' },
-  { to: '/npcs', icon: '👤', label: 'NPCs' },
-  { to: '/characters', icon: '🧙', label: 'Characters' },
-  { to: '/locations', icon: '📍', label: 'Locations' },
-  { to: '/missions', icon: '⚔️', label: 'Missions' },
-  { to: '/saved', icon: '⭐', label: 'Saved' },
-  { to: '/my-notes', icon: '📝', label: 'Notes' },
-  { to: '/profile', icon: '⚙️', label: 'Settings' },
+interface NavItem {
+  to: string
+  label: string
+  icon: Component | string
+  isGameIcon?: boolean
+}
+
+const navItems: NavItem[] = [
+  { to: '/', label: 'Home', icon: Home },
+  { to: '/map', label: 'Map', icon: 'compass', isGameIcon: true },
+  { to: '/sessions', label: 'Sessions', icon: 'scroll', isGameIcon: true },
+  { to: '/npcs', label: 'NPCs', icon: 'npc', isGameIcon: true },
+  { to: '/characters', label: 'Characters', icon: 'warrior', isGameIcon: true },
+  { to: '/locations', label: 'Locations', icon: 'castle', isGameIcon: true },
+  { to: '/missions', label: 'Missions', icon: 'swords', isGameIcon: true },
+  { to: '/saved', label: 'Saved', icon: Star },
+  { to: '/my-notes', label: 'Notes', icon: 'quill', isGameIcon: true },
+  { to: '/profile', label: 'Settings', icon: Settings },
 ]
 
 function getActiveIndex(): number {
@@ -74,7 +83,10 @@ onMounted(() => {
         @click="navigate(index)"
         :class="['pwa-nav-item', { active: index === activeIndex }]"
       >
-        <span class="pwa-nav-icon">{{ item.icon }}</span>
+        <span class="pwa-nav-icon">
+          <GameIcon v-if="item.isGameIcon" :name="item.icon as string" :size="24" />
+          <component v-else :is="item.icon" :size="24" :stroke-width="2" />
+        </span>
         <span class="pwa-nav-label">{{ item.label }}</span>
       </button>
     </div>
@@ -144,8 +156,9 @@ onMounted(() => {
 }
 
 .pwa-nav-icon {
-  font-size: 24px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
