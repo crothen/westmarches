@@ -754,17 +754,47 @@ const ENTITY_PATTERNS = [
   { type: 'monster', pattern: /\/monsters\/([^\/\?]+)/, nameSelector: '.mon-stat-block__name-link, .page-title' },
   { type: 'feat', pattern: /\/feats\/([^\/\?]+)/, nameSelector: '.page-title, h1.content-title' },
   { type: 'race', pattern: /\/races\/([^\/\?]+)/, nameSelector: '.page-title, h1.content-title' },
+  { type: 'species', pattern: /\/species\/([^\/\?]+)/, nameSelector: '.page-title, h1.content-title' },
   { type: 'class', pattern: /\/classes\/([^\/\?]+)/, nameSelector: '.page-title, h1.content-title' },
   { type: 'subclass', pattern: /\/subclasses\/([^\/\?]+)/, nameSelector: '.page-title, h1.content-title' },
   { type: 'background', pattern: /\/backgrounds\/([^\/\?]+)/, nameSelector: '.page-title, h1.content-title' },
   { type: 'vehicle', pattern: /\/vehicles\/([^\/\?]+)/, nameSelector: '.page-title, h1.content-title' },
 ]
 
+// Detect entity type from a URL path (for list/search inline stars)
+function detectEntityFromUrl(url) {
+  try {
+    const path = new URL(url, window.location.origin).pathname
+    const patterns = [
+      { type: 'spell', pattern: /\/spells\/([^\/\?]+)/ },
+      { type: 'monster', pattern: /\/monsters\/([^\/\?]+)/ },
+      { type: 'magic-item', pattern: /\/magic-items\/([^\/\?]+)/ },
+      { type: 'item', pattern: /\/equipment\/([^\/\?]+)/ },
+      { type: 'feat', pattern: /\/feats\/([^\/\?]+)/ },
+      { type: 'race', pattern: /\/races\/([^\/\?]+)/ },
+      { type: 'species', pattern: /\/species\/([^\/\?]+)/ },
+      { type: 'class', pattern: /\/classes\/([^\/\?]+)/ },
+      { type: 'subclass', pattern: /\/subclasses\/([^\/\?]+)/ },
+      { type: 'background', pattern: /\/backgrounds\/([^\/\?]+)/ },
+      { type: 'vehicle', pattern: /\/vehicles\/([^\/\?]+)/ },
+    ]
+    for (const p of patterns) {
+      const match = path.match(p.pattern)
+      if (match) return { type: p.type, slug: match[1] }
+    }
+  } catch (e) {
+    console.warn('[WM] detectEntityFromUrl error:', e)
+  }
+  return null
+}
+
 function detectEntity() {
   const path = window.location.pathname
+  console.log('[WM] detectEntity path:', path)
   for (const entity of ENTITY_PATTERNS) {
     const match = path.match(entity.pattern)
     if (match) {
+      console.log('[WM] Matched:', entity.type, match[1])
       const nameEl = document.querySelector(entity.nameSelector)
       const name = nameEl?.textContent?.trim() || match[1].replace(/-/g, ' ')
       // Try to get image
@@ -779,20 +809,31 @@ function detectEntity() {
       }
     }
   }
+  console.log('[WM] No entity match')
   return null
 }
 
 let currentBookmarkId = null
 
 async function createStarButton() {
+  console.log('[WM] createStarButton called')
   // Don't create if already exists
-  if (document.getElementById('wm-star-btn')) return
+  if (document.getElementById('wm-star-btn')) {
+    console.log('[WM] Star button already exists')
+    return
+  }
   
   const entity = detectEntity()
-  if (!entity) return
+  if (!entity) {
+    console.log('[WM] No entity detected, skipping star button')
+    return
+  }
+  
+  console.log('[WM] Creating star button for:', entity.type, entity.name)
   
   // Check if already bookmarked
   const isStarred = await checkIfBookmarked(entity.url)
+  console.log('[WM] isStarred:', isStarred)
   
   const btn = document.createElement('button')
   btn.id = 'wm-star-btn'
@@ -931,6 +972,104 @@ function showStarModal(entity, starBtn) {
   modal.querySelector('#wm-star-note').focus()
 }
 
+// ============================================
+// Inline Star Buttons (List & Search Pages)
+// ============================================
+
+async function addInlineStarButtons() {
+  console.log('[WM] addInlineStarButtons called')
+  
+  // Selectors for different page types
+  const itemSelectors = [
+    // Spell/monster/item listing pages
+    '.listing .info .row.spell-name .name a.link',
+    '.listing .info .row.monster-name .name a.link',
+    '.listing .info .row.item-name .name a.link',
+    // General listing items
+    '.listing-body .info a.link',
+    // Search results
+    '.ddb-search-results-listing-item-header-primary-text a.link',
+  ]
+  
+  const links = document.querySelectorAll(itemSelectors.join(', '))
+  console.log('[WM] Found', links.length, 'entity links')
+  
+  for (const link of links) {
+    // Skip if already processed
+    if (link.dataset.wmStarAdded) continue
+    link.dataset.wmStarAdded = 'true'
+    
+    const href = link.getAttribute('href')
+    if (!href) continue
+    
+    const entityInfo = detectEntityFromUrl(href)
+    if (!entityInfo) continue
+    
+    const fullUrl = new URL(href, window.location.origin).href
+    const name = link.textContent.trim()
+    
+    // Create inline star button
+    const starBtn = document.createElement('button')
+    starBtn.className = 'wm-inline-star'
+    starBtn.innerHTML = '☆'
+    starBtn.title = 'Save to West Marches'
+    starBtn.dataset.url = fullUrl
+    starBtn.dataset.type = entityInfo.type
+    starBtn.dataset.slug = entityInfo.slug
+    starBtn.dataset.name = name
+    
+    // Check if bookmarked (async, don't await to avoid blocking)
+    checkIfBookmarked(fullUrl).then(isStarred => {
+      if (isStarred) {
+        starBtn.classList.add('wm-starred')
+        starBtn.innerHTML = '⭐'
+        starBtn.title = 'Remove from West Marches'
+      }
+    })
+    
+    // Click handler
+    starBtn.addEventListener('click', async (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      
+      const wasStarred = starBtn.classList.contains('wm-starred')
+      const entity = {
+        type: starBtn.dataset.type,
+        slug: starBtn.dataset.slug,
+        name: starBtn.dataset.name,
+        url: starBtn.dataset.url,
+        image: null
+      }
+      
+      if (wasStarred) {
+        const success = await removeBookmark(entity.url)
+        if (success) {
+          starBtn.classList.remove('wm-starred')
+          starBtn.innerHTML = '☆'
+          starBtn.title = 'Save to West Marches'
+          showToast('Removed from saved')
+        }
+      } else {
+        // For inline stars, save directly without modal
+        starBtn.innerHTML = '...'
+        const success = await saveBookmark(entity, null)
+        if (success) {
+          starBtn.classList.add('wm-starred')
+          starBtn.innerHTML = '⭐'
+          starBtn.title = 'Remove from West Marches'
+          showToast('Saved to West Marches!')
+        } else {
+          starBtn.innerHTML = '☆'
+          showToast('Failed to save - are you logged in?')
+        }
+      }
+    })
+    
+    // Insert star button after the link
+    link.parentNode.insertBefore(starBtn, link.nextSibling)
+  }
+}
+
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init)
@@ -939,17 +1078,28 @@ if (document.readyState === 'loading') {
 }
 
 // Also create star button after init (and on navigation)
-setTimeout(createStarButton, 1500)
+setTimeout(() => {
+  createStarButton()
+  addInlineStarButtons()
+}, 1500)
 
-// Watch for SPA navigation
+// Watch for SPA navigation and dynamic content
 let lastUrl = location.href
 new MutationObserver(() => {
+  // URL change - full reset
   if (location.href !== lastUrl) {
     lastUrl = location.href
     // Remove old star button
     const oldBtn = document.getElementById('wm-star-btn')
     if (oldBtn) oldBtn.remove()
-    // Create new one after page settles
-    setTimeout(createStarButton, 1500)
+    // Create new ones after page settles
+    setTimeout(() => {
+      createStarButton()
+      addInlineStarButtons()
+    }, 1500)
+  } else {
+    // Same URL but DOM changed - check for new list items (debounced)
+    clearTimeout(window.wmInlineStarTimeout)
+    window.wmInlineStarTimeout = setTimeout(addInlineStarButtons, 500)
   }
 }).observe(document.body, { subtree: true, childList: true })

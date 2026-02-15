@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "userBookmarks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "url", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "sessionEntries",
       "queryScope": "COLLECTION",
       "fields": [

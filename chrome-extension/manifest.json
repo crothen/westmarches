@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "West Marches Companion",
-  "version": "1.0.2",
+  "version": "1.0.5",
   "description": "Quick access to West Marches tools while browsing D&D Beyond",
   "permissions": [
     "storage",

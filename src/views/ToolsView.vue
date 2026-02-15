@@ -57,41 +57,49 @@ function copyToClipboard() {
           <ol class="text-sm text-zinc-400 space-y-3">
             <li class="flex items-start gap-3">
               <span class="w-5 h-5 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">1</span>
-              <span><strong class="text-zinc-200">Download</strong> the extension zip file using the button below.</span>
+              <span>Click the <strong class="text-zinc-200">Install from Chrome Web Store</strong> button below.</span>
             </li>
             <li class="flex items-start gap-3">
               <span class="w-5 h-5 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">2</span>
-              <span><strong class="text-zinc-200">Extract</strong> the zip to a folder on your computer.</span>
+              <span>Click <strong class="text-zinc-200">"Add to Chrome"</strong> on the Chrome Web Store page.</span>
             </li>
             <li class="flex items-start gap-3">
               <span class="w-5 h-5 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">3</span>
-              <span>Open Chrome and go to <code class="bg-zinc-800 px-1.5 py-0.5 rounded text-red-400">chrome://extensions</code></span>
-            </li>
-            <li class="flex items-start gap-3">
-              <span class="w-5 h-5 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">4</span>
-              <span><strong class="text-zinc-200">Enable Developer mode</strong> (toggle in top right corner).</span>
-            </li>
-            <li class="flex items-start gap-3">
-              <span class="w-5 h-5 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">5</span>
-              <span>Click <strong class="text-zinc-200">"Load unpacked"</strong> and select the extracted folder.</span>
+              <span>Pin the extension to your toolbar for easy access.</span>
             </li>
           </ol>
         </div>
 
         <a
-          href="/downloads/westmarches-companion.zip"
-          download
+          href="https://chromewebstore.google.com/detail/west-marches-companion/pjfgbggijdiijaabflnpdgmekainmaok"
+          target="_blank"
           class="w-full py-3 px-4 rounded-lg font-medium bg-red-600 hover:bg-red-500 text-white transition-all flex items-center justify-center gap-2"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm0 4.8a7.2 7.2 0 110 14.4 7.2 7.2 0 010-14.4zm0 2.4a4.8 4.8 0 100 9.6 4.8 4.8 0 000-9.6z"/>
           </svg>
-          Download Extension (.zip)
+          Install from Chrome Web Store
         </a>
 
         <p class="text-xs text-zinc-500 mt-3 text-center">
           Works on Chrome, Edge, Brave, and other Chromium browsers.
         </p>
+
+        <details class="mt-4">
+          <summary class="text-sm text-zinc-400 cursor-pointer hover:text-zinc-300">Manual install (for development)</summary>
+          <div class="mt-3 p-3 bg-zinc-950 rounded-lg">
+            <a
+              href="/downloads/westmarches-companion.zip"
+              download
+              class="w-full py-2 px-3 rounded-lg font-medium bg-zinc-700 hover:bg-zinc-600 text-white transition-all flex items-center justify-center gap-2 text-sm"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download .zip
+            </a>
+          </div>
+        </details>
       </div>
 
       <!-- D&D Beyond Nav Bookmarklet -->

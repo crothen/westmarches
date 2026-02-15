@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { useSearch } from '../../composables/useSearch'
 import { Menu, Search, User, X, ChevronRight, MapPin, Building2, Calendar, CalendarCheck, Star, Backpack, Sparkles, Wrench } from 'lucide-vue-next'
 import GameIcon from '../icons/GameIcon.vue'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const search = useSearch()
 
 const menuOpen = ref(false)
 const searchOpen = ref(false)
-const searchQuery = ref('')
 
 const menuSections = [
   {
@@ -65,13 +66,31 @@ function goToProfile() {
   router.push('/profile')
 }
 
-function handleSearch() {
-  if (searchQuery.value.trim()) {
-    // TODO: implement search
-    searchOpen.value = false
-    searchQuery.value = ''
-  }
+function openSearch() {
+  searchOpen.value = true
+  search.init()
 }
+
+function closeSearch() {
+  searchOpen.value = false
+  search.searchQuery.value = ''
+}
+
+function navigateToResult(route: string) {
+  closeSearch()
+  router.push(route)
+}
+
+// Highlight matching text in a string
+function highlightMatch(text: string, query: string): string {
+  if (!query || query.length < 2) return text
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  return text.replace(regex, '<mark class="search-highlight">$1</mark>')
+}
+
+onUnmounted(() => {
+  search.destroy()
+})
 
 // Get page title from route
 function getPageTitle(): string {
@@ -100,7 +119,7 @@ function getPageTitle(): string {
     <h1 class="pwa-header-title">{{ getPageTitle() }}</h1>
     
     <div class="pwa-header-actions">
-      <button @click="searchOpen = true" class="pwa-header-btn">
+      <button @click="openSearch" class="pwa-header-btn">
         <Search :size="22" />
       </button>
       <button @click="goToProfile" class="pwa-header-avatar">
@@ -161,20 +180,84 @@ function getPageTitle(): string {
     <transition name="fade">
       <div v-if="searchOpen" class="pwa-search-overlay">
         <div class="pwa-search-header">
-          <button @click="searchOpen = false" class="pwa-search-back">
+          <button @click="closeSearch" class="pwa-search-back">
             <X :size="24" />
           </button>
           <input 
-            v-model="searchQuery"
+            v-model="search.searchQuery.value"
             type="text" 
             placeholder="Search..." 
             class="pwa-search-input"
             autofocus
-            @keyup.enter="handleSearch"
           />
         </div>
         <div class="pwa-search-content">
-          <p class="pwa-search-hint">Search for NPCs, locations, sessions...</p>
+          <!-- Loading -->
+          <div v-if="search.isLoading.value" class="pwa-search-loading">
+            <div class="pwa-search-spinner"></div>
+            <span>Loading...</span>
+          </div>
+          
+          <!-- Empty state -->
+          <p v-else-if="search.searchQuery.value.length < 2" class="pwa-search-hint">
+            Search for NPCs, locations, sessions, and more...
+          </p>
+          
+          <!-- No results -->
+          <p v-else-if="search.results.value.length === 0" class="pwa-search-hint">
+            No results for "{{ search.searchQuery.value }}"
+          </p>
+          
+          <!-- Results -->
+          <div v-else class="pwa-search-results">
+            <template v-for="(items, type) in search.groupedResults.value" :key="type">
+              <div class="pwa-search-group">
+                <div class="pwa-search-group-title">
+                  {{ search.typeConfig[type]?.icon }} {{ search.typeConfig[type]?.label }}s
+                  <span class="pwa-search-group-count">{{ items.length }}</span>
+                </div>
+                <button 
+                  v-for="item in items.slice(0, 5)" 
+                  :key="item.id"
+                  @click="navigateToResult(item.route)"
+                  class="pwa-search-result"
+                >
+                  <img 
+                    v-if="item.imageUrl" 
+                    :src="item.imageUrl" 
+                    class="pwa-search-result-img" 
+                  />
+                  <div v-else class="pwa-search-result-icon">
+                    {{ search.typeConfig[item.type]?.icon }}
+                  </div>
+                  <div class="pwa-search-result-content">
+                    <div 
+                      class="pwa-search-result-title" 
+                      v-html="highlightMatch(item.title, search.searchQuery.value)"
+                    ></div>
+                    <div v-if="item.subtitle" class="pwa-search-result-subtitle">
+                      {{ item.subtitle }}
+                    </div>
+                    <div class="pwa-search-result-matches">
+                      <span 
+                        v-for="(match, idx) in item.matches.slice(0, 2)" 
+                        :key="idx"
+                        class="pwa-search-match-badge"
+                        :class="{ 'is-tag': match.isTag, 'is-title': match.isTitle }"
+                      >
+                        <template v-if="match.isTag">🏷️ {{ match.value }}</template>
+                        <template v-else-if="!match.isTitle">{{ match.field }}: <span v-html="highlightMatch(match.value.slice(0, 50), search.searchQuery.value)"></span>{{ match.value.length > 50 ? '...' : '' }}</template>
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight :size="18" class="pwa-search-result-arrow" />
+                </button>
+                <div v-if="items.length > 5" class="pwa-search-more">
+                  +{{ items.length - 5 }} more
+                </div>
+              </div>
+            </template>
+          </div>
         </div>
       </div>
     </transition>
@@ -431,12 +514,174 @@ function getPageTitle(): string {
 }
 
 .pwa-search-content {
-  padding: 24px 20px;
+  padding: 16px;
+  overflow-y: auto;
+  max-height: calc(100vh - 60px - env(safe-area-inset-top, 0px));
 }
 
 .pwa-search-hint {
   color: rgba(255, 255, 255, 0.4);
   font-size: 14px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.pwa-search-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+}
+
+.pwa-search-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #ef233c;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.pwa-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pwa-search-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pwa-search-group-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.pwa-search-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+.pwa-search-result:active {
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(0.98);
+}
+
+.pwa-search-result-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.pwa-search-result-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.pwa-search-result-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.pwa-search-result-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pwa-search-result-subtitle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+.pwa-search-result-matches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.pwa-search-match-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pwa-search-match-badge.is-tag {
+  background: rgba(239, 35, 60, 0.15);
+  color: #ef233c;
+}
+
+.pwa-search-match-badge.is-title {
+  display: none; /* Title matches are obvious from the title */
+}
+
+.pwa-search-result-arrow {
+  color: rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+}
+
+.pwa-search-more {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  padding: 4px 0;
+}
+
+/* Search highlight */
+:deep(.search-highlight) {
+  background: rgba(239, 35, 60, 0.3);
+  color: #ef233c;
+  padding: 0 2px;
+  border-radius: 2px;
 }
 
 /* Animations */

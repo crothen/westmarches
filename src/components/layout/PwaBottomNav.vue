@@ -9,6 +9,7 @@ const router = useRouter()
 const navRef = ref<HTMLElement | null>(null)
 const centerIndex = ref(0)
 const isTouching = ref(false)
+const navigatingFromTouch = ref(false)
 
 interface NavItem {
   to: string
@@ -46,8 +47,38 @@ function getActiveIndex(): number {
 const activeIndex = ref(getActiveIndex())
 
 watch(() => route.path, () => {
+  const oldIndex = activeIndex.value
   activeIndex.value = getActiveIndex()
-  scrollToIndex(activeIndex.value + baseOffset, true)
+  const newIndex = activeIndex.value
+  
+  // Skip scroll animation if navigation came from touch (touch handler handles it)
+  if (navigatingFromTouch.value) {
+    navigatingFromTouch.value = false
+    return
+  }
+  
+  // Calculate shortest path considering the loop
+  const diff = newIndex - oldIndex
+  const itemCount = navItems.length
+  
+  // Determine target copy to minimize scroll distance
+  let targetIndex = newIndex + baseOffset
+  
+  // If wrapping from end to start (e.g., 9 → 0), scroll forward to next copy
+  if (diff < -(itemCount / 2)) {
+    targetIndex = newIndex + baseOffset + itemCount
+  }
+  // If wrapping from start to end (e.g., 0 → 9), scroll backward to previous copy
+  else if (diff > (itemCount / 2)) {
+    targetIndex = newIndex + baseOffset - itemCount
+  }
+  
+  scrollToIndex(targetIndex, true)
+  
+  // After animation, silently reset to center copy
+  setTimeout(() => {
+    scrollToIndex(newIndex + baseOffset, false)
+  }, 350)
 })
 
 function scrollToIndex(index: number, smooth = true) {
@@ -105,23 +136,26 @@ function handleTouchEnd() {
   
   updateCenterItem()
   
-  // Snap to center item
-  scrollToIndex(centerIndex.value, true)
-  
-  // Navigate to the centered item
-  const realIndex = centerIndex.value % navItems.length
+  const currentCenter = centerIndex.value
+  const realIndex = currentCenter % navItems.length
   const item = navItems[realIndex]
+  
+  // Snap to the current center item (smooth scroll)
+  scrollToIndex(currentCenter, true)
+  
+  // Navigate if needed
   if (item && realIndex !== activeIndex.value) {
+    navigatingFromTouch.value = true
     activeIndex.value = realIndex
     router.push(item.to)
   }
   
-  // Handle loop wrap-around after navigation
+  // After snap animation completes, silently reset to center copy if we're in an edge copy
   setTimeout(() => {
-    if (centerIndex.value < navItems.length) {
+    const needsReset = currentCenter < navItems.length || currentCenter >= navItems.length * 2
+    if (needsReset) {
       scrollToIndex(realIndex + baseOffset, false)
-    } else if (centerIndex.value >= navItems.length * 2) {
-      scrollToIndex(realIndex + baseOffset, false)
+      centerIndex.value = realIndex + baseOffset
     }
   }, 350)
 }
@@ -212,8 +246,8 @@ onUnmounted(() => {
 .pwa-nav-scroll {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 calc(50vw - 40px);
+  gap: 4px;
+  padding: 0 calc(50vw - 28px);
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -231,9 +265,9 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 72px;
-  height: 72px;
-  border-radius: 16px;
+  width: 56px;
+  height: 64px;
+  border-radius: 12px;
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.4);
@@ -252,31 +286,13 @@ onUnmounted(() => {
   transform: translateY(0);
 }
 
-/* Active item highlight - top and bottom border with glow */
+/* Active item highlight with glow */
 .pwa-nav-item.active {
   color: #ef233c;
 }
 
-.pwa-nav-item.active::before,
-.pwa-nav-item.active::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 32px;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, #ef233c, transparent);
-  border-radius: 2px;
-}
-
-.pwa-nav-item.active::before {
-  top: 4px;
-  box-shadow: 0 -4px 12px rgba(239, 35, 60, 0.5);
-}
-
-.pwa-nav-item.active::after {
-  bottom: 4px;
-  box-shadow: 0 4px 12px rgba(239, 35, 60, 0.5);
+.pwa-nav-item.active .pwa-nav-icon {
+  filter: drop-shadow(0 0 8px rgba(239, 35, 60, 0.6)) drop-shadow(0 0 16px rgba(239, 35, 60, 0.3));
 }
 
 .pwa-nav-icon {
@@ -296,25 +312,4 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* Fade edges */
-.pwa-bottom-nav::before,
-.pwa-bottom-nav::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 50px;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.pwa-bottom-nav::before {
-  left: 0;
-  background: linear-gradient(to right, rgba(0, 0, 0, 1), transparent);
-}
-
-.pwa-bottom-nav::after {
-  right: 0;
-  background: linear-gradient(to left, rgba(0, 0, 0, 1), transparent);
-}
 </style>

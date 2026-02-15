@@ -13,6 +13,53 @@ const FIREBASE_CONFIG = {
 // Google OAuth Client ID (for Chrome extension)
 const OAUTH_CLIENT_ID = '1084465200262-r01sd51huantpkto1tvv9j7uir9fvvmg.apps.googleusercontent.com'
 
+// Refresh Firebase token if expired
+async function getValidToken() {
+  const { token, refreshToken } = await chrome.storage.local.get(['token', 'refreshToken'])
+  if (!token || !refreshToken) return null
+  
+  // Try to use current token first, refresh if needed
+  try {
+    // Check if token is expired by making a simple request
+    const testResponse = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/test`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    )
+    
+    // 401 or 403 means token expired
+    if (testResponse.status === 401 || testResponse.status === 403) {
+      console.log('Token expired, refreshing...')
+      const refreshResponse = await fetch(
+        `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_CONFIG.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `grant_type=refresh_token&refresh_token=${refreshToken}`
+        }
+      )
+      
+      const refreshData = await refreshResponse.json()
+      if (refreshData.error) {
+        console.error('Token refresh failed:', refreshData.error)
+        return null
+      }
+      
+      // Update stored token
+      await chrome.storage.local.set({ 
+        token: refreshData.id_token,
+        refreshToken: refreshData.refresh_token 
+      })
+      
+      return refreshData.id_token
+    }
+    
+    return token
+  } catch (err) {
+    console.error('Token validation error:', err)
+    return token // Return existing token and let the request fail if invalid
+  }
+}
+
 // Message handler
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'bookmark') {
@@ -285,9 +332,10 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 // Handle bookmark (star) requests
 async function handleBookmarkRequest(request) {
-  const { token, user } = await chrome.storage.local.get(['token', 'user'])
+  const { user } = await chrome.storage.local.get(['user'])
+  const token = await getValidToken()
   if (!token || !user) {
-    return { success: false, error: 'Not authenticated' }
+    return { success: false, error: 'Not authenticated - please log in via the extension popup' }
   }
   
   const baseUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents`

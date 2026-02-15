@@ -670,3 +670,46 @@
     transform: rotate(360deg);
   }
 }
+
+/* ============================================
+   Inline Star Buttons (List & Search)
+   ============================================ */
+
+.wm-inline-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 6px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  vertical-align: middle;
+  opacity: 0.5;
+  transition: all 0.15s ease;
+}
+
+.wm-inline-star:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.wm-inline-star.wm-starred {
+  opacity: 1;
+}
+
+/* Adjust for search results page */
+.ddb-search-results-listing-item-header-primary-text .wm-inline-star {
+  font-size: 16px;
+}
+
+/* Adjust for spell/monster listings */
+.listing .info .wm-inline-star {
+  position: relative;
+  top: -1px;
+}
