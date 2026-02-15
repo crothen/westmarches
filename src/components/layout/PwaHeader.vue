@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import { Menu, Search, User, X, ChevronRight } from 'lucide-vue-next'
+import { Menu, Search, User, X, ChevronRight, MapPin, Building2, Calendar, CalendarCheck, Star, Backpack, Sparkles, Wrench } from 'lucide-vue-next'
 import GameIcon from '../icons/GameIcon.vue'
 
 const router = useRouter()
@@ -19,7 +19,7 @@ const menuSections = [
     items: [
       { to: '/map', label: 'Map', icon: 'compass', isGameIcon: true },
       { to: '/locations', label: 'Locations', icon: 'castle', isGameIcon: true },
-      { to: '/features', label: 'Points of Interest', icon: 'map', isGameIcon: true },
+      { to: '/features', label: 'Points of Interest', icon: MapPin },
     ]
   },
   {
@@ -27,7 +27,7 @@ const menuSections = [
     items: [
       { to: '/characters', label: 'Characters', icon: 'warrior', isGameIcon: true },
       { to: '/npcs', label: 'NPCs', icon: 'npc', isGameIcon: true },
-      { to: '/organizations', label: 'Organizations', icon: 'castle', isGameIcon: true },
+      { to: '/organizations', label: 'Organizations', icon: Building2 },
     ]
   },
   {
@@ -35,23 +35,23 @@ const menuSections = [
     items: [
       { to: '/sessions', label: 'Sessions', icon: 'scroll', isGameIcon: true },
       { to: '/missions', label: 'Missions', icon: 'swords', isGameIcon: true },
-      { to: '/calendar', label: 'Calendar', icon: 'scroll', isGameIcon: true },
-      { to: '/schedule', label: 'Schedule', icon: 'scroll', isGameIcon: true },
+      { to: '/calendar', label: 'Calendar', icon: Calendar },
+      { to: '/schedule', label: 'Schedule', icon: CalendarCheck },
     ]
   },
   {
     title: 'Your Stuff',
     items: [
-      { to: '/saved', label: 'Saved', icon: 'compass', isGameIcon: true },
+      { to: '/saved', label: 'Saved', icon: Star },
       { to: '/my-notes', label: 'Notes', icon: 'quill', isGameIcon: true },
-      { to: '/inventory', label: 'Inventory', icon: 'map', isGameIcon: true },
+      { to: '/inventory', label: 'Inventory', icon: Backpack },
     ]
   },
   {
     title: 'Tools',
     items: [
-      { to: '/generate', label: 'Generate', icon: 'compass', isGameIcon: true },
-      { to: '/tools', label: 'Tools', icon: 'swords', isGameIcon: true },
+      { to: '/generate', label: 'Generate', icon: Sparkles },
+      { to: '/tools', label: 'Tools', icon: Wrench },
     ]
   },
 ]
@@ -132,6 +132,7 @@ function getPageTitle(): string {
               >
                 <span class="pwa-menu-icon">
                   <GameIcon v-if="item.isGameIcon" :name="item.icon" :size="22" />
+                  <component v-else :is="item.icon" :size="22" :stroke-width="1.5" />
                 </span>
                 <span class="pwa-menu-label">{{ item.label }}</span>
                 <ChevronRight :size="18" class="pwa-menu-arrow" />

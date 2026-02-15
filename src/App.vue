@@ -19,10 +19,7 @@ const { isPwa } = usePwa()
 // Check if current route wants no layout (fullscreen views)
 const noLayout = computed(() => route.meta.noLayout === true)
 
-// PWA: some routes need special handling (map handles its own layout)
-const isPwaMapRoute = computed(() => {
-  return isPwa.value && route.path === '/map'
-})
+// No special PWA map handling - use normal layout
 
 // Global hover handler for v-html rendered mentions (outside MentionText)
 function onGlobalMouseOver(e: MouseEvent) {
@@ -64,7 +61,7 @@ onUnmounted(() => {
   <PwaSplash v-if="isPwa" />
   
   <!-- PWA Pull to Refresh -->
-  <PwaPullRefresh v-if="isPwa && !noLayout && !isPwaMapRoute" />
+  <PwaPullRefresh v-if="isPwa && !noLayout" />
   
   <div v-if="auth.loading" class="min-h-screen bg-black flex items-center justify-center">
     <div class="text-center">
@@ -75,15 +72,6 @@ onUnmounted(() => {
   
   <!-- No layout for fullscreen views -->
   <template v-else-if="noLayout">
-    <RouterView v-slot="{ Component }">
-      <transition :name="isPwa ? 'pwa-page' : ''" mode="out-in">
-        <component :is="Component" />
-      </transition>
-    </RouterView>
-  </template>
-  
-  <!-- PWA map - no app layout, map handles itself -->
-  <template v-else-if="isPwaMapRoute">
     <RouterView v-slot="{ Component }">
       <transition :name="isPwa ? 'pwa-page' : ''" mode="out-in">
         <component :is="Component" />
