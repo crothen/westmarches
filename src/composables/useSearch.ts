@@ -85,89 +85,143 @@ export function useSearch() {
     if (isInitialized.value) return
     isInitialized.value = true
     
-    // Characters
-    unsubs.push(onSnapshot(query(collection(db, 'characters'), orderBy('name')), snap => {
-      characters.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Character))
+    // Helper to handle errors - still count as loaded so search doesn't hang
+    const onError = (name: string) => (err: Error) => {
+      console.warn(`Search: failed to load ${name}:`, err.message)
       checkLoading()
-    }))
+    }
+    
+    // Characters
+    unsubs.push(onSnapshot(
+      query(collection(db, 'characters'), orderBy('name')), 
+      snap => {
+        characters.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Character))
+        checkLoading()
+      },
+      onError('characters')
+    ))
     
     // NPCs
-    unsubs.push(onSnapshot(query(collection(db, 'npcs'), orderBy('name')), snap => {
-      npcs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'npcs'), orderBy('name')), 
+      snap => {
+        npcs.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Npc))
+        checkLoading()
+      },
+      onError('npcs')
+    ))
     
     // Locations
-    unsubs.push(onSnapshot(query(collection(db, 'locations'), orderBy('name')), snap => {
-      locations.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'locations'), orderBy('name')), 
+      snap => {
+        locations.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as CampaignLocation))
+        checkLoading()
+      },
+      onError('locations')
+    ))
     
     // Features
-    unsubs.push(onSnapshot(query(collection(db, 'features'), orderBy('name')), snap => {
-      features.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'features'), orderBy('name')), 
+      snap => {
+        features.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as LocationFeature))
+        checkLoading()
+      },
+      onError('features')
+    ))
     
     // Organizations
-    unsubs.push(onSnapshot(query(collection(db, 'organizations'), orderBy('name')), snap => {
-      organizations.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Organization))
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'organizations'), orderBy('name')), 
+      snap => {
+        organizations.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Organization))
+        checkLoading()
+      },
+      onError('organizations')
+    ))
     
     // Sessions
-    unsubs.push(onSnapshot(query(collection(db, 'sessions'), orderBy('sessionNumber', 'desc')), snap => {
-      sessions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as SessionLog))
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'sessions'), orderBy('sessionNumber', 'desc')), 
+      snap => {
+        sessions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as SessionLog))
+        checkLoading()
+      },
+      onError('sessions')
+    ))
     
     // Missions
-    unsubs.push(onSnapshot(query(collection(db, 'missions')), snap => {
-      missions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Mission))
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'missions')), 
+      snap => {
+        missions.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as Mission))
+        checkLoading()
+      },
+      onError('missions')
+    ))
     
     // Markers (exclude hidden/private unless DM/admin)
-    unsubs.push(onSnapshot(query(collection(db, 'markers')), snap => {
-      markers.value = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as HexMarker))
-        .filter(m => {
-          if (m.hidden && !auth.isDm && !auth.isAdmin) return false
-          if (m.isPrivate && m.createdBy !== auth.firebaseUser?.uid && !auth.isDm && !auth.isAdmin) return false
-          return true
-        })
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'markers')), 
+      snap => {
+        markers.value = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as HexMarker))
+          .filter(m => {
+            if (m.hidden && !auth.isDm && !auth.isAdmin) return false
+            if (m.isPrivate && m.createdBy !== auth.firebaseUser?.uid && !auth.isDm && !auth.isAdmin) return false
+            return true
+          })
+        checkLoading()
+      },
+      onError('markers')
+    ))
     
     // NPC Notes (public only, or own notes)
-    unsubs.push(onSnapshot(query(collection(db, 'npcNotes')), snap => {
-      npcNotes.value = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as NpcNote))
-        .filter(n => !n.isPrivate || n.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin)
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'npcNotes')), 
+      snap => {
+        npcNotes.value = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as NpcNote))
+          .filter(n => !n.isPrivate || n.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin)
+        checkLoading()
+      },
+      onError('npcNotes')
+    ))
     
     // Session Notes (public only, or own notes)
-    unsubs.push(onSnapshot(query(collection(db, 'sessionNotes')), snap => {
-      sessionNotes.value = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as SessionNote))
-        .filter(n => !n.isPrivate || n.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin)
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'sessionNotes')), 
+      snap => {
+        sessionNotes.value = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as SessionNote))
+          .filter(n => !n.isPrivate || n.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin)
+        checkLoading()
+      },
+      onError('sessionNotes')
+    ))
     
     // Hex Notes (public only, or own notes)
-    unsubs.push(onSnapshot(query(collection(db, 'hexNotes')), snap => {
-      hexNotes.value = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as HexNote))
-        .filter(n => !n.isPrivate || n.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin)
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'hexNotes')), 
+      snap => {
+        hexNotes.value = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as HexNote))
+          .filter(n => !n.isPrivate || n.userId === auth.firebaseUser?.uid || auth.isDm || auth.isAdmin)
+        checkLoading()
+      },
+      onError('hexNotes')
+    ))
     
     // Inventory
-    unsubs.push(onSnapshot(query(collection(db, 'partyInventory')), snap => {
-      inventory.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as PartyInventoryItem))
-      checkLoading()
-    }))
+    unsubs.push(onSnapshot(
+      query(collection(db, 'partyInventory')), 
+      snap => {
+        inventory.value = snap.docs.map(d => ({ id: d.id, ...d.data() } as PartyInventoryItem))
+        checkLoading()
+      },
+      onError('partyInventory')
+    ))
   }
   
   let loadedCount = 0
