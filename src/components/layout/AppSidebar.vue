@@ -1,6 +1,13 @@
 <script setup lang="ts">
+import { type Component } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
+import { 
+  Home, MapPin, Landmark, Building2, Calendar, CalendarDays, 
+  Backpack, Star, Sparkles, Wrench, Settings, UserCog, 
+  Map as MapIcon, Dice5
+} from 'lucide-vue-next'
+import GameIcon from '../icons/GameIcon.vue'
 
 defineProps<{ open: boolean }>()
 defineEmits<{ close: [] }>()
@@ -15,7 +22,8 @@ async function handleLogout() {
 interface NavItem {
   to: string
   label: string
-  icon: string
+  icon: Component | string
+  isGameIcon?: boolean
   show: 'all' | 'player' | 'dm' | 'admin'
   sub?: boolean
 }
@@ -29,53 +37,53 @@ const sections: NavSection[] = [
   {
     title: '',
     items: [
-      { to: '/', label: 'Home', icon: '🏠', show: 'all' },
+      { to: '/', label: 'Home', icon: Home, show: 'all' },
     ]
   },
   {
     title: 'World',
     items: [
-      { to: '/map', label: 'Map', icon: '🗺️', show: 'all' },
-      { to: '/locations', label: 'Locations', icon: '📍', show: 'all' },
-      { to: '/features', label: 'Points of Interest', icon: '📌', show: 'all' },
+      { to: '/map', label: 'Map', icon: 'compass', isGameIcon: true, show: 'all' },
+      { to: '/locations', label: 'Locations', icon: 'castle', isGameIcon: true, show: 'all' },
+      { to: '/features', label: 'Points of Interest', icon: MapPin, show: 'all' },
     ]
   },
   {
     title: 'People',
     items: [
-      { to: '/characters', label: 'Characters', icon: '🧙', show: 'all' },
-      { to: '/npcs', label: 'NPCs', icon: '👤', show: 'all' },
+      { to: '/characters', label: 'Characters', icon: 'warrior', isGameIcon: true, show: 'all' },
+      { to: '/npcs', label: 'NPCs', icon: 'npc', isGameIcon: true, show: 'all' },
     ]
   },
   {
     title: 'Factions & Missions',
     items: [
-      { to: '/organizations', label: 'Organizations', icon: '🏛️', show: 'all' },
-      { to: '/missions', label: 'Missions', icon: '⚔️', show: 'all' },
+      { to: '/organizations', label: 'Organizations', icon: Building2, show: 'all' },
+      { to: '/missions', label: 'Missions', icon: 'swords', isGameIcon: true, show: 'all' },
     ]
   },
   {
     title: 'Journal',
     items: [
-      { to: '/sessions', label: 'Sessions', icon: '📖', show: 'all' },
-      { to: '/calendar', label: 'Calendar', icon: '🗓️', show: 'all' },
-      { to: '/schedule', label: 'Schedule', icon: '📅', show: 'player' },
-      { to: '/inventory', label: 'Inventory', icon: '🎒', show: 'player' },
-      { to: '/my-notes', label: 'My Notes', icon: '📝', show: 'player' },
-      { to: '/saved', label: 'Saved', icon: '⭐', show: 'player' },
+      { to: '/sessions', label: 'Sessions', icon: 'scroll', isGameIcon: true, show: 'all' },
+      { to: '/calendar', label: 'Calendar', icon: Calendar, show: 'all' },
+      { to: '/schedule', label: 'Schedule', icon: CalendarDays, show: 'player' },
+      { to: '/inventory', label: 'Inventory', icon: Backpack, show: 'player' },
+      { to: '/my-notes', label: 'My Notes', icon: 'quill', isGameIcon: true, show: 'player' },
+      { to: '/saved', label: 'Saved', icon: Star, show: 'player' },
     ]
   },
   {
     title: 'Management',
     items: [
-      { to: '/generate', label: 'Generate', icon: '✨', show: 'player' },
-      { to: '/tools', label: 'Tools', icon: '🔧', show: 'all' },
-      { to: '/admin', label: 'Admin', icon: '⚙️', show: 'admin' },
-      { to: '/admin/campaign', label: 'Campaign', icon: '🎲', show: 'dm', sub: true },
-      { to: '/admin/users', label: 'Users', icon: '👥', show: 'admin', sub: true },
-      { to: '/admin/markers', label: 'Markers', icon: '📌', show: 'admin', sub: true },
-      { to: '/admin/tiles', label: 'Tiles', icon: '🗺️', show: 'admin', sub: true },
-      { to: '/admin/session-locations', label: 'Session Locations', icon: '📍', show: 'admin', sub: true },
+      { to: '/generate', label: 'Generate', icon: Sparkles, show: 'player' },
+      { to: '/tools', label: 'Tools', icon: Wrench, show: 'all' },
+      { to: '/admin', label: 'Admin', icon: Settings, show: 'admin' },
+      { to: '/admin/campaign', label: 'Campaign', icon: Dice5, show: 'dm', sub: true },
+      { to: '/admin/users', label: 'Users', icon: UserCog, show: 'admin', sub: true },
+      { to: '/admin/markers', label: 'Markers', icon: MapPin, show: 'admin', sub: true },
+      { to: '/admin/tiles', label: 'Tiles', icon: MapIcon, show: 'admin', sub: true },
+      { to: '/admin/session-locations', label: 'Session Locations', icon: Landmark, show: 'admin', sub: true },
     ]
   },
 ]
@@ -123,7 +131,10 @@ function hasVisibleItems(section: NavSection): boolean {
             active-class="!text-[#ef233c] bg-[#ef233c]/[0.06] hover:!bg-[#ef233c]/[0.1]"
             @click="$emit('close')"
           >
-            <span :class="['text-center', item.sub ? 'text-sm w-4' : 'text-base w-5']">{{ item.icon }}</span>
+            <span :class="['flex items-center justify-center', item.sub ? 'w-4' : 'w-5']">
+              <GameIcon v-if="item.isGameIcon" :name="item.icon as string" :size="item.sub ? 16 : 18" />
+              <component v-else :is="item.icon" :size="item.sub ? 16 : 18" :stroke-width="2" />
+            </span>
             <span class="font-medium">{{ item.label }}</span>
           </RouterLink>
         </div>
