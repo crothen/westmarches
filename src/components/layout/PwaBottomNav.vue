@@ -108,10 +108,15 @@ function handleScrollEnd() {
   // Snap to center item
   scrollToIndex(centerIndex.value, true)
   
-  // Handle loop wrap-around
+  // Navigate to the centered item
   const realIndex = centerIndex.value % navItems.length
+  const item = navItems[realIndex]
+  if (item && realIndex !== activeIndex.value) {
+    activeIndex.value = realIndex
+    router.push(item.to)
+  }
   
-  // If we're in the first or last set, jump to middle set
+  // Handle loop wrap-around
   if (centerIndex.value < navItems.length) {
     setTimeout(() => scrollToIndex(realIndex + baseOffset, false), 300)
   } else if (centerIndex.value >= navItems.length * 2) {
