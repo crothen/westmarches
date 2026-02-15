@@ -8,6 +8,7 @@ const route = useRoute()
 const router = useRouter()
 const navRef = ref<HTMLElement | null>(null)
 const centerIndex = ref(0)
+const isDragging = ref(false)
 
 interface NavItem {
   to: string
@@ -84,6 +85,11 @@ function updateCenterItem() {
     const itemCenterX = rect.left + rect.width / 2
     const dist = Math.abs(itemCenterX - centerX)
     
+    // Calculate scale based on distance from center
+    const maxDist = 100
+    const scale = Math.max(0.7, 1 - (dist / maxDist) * 0.3)
+    item.style.transform = `scale(${scale})`
+    
     if (dist < closestDist) {
       closestDist = dist
       closestIndex = i
@@ -95,6 +101,7 @@ function updateCenterItem() {
 
 function handleScrollEnd() {
   if (!navRef.value) return
+  isDragging.value = false
   
   updateCenterItem()
   
@@ -106,10 +113,8 @@ function handleScrollEnd() {
   
   // If we're in the first or last set, jump to middle set
   if (centerIndex.value < navItems.length) {
-    // In first set - jump to middle
     setTimeout(() => scrollToIndex(realIndex + baseOffset, false), 300)
   } else if (centerIndex.value >= navItems.length * 2) {
-    // In last set - jump to middle
     setTimeout(() => scrollToIndex(realIndex + baseOffset, false), 300)
   }
 }
@@ -117,6 +122,7 @@ function handleScrollEnd() {
 let scrollTimeout: number | null = null
 
 function onScroll() {
+  isDragging.value = true
   updateCenterItem()
   
   if (scrollTimeout) clearTimeout(scrollTimeout)
@@ -142,6 +148,8 @@ function isCenter(index: number): boolean {
 onMounted(() => {
   scrollToIndex(activeIndex.value + baseOffset, false)
   navRef.value?.addEventListener('scroll', onScroll, { passive: true })
+  // Initial scale calculation
+  setTimeout(updateCenterItem, 100)
 })
 
 onUnmounted(() => {
@@ -159,15 +167,15 @@ onUnmounted(() => {
         @click="navigate(index)"
         :class="['pwa-nav-item', { active: isActive(index), center: isCenter(index) }]"
       >
-        <span class="pwa-nav-icon">
-          <GameIcon v-if="item.isGameIcon" :name="item.icon as string" :size="28" />
-          <component v-else :is="item.icon" :size="28" :stroke-width="1.5" />
+        <span class="pwa-nav-icon-wrap" :class="{ 'active-circle': isActive(index) }">
+          <GameIcon v-if="item.isGameIcon" :name="item.icon as string" :size="26" />
+          <component v-else :is="item.icon" :size="26" :stroke-width="1.5" />
         </span>
         <span class="pwa-nav-label">{{ item.label }}</span>
       </button>
     </div>
-    <!-- Center indicator line -->
-    <div class="pwa-nav-indicator"></div>
+    <!-- Center marker -->
+    <div class="pwa-nav-center-marker"></div>
   </nav>
 </template>
 
@@ -177,12 +185,12 @@ onUnmounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  height: calc(80px + env(safe-area-inset-bottom, 0px));
+  height: calc(88px + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.98), rgba(10, 10, 10, 0.95));
+  background: linear-gradient(to top, rgba(0, 0, 0, 1), rgba(10, 10, 10, 0.98));
   backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  z-index: 1000;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -191,12 +199,12 @@ onUnmounted(() => {
 .pwa-nav-scroll {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 calc(50vw - 36px);
+  gap: 16px;
+  padding: 0 calc(50vw - 40px);
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  height: 80px;
+  height: 88px;
   scroll-behavior: auto;
 }
 
@@ -210,20 +218,19 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.5);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
-  transform: scale(0.8);
+  transition: color 0.15s;
+  transform-origin: center;
 }
 
 .pwa-nav-item.center {
-  color: rgba(255, 255, 255, 0.9);
-  transform: scale(1);
+  color: rgba(255, 255, 255, 1);
 }
 
 .pwa-nav-item.center .pwa-nav-label {
@@ -231,42 +238,42 @@ onUnmounted(() => {
   transform: translateY(0);
 }
 
-.pwa-nav-item.active {
-  background: rgba(239, 35, 60, 0.2);
-  color: #ef233c;
-  box-shadow: 0 0 24px rgba(239, 35, 60, 0.4);
-}
-
-.pwa-nav-item.active.center {
-  transform: scale(1.05);
-}
-
-.pwa-nav-icon {
+.pwa-nav-icon-wrap {
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.pwa-nav-icon-wrap.active-circle {
+  background: #ef233c;
+  color: white;
+  box-shadow: 0 4px 20px rgba(239, 35, 60, 0.5);
 }
 
 .pwa-nav-label {
   font-size: 11px;
   font-weight: 600;
-  margin-top: 4px;
+  margin-top: 6px;
   opacity: 0;
   transform: translateY(-4px);
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
-.pwa-nav-indicator {
+.pwa-nav-center-marker {
   position: absolute;
-  top: -1px;
+  top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 48px;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, #ef233c, transparent);
-  border-radius: 0 0 3px 3px;
+  width: 4px;
+  height: 4px;
+  background: #ef233c;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(239, 35, 60, 0.8);
 }
 
 /* Fade edges */
@@ -276,7 +283,7 @@ onUnmounted(() => {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 80px;
+  width: 60px;
   pointer-events: none;
   z-index: 1;
 }

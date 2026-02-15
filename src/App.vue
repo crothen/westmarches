@@ -8,6 +8,7 @@ import MentionTooltip from './components/common/MentionTooltip.vue'
 import PwaBottomNav from './components/layout/PwaBottomNav.vue'
 import PwaSplash from './components/layout/PwaSplash.vue'
 import PwaPullRefresh from './components/layout/PwaPullRefresh.vue'
+import PwaHeader from './components/layout/PwaHeader.vue'
 import { showTooltip, hideTooltip } from './composables/useEntityTooltip'
 import type { MentionKind } from './lib/mentionRenderer'
 
@@ -90,16 +91,27 @@ onUnmounted(() => {
     </RouterView>
   </template>
   
-  <AppLayout v-else :class="{ 'pwa-layout': isPwa }">
+  <!-- PWA Layout -->
+  <template v-else-if="isPwa && auth.isAuthenticated">
+    <PwaHeader />
+    <main class="pwa-main">
+      <RouterView v-slot="{ Component }">
+        <transition name="pwa-page" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </RouterView>
+    </main>
+    <PwaBottomNav />
+  </template>
+  
+  <!-- Regular Layout -->
+  <AppLayout v-else>
     <RouterView v-slot="{ Component }">
       <transition :name="isPwa ? 'pwa-page' : ''" mode="out-in">
         <component :is="Component" />
       </transition>
     </RouterView>
   </AppLayout>
-  
-  <!-- PWA Bottom Navigation -->
-  <PwaBottomNav v-if="isPwa && auth.isAuthenticated && !noLayout" />
   
   <MentionTooltip />
 </template>
@@ -113,9 +125,13 @@ body.pwa-mode {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
-/* Add bottom padding for PWA nav */
-.pwa-layout {
-  padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+/* PWA main content area */
+.pwa-main {
+  padding-top: calc(56px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  min-height: 100vh;
+  padding-left: 16px;
+  padding-right: 16px;
 }
 
 /* Hide install prompts in PWA mode */
