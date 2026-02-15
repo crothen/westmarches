@@ -199,8 +199,8 @@ function getPageTitle(): string {
           </div>
           
           <!-- Empty state -->
-          <p v-else-if="search.searchQuery.value.length < 2" class="pwa-search-hint">
-            Search for NPCs, locations, sessions, and more...
+          <p v-else-if="search.searchQuery.value.length < 3" class="pwa-search-hint">
+            Type at least 3 characters to search...
           </p>
           
           <!-- No results -->

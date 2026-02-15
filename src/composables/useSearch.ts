@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuthStore } from '../stores/auth'
@@ -45,6 +45,9 @@ const typeConfig: Record<string, { icon: string; label: string }> = {
   inventory: { icon: '🎒', label: 'Inventory' },
 }
 
+const MIN_SEARCH_LENGTH = 3
+const DEBOUNCE_MS = 300
+
 export function useSearch() {
   const auth = useAuthStore()
   
@@ -63,8 +66,18 @@ export function useSearch() {
   const inventory = ref<PartyInventoryItem[]>([])
   
   const searchQuery = ref('')
+  const debouncedQuery = ref('')
   const isLoading = ref(true)
   const isInitialized = ref(false)
+  
+  // Debounce search query
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  watch(searchQuery, (val) => {
+    if (debounceTimer) clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => {
+      debouncedQuery.value = val
+    }, DEBOUNCE_MS)
+  })
   
   const unsubs: (() => void)[] = []
   
@@ -218,8 +231,8 @@ export function useSearch() {
   }
   
   const results = computed<SearchResult[]>(() => {
-    const q = searchQuery.value.trim()
-    if (q.length < 2) return []
+    const q = debouncedQuery.value.trim()
+    if (q.length < MIN_SEARCH_LENGTH) return []
     
     const allResults: SearchResult[] = []
     
