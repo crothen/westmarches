@@ -15,6 +15,10 @@ const OAUTH_CLIENT_ID = '1084465200262-r01sd51huantpkto1tvv9j7uir9fvvmg.apps.goo
 
 // Message handler
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'bookmark') {
+    handleBookmarkRequest(request).then(sendResponse)
+    return true
+  }
   if (request.action === 'login') {
     if (request.method === 'email') {
       handleEmailLogin(request.email, request.password).then(sendResponse)
@@ -278,5 +282,130 @@ chrome.commands.onCommand.addListener(async (command) => {
     chrome.tabs.sendMessage(tab.id, { action: 'toggleSidebar' })
   }
 })
+
+// Handle bookmark (star) requests
+async function handleBookmarkRequest(request) {
+  const { token, user } = await chrome.storage.local.get(['token', 'user'])
+  if (!token || !user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+  
+  const baseUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents`
+  
+  try {
+    if (request.method === 'check') {
+      // Check if URL is bookmarked by querying with filter
+      const query = {
+        structuredQuery: {
+          from: [{ collectionId: 'userBookmarks' }],
+          where: {
+            compositeFilter: {
+              op: 'AND',
+              filters: [
+                { fieldFilter: { field: { fieldPath: 'userId' }, op: 'EQUAL', value: { stringValue: user.uid } } },
+                { fieldFilter: { field: { fieldPath: 'url' }, op: 'EQUAL', value: { stringValue: request.url } } }
+              ]
+            }
+          },
+          limit: 1
+        }
+      }
+      
+      const response = await fetch(`${baseUrl}:runQuery`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(query)
+      })
+      
+      const results = await response.json()
+      if (results[0]?.document) {
+        const docPath = results[0].document.name
+        const bookmarkId = docPath.split('/').pop()
+        return { success: true, bookmarkId }
+      }
+      return { success: true, bookmarkId: null }
+    }
+    
+    if (request.method === 'save') {
+      const data = request.data
+      const fields = {
+        userId: { stringValue: user.uid },
+        type: { stringValue: data.type },
+        slug: { stringValue: data.slug },
+        name: { stringValue: data.name },
+        url: { stringValue: data.url },
+        savedAt: { timestampValue: new Date().toISOString() }
+      }
+      if (data.image) fields.image = { stringValue: data.image }
+      if (data.note) fields.note = { stringValue: data.note }
+      
+      const response = await fetch(`${baseUrl}/userBookmarks`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ fields })
+      })
+      
+      const result = await response.json()
+      if (result.error) {
+        return { success: false, error: result.error.message }
+      }
+      return { success: true }
+    }
+    
+    if (request.method === 'remove') {
+      // First find the bookmark
+      const query = {
+        structuredQuery: {
+          from: [{ collectionId: 'userBookmarks' }],
+          where: {
+            compositeFilter: {
+              op: 'AND',
+              filters: [
+                { fieldFilter: { field: { fieldPath: 'userId' }, op: 'EQUAL', value: { stringValue: user.uid } } },
+                { fieldFilter: { field: { fieldPath: 'url' }, op: 'EQUAL', value: { stringValue: request.url } } }
+              ]
+            }
+          },
+          limit: 1
+        }
+      }
+      
+      const queryResponse = await fetch(`${baseUrl}:runQuery`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(query)
+      })
+      
+      const results = await queryResponse.json()
+      if (!results[0]?.document) {
+        return { success: true } // Already removed
+      }
+      
+      const docName = results[0].document.name
+      
+      // Delete it
+      const deleteResponse = await fetch(`https://firestore.googleapis.com/v1/${docName}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      return { success: deleteResponse.ok }
+    }
+    
+    return { success: false, error: 'Unknown method' }
+  } catch (err) {
+    console.error('Bookmark error:', err)
+    return { success: false, error: err.message }
+  }
+}
 
 console.log('West Marches extension background script loaded')

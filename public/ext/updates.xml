@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+  <app appid='westmarches-companion'>
+    <updatecheck codebase='https://westmarches-dnd.web.app/downloads/westmarches-companion.crx' version='1.0.1'/>
+  </app>
+</gupdate>

@@ -26,20 +26,22 @@ const initialHex = computed(() => {
   return null
 })
 
-// Set selectedHex from URL on first load
 if (initialHex.value) {
   selectedHex.value = initialHex.value
 }
 
 function onHexClick(hex: { x: number; y: number }) {
   selectedHex.value = hex
-  // Replace URL silently — no history entry per click, no zoom/jump
   router.replace({ query: { hex: `${hex.x}_${hex.y}` } })
 }
 
 function closePanel() {
   selectedHex.value = null
   router.replace({ query: {} })
+}
+
+function exitFullscreen() {
+  router.push({ name: 'map', query: route.query })
 }
 
 async function updateTerrain(hexKey: string, terrainId: number) {
@@ -98,58 +100,60 @@ async function toggleTag(hexKey: string, tagId: number) {
 </script>
 
 <template>
-  <div class="h-[calc(100vh-3rem)] flex">
-    <!-- Map area -->
-    <div class="flex-1 flex flex-col min-w-0">
-      <div class="flex items-center justify-between mb-3 px-1">
-        <div class="flex items-center gap-3">
-          <h1 class="text-2xl font-bold tracking-tight text-white" style="font-family: Manrope, sans-serif">🗺️ World Map</h1>
-          <div class="flex gap-1">
-            <router-link 
-              :to="{ name: 'map-fullscreen', query: route.query }"
-              class="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-white transition-colors"
-              title="Fullscreen (90%)"
-            >
-              ⛶
-            </router-link>
-            <router-link 
-              :to="{ name: 'map-wc' }"
-              class="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-white transition-colors"
-              title="Test Web Component"
-            >
-              🧪
-            </router-link>
-          </div>
+  <div class="fixed inset-0 bg-black flex z-50">
+    <!-- Map area - 90% of viewport -->
+    <div class="flex-1 flex flex-col min-w-0 h-[90vh] m-auto relative">
+      <!-- Top bar -->
+      <div class="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
+        <div class="flex items-center gap-3 pointer-events-auto">
+          <button 
+            @click="exitFullscreen"
+            class="px-3 py-2 bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
+          >
+            <span>←</span>
+            <span>Exit Fullscreen</span>
+          </button>
+          <h1 class="text-xl font-bold tracking-tight text-white px-3 py-2 bg-zinc-900/90 border border-zinc-700 rounded-lg" style="font-family: Manrope, sans-serif">
+            🗺️ World Map
+          </h1>
         </div>
-        <div v-if="selectedHex" class="text-zinc-500 text-sm">
-          <span class="text-[#ef233c] font-mono">{{ selectedHex.x }}, {{ selectedHex.y }}</span>
+        <div v-if="selectedHex" class="text-zinc-400 text-sm bg-zinc-900/90 border border-zinc-700 rounded-lg px-3 py-2 pointer-events-auto">
+          Hex: <span class="text-[#ef233c] font-mono">{{ selectedHex.x }}, {{ selectedHex.y }}</span>
         </div>
       </div>
-      <HexGrid ref="hexGridRef" :initial-hex="initialHex" @hex-click="onHexClick" class="flex-1 rounded-xl overflow-hidden" />
-    </div>
 
-    <!-- Detail panel (slides in from right) -->
-    <transition
-      enter-active-class="transition-all duration-200 ease-out"
-      enter-from-class="translate-x-full opacity-0"
-      enter-to-class="translate-x-0 opacity-100"
-      leave-active-class="transition-all duration-150 ease-in"
-      leave-from-class="translate-x-0 opacity-100"
-      leave-to-class="translate-x-full opacity-0"
-    >
-      <HexDetailPanel
-        v-if="selectedHex"
-        :hex="selectedHex"
-        :terrain-config="terrainConfig"
-        :tags-config="tagsConfig"
-        :hex-data="hexData"
-        @close="closePanel"
-        @update-terrain="updateTerrain"
-        @set-main-tag="setMainTag"
-        @toggle-tag="toggleTag"
-        @update-detail-map="updateDetailMap"
-        @markers-changed="onMarkersChanged"
+      <!-- Map -->
+      <HexGrid 
+        ref="hexGridRef" 
+        :initial-hex="initialHex" 
+        @hex-click="onHexClick" 
+        class="flex-1 rounded-xl overflow-hidden border border-zinc-800" 
       />
-    </transition>
+
+      <!-- Detail panel (slides in from right) -->
+      <transition
+        enter-active-class="transition-all duration-200 ease-out"
+        enter-from-class="translate-x-full opacity-0"
+        enter-to-class="translate-x-0 opacity-100"
+        leave-active-class="transition-all duration-150 ease-in"
+        leave-from-class="translate-x-0 opacity-100"
+        leave-to-class="translate-x-full opacity-0"
+      >
+        <div v-if="selectedHex" class="absolute top-0 right-0 h-full">
+          <HexDetailPanel
+            :hex="selectedHex"
+            :terrain-config="terrainConfig"
+            :tags-config="tagsConfig"
+            :hex-data="hexData"
+            @close="closePanel"
+            @update-terrain="updateTerrain"
+            @set-main-tag="setMainTag"
+            @toggle-tag="toggleTag"
+            @update-detail-map="updateDetailMap"
+            @markers-changed="onMarkersChanged"
+          />
+        </div>
+      </transition>
+    </div>
   </div>
 </template>

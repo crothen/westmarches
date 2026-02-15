@@ -33,6 +33,7 @@ interface HexNote {
   userId: string
 }
 
+// Match Vue app's config
 const MAP_CONFIG = { gridW: 50, gridH: 50, hexSize: 30 }
 
 @customElement('wm-map')
@@ -123,6 +124,28 @@ export class WmMap extends LitElement {
     .hex-info .coords {
       color: var(--wm-accent);
       font-family: monospace;
+    }
+
+    .loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--wm-accent);
+    }
+
+    .zoom-indicator {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(0, 0, 0, 0.6);
+      color: var(--wm-text-muted);
+      font-size: 12px;
+      font-family: monospace;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--wm-border);
     }
 
     /* Detail Panel */
@@ -218,173 +241,14 @@ export class WmMap extends LitElement {
       font-size: 13px;
     }
 
-    .add-btn {
-      width: 100%;
-      padding: 10px;
-      background: rgba(239, 35, 60, 0.1);
-      border: 1px dashed rgba(239, 35, 60, 0.3);
-      border-radius: 8px;
-      color: var(--wm-accent);
-      font-size: 13px;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .add-btn:hover {
-      background: rgba(239, 35, 60, 0.2);
-      border-style: solid;
-    }
-
-    /* Modal */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal {
-      background: var(--wm-bg);
-      border: 1px solid var(--wm-border);
-      border-radius: 12px;
-      width: 90%;
-      max-width: 400px;
-      max-height: 80vh;
-      overflow-y: auto;
-    }
-
-    .modal-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--wm-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .modal-title {
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .modal-body {
-      padding: 16px;
-    }
-
-    .form-group {
-      margin-bottom: 16px;
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 12px;
-      color: var(--wm-text-muted);
-      margin-bottom: 6px;
-    }
-
-    .form-group input,
-    .form-group textarea,
-    .form-group select {
-      width: 100%;
-      padding: 10px 12px;
+    .terrain-badge {
+      display: inline-block;
+      padding: 4px 8px;
       background: var(--wm-bg-secondary);
       border: 1px solid var(--wm-border);
-      border-radius: 8px;
-      color: var(--wm-text);
-      font-size: 14px;
-      font-family: inherit;
-      outline: none;
-    }
-
-    .form-group input:focus,
-    .form-group textarea:focus,
-    .form-group select:focus {
-      border-color: var(--wm-accent);
-    }
-
-    .form-group textarea {
-      resize: vertical;
-      min-height: 80px;
-    }
-
-    .checkbox-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-    }
-
-    .modal-footer {
-      padding: 12px 16px;
-      border-top: 1px solid var(--wm-border);
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-
-    .btn {
-      padding: 10px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-      transition: all 0.15s;
-    }
-
-    .btn-primary {
-      background: var(--wm-accent);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      opacity: 0.9;
-    }
-
-    .btn-secondary {
-      background: var(--wm-bg-secondary);
-      color: var(--wm-text);
-      border: 1px solid var(--wm-border);
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    .note {
-      padding: 12px;
-      background: var(--wm-bg-secondary);
-      border: 1px solid var(--wm-border);
-      border-radius: 8px;
-      margin-bottom: 8px;
-    }
-
-    .note-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 6px;
-    }
-
-    .note-author {
-      font-size: 12px;
-      color: var(--wm-accent);
-      font-weight: 500;
-    }
-
-    .note-private {
-      font-size: 10px;
-      background: rgba(255, 255, 255, 0.1);
-      padding: 2px 6px;
       border-radius: 4px;
-      color: var(--wm-text-muted);
-    }
-
-    .note-content {
-      font-size: 13px;
-      line-height: 1.4;
+      font-size: 12px;
+      margin-bottom: 12px;
     }
   `
 
@@ -395,33 +259,48 @@ export class WmMap extends LitElement {
   @property({ type: Boolean }) isDm: boolean = false
 
   @state() private selectedHex: HexCoord | null = null
-  @state() private camera: Camera = { x: 25, y: 25, zoom: 1 }
+  @state() private camera: Camera = { x: 50, y: 50, zoom: 1 }
   @state() private hexData: Record<string, any> = {}
   @state() private locations: Location[] = []
   @state() private features: Feature[] = []
   @state() private hexNotes: HexNote[] = []
   @state() private loading = true
-  @state() private modalType: 'location' | 'feature' | 'note' | null = null
+  @state() private terrainConfig: Record<number, { name: string; color: string; texture?: string }> = {}
+  @state() private markerTypesConfig: {
+    locationTypes: Record<string, { label: string; iconUrl: string }>;
+    featureTypes: Record<string, { label: string; iconUrl: string }>;
+  } = { locationTypes: {}, featureTypes: {} }
 
   @query('canvas') canvas!: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D | null = null
   private dpr = 1
   private isPanning = false
+  private hasMoved = false
   private lastMouse = { x: 0, y: 0 }
+  private animationId: number | null = null
+  
+  // Touch/pinch state
+  private initialPinchDist: number | null = null
+  private initialPinchZoom: number = 1
+  private touchStartPos: { x: number; y: number } | null = null
+  
+  // Loaded images
+  private terrainImages: Record<number, HTMLImageElement> = {}
+  private iconImages: Record<string, HTMLImageElement> = {}
 
-  // Terrain colors (simplified)
-  private terrainColors: Record<number, string> = {
-    1: '#4a90d9', // Water
-    2: '#c4b998', // Pale
-    3: '#2d5a27', // Forest
-    4: '#6b6b6b', // Mountain
-    5: '#5a6b4a', // Swamp
-    6: '#8fbc8f', // Plains
-    7: '#9a8b7a', // Foothills
-    9: '#2a5a8a', // Deep Water
-    10: '#7cba7c', // Grass
-    11: '#5a8a5a', // Dark Grass
-    12: '#1a3a1a', // Dark Forest
+  // Default terrain colors (fallback if config not loaded)
+  private defaultTerrainColors: Record<number, string> = {
+    1: '#4a90d9',   // Water
+    2: '#c4b998',   // Pale/Desert
+    3: '#2d5a27',   // Forest
+    4: '#6b6b6b',   // Mountain
+    5: '#5a6b4a',   // Swamp
+    6: '#8fbc8f',   // Plains
+    7: '#9a8b7a',   // Foothills
+    9: '#2a5a8a',   // Deep Water
+    10: '#7cba7c',  // Grass
+    11: '#5a8a5a',  // Dark Grass
+    12: '#1a3a1a',  // Dark Forest
   }
 
   connectedCallback() {
@@ -441,11 +320,20 @@ export class WmMap extends LitElement {
   firstUpdated() {
     this.setupCanvas()
     this.setupInputListeners()
+    this.fitToView()
     this.draw()
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback()
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId)
+    }
   }
 
   private async loadData() {
     this.loading = true
+    console.log('[wm-map] loadData starting, authToken:', this.authToken ? 'present' : 'missing')
     try {
       const [mapDoc, locs, feats] = await Promise.all([
         firestore.getDocument('maps', 'world'),
@@ -453,16 +341,107 @@ export class WmMap extends LitElement {
         firestore.listDocuments('features')
       ])
       
+      console.log('[wm-map] mapDoc:', mapDoc ? 'loaded' : 'null')
+      
       if (mapDoc?.hexes) {
         this.hexData = mapDoc.hexes
+        // Debug: log first few keys
+        const keys = Object.keys(this.hexData).slice(0, 10)
+        console.log('[wm-map] HexData sample keys:', keys)
+        console.log('[wm-map] Sample hex 1_1:', this.hexData['1_1'])
+        console.log('[wm-map] Sample hex 0_0:', this.hexData['0_0'])
+        console.log('[wm-map] Total hexes:', Object.keys(this.hexData).length)
+      } else {
+        console.log('[wm-map] No hexes in mapDoc')
       }
       this.locations = locs.filter((l: any) => !l.hidden || this.isAdmin || this.isDm) as Location[]
       this.features = feats.filter((f: any) => !f.hidden || this.isAdmin || this.isDm) as Feature[]
+      
+      // Load terrain config from config/terrain document
+      try {
+        const terrainDoc = await firestore.getDocument('config', 'terrain')
+        if (terrainDoc) {
+          // terrain doc has keys like "1", "2", etc. with name, color, texture
+          for (const [key, value] of Object.entries(terrainDoc)) {
+            if (key === 'id') continue
+            const id = parseInt(key)
+            if (!isNaN(id) && typeof value === 'object') {
+              const v = value as any
+              this.terrainConfig[id] = { 
+                name: v.name || `Terrain ${id}`, 
+                color: v.color || '#666',
+                texture: v.texture
+              }
+            }
+          }
+          console.log('[wm-map] Loaded terrain config:', Object.keys(this.terrainConfig).length, 'types')
+          this.loadTerrainImages()
+        }
+      } catch (e) {
+        console.log('[wm-map] Using default terrain colors')
+      }
+      
+      // Load marker types config
+      try {
+        const markerTypesDoc = await firestore.getDocument('config', 'markerTypes')
+        if (markerTypesDoc) {
+          this.markerTypesConfig = {
+            locationTypes: markerTypesDoc.locationTypes || {},
+            featureTypes: markerTypesDoc.featureTypes || {}
+          }
+          console.log('[wm-map] Loaded marker types config')
+          this.loadIconImages()
+        }
+      } catch (e) {
+        console.log('[wm-map] Using default icons')
+      }
     } catch (e) {
       console.error('Failed to load map data:', e)
     }
     this.loading = false
     this.draw()
+  }
+
+  private loadTerrainImages() {
+    for (const [idStr, config] of Object.entries(this.terrainConfig)) {
+      const id = parseInt(idStr)
+      if (config.texture) {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => {
+          this.terrainImages[id] = img
+          this.requestDraw()
+        }
+        img.src = config.texture
+      }
+    }
+  }
+
+  private loadIconImages() {
+    // Load location type icons
+    for (const [key, entry] of Object.entries(this.markerTypesConfig.locationTypes)) {
+      if (entry.iconUrl) {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => {
+          this.iconImages[`loc:${key}`] = img
+          this.requestDraw()
+        }
+        img.src = entry.iconUrl
+      }
+    }
+    // Load feature type icons
+    for (const [key, entry] of Object.entries(this.markerTypesConfig.featureTypes)) {
+      if (entry.iconUrl) {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => {
+          this.iconImages[`feat:${key}`] = img
+          this.requestDraw()
+        }
+        img.src = entry.iconUrl
+      }
+    }
   }
 
   private async loadHexNotes(hexKey: string) {
@@ -486,12 +465,24 @@ export class WmMap extends LitElement {
     this.canvas.height = rect.height * this.dpr
     this.ctx = this.canvas.getContext('2d')!
     this.ctx.scale(this.dpr, this.dpr)
+    
+    // Observe resize
+    const resizeObserver = new ResizeObserver(() => {
+      const newRect = this.canvas.getBoundingClientRect()
+      this.canvas.width = newRect.width * this.dpr
+      this.canvas.height = newRect.height * this.dpr
+      this.ctx = this.canvas.getContext('2d')!
+      this.ctx.scale(this.dpr, this.dpr)
+      this.draw()
+    })
+    resizeObserver.observe(this.canvas)
   }
 
   private setupInputListeners() {
     this.canvas.addEventListener('mousedown', this.onMouseDown.bind(this))
     this.canvas.addEventListener('mousemove', this.onMouseMove.bind(this))
     this.canvas.addEventListener('mouseup', this.onMouseUp.bind(this))
+    this.canvas.addEventListener('mouseleave', this.onMouseUp.bind(this))
     this.canvas.addEventListener('wheel', this.onWheel.bind(this), { passive: false })
     this.canvas.addEventListener('click', this.onClick.bind(this))
 
@@ -504,6 +495,7 @@ export class WmMap extends LitElement {
   private onMouseDown(e: MouseEvent) {
     if (e.button === 0 || e.button === 2) {
       this.isPanning = true
+      this.hasMoved = false
       this.lastMouse = { x: e.clientX, y: e.clientY }
     }
   }
@@ -512,10 +504,13 @@ export class WmMap extends LitElement {
     if (this.isPanning) {
       const dx = e.clientX - this.lastMouse.x
       const dy = e.clientY - this.lastMouse.y
-      this.camera.x -= dx / (MAP_CONFIG.hexSize * this.camera.zoom)
-      this.camera.y -= dy / (MAP_CONFIG.hexSize * this.camera.zoom)
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+        this.hasMoved = true
+      }
+      this.camera.x += dx
+      this.camera.y += dy
       this.lastMouse = { x: e.clientX, y: e.clientY }
-      this.draw()
+      this.requestDraw()
     }
   }
 
@@ -525,80 +520,186 @@ export class WmMap extends LitElement {
 
   private onWheel(e: WheelEvent) {
     e.preventDefault()
+    const rect = this.canvas.getBoundingClientRect()
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
     const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
-    this.camera.zoom = Math.max(0.3, Math.min(5, this.camera.zoom * zoomFactor))
-    this.draw()
+    const newZoom = Math.max(0.3, Math.min(5, this.camera.zoom * zoomFactor))
+    
+    // Zoom towards mouse position
+    const worldX = (mouseX - this.camera.x) / this.camera.zoom
+    const worldY = (mouseY - this.camera.y) / this.camera.zoom
+    
+    this.camera.zoom = newZoom
+    this.camera.x = mouseX - worldX * newZoom
+    this.camera.y = mouseY - worldY * newZoom
+    
+    this.requestDraw()
   }
 
   private onClick(e: MouseEvent) {
-    if (this.isPanning) return
-    const hex = this.screenToHex(e.offsetX, e.offsetY)
-    if (hex.x >= 0 && hex.x < MAP_CONFIG.gridW && hex.y >= 0 && hex.y < MAP_CONFIG.gridH) {
+    // Don't select hex if we were dragging
+    if (this.hasMoved) return
+    
+    const hex = this.getHexAt(e.offsetX, e.offsetY)
+    console.log('[wm-map] Click at', e.offsetX, e.offsetY, '-> hex:', hex)
+    if (hex && hex.x >= 1 && hex.x <= MAP_CONFIG.gridW && hex.y >= 1 && hex.y <= MAP_CONFIG.gridH) {
       this.selectedHex = hex
       this.loadHexNotes(`${hex.x}_${hex.y}`)
+      this.requestDraw()
     }
   }
 
   private onTouchStart(e: TouchEvent) {
+    e.preventDefault()
+    
     if (e.touches.length === 1) {
-      e.preventDefault()
       const touch = e.touches[0]!
       this.isPanning = true
+      this.hasMoved = false
       this.lastMouse = { x: touch.clientX, y: touch.clientY }
+      this.touchStartPos = { x: touch.clientX, y: touch.clientY }
+    } else if (e.touches.length === 2) {
+      // Pinch zoom start
+      this.isPanning = false
+      const t1 = e.touches[0]!
+      const t2 = e.touches[1]!
+      this.initialPinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
+      this.initialPinchZoom = this.camera.zoom
     }
   }
 
   private onTouchMove(e: TouchEvent) {
+    e.preventDefault()
+    
     if (e.touches.length === 1 && this.isPanning) {
-      e.preventDefault()
       const touch = e.touches[0]!
       const dx = touch.clientX - this.lastMouse.x
       const dy = touch.clientY - this.lastMouse.y
-      this.camera.x -= dx / (MAP_CONFIG.hexSize * this.camera.zoom)
-      this.camera.y -= dy / (MAP_CONFIG.hexSize * this.camera.zoom)
+      
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        this.hasMoved = true
+      }
+      
+      this.camera.x += dx
+      this.camera.y += dy
       this.lastMouse = { x: touch.clientX, y: touch.clientY }
-      this.draw()
+      this.requestDraw()
+    } else if (e.touches.length === 2 && this.initialPinchDist) {
+      // Pinch zoom
+      const t1 = e.touches[0]!
+      const t2 = e.touches[1]!
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
+      const scale = dist / this.initialPinchDist
+      
+      // Calculate pinch center
+      const rect = this.canvas.getBoundingClientRect()
+      const centerX = (t1.clientX + t2.clientX) / 2 - rect.left
+      const centerY = (t1.clientY + t2.clientY) / 2 - rect.top
+      
+      const newZoom = Math.max(0.3, Math.min(5, this.initialPinchZoom * scale))
+      
+      // Zoom towards pinch center
+      const worldX = (centerX - this.camera.x) / this.camera.zoom
+      const worldY = (centerY - this.camera.y) / this.camera.zoom
+      
+      this.camera.zoom = newZoom
+      this.camera.x = centerX - worldX * newZoom
+      this.camera.y = centerY - worldY * newZoom
+      
+      this.hasMoved = true
+      this.requestDraw()
     }
   }
 
-  private onTouchEnd() {
+  private onTouchEnd(e: TouchEvent) {
+    // Tap to select hex (if didn't move)
+    if (!this.hasMoved && this.touchStartPos && e.changedTouches.length > 0) {
+      const touch = e.changedTouches[0]!
+      const rect = this.canvas.getBoundingClientRect()
+      const x = touch.clientX - rect.left
+      const y = touch.clientY - rect.top
+      
+      const hex = this.getHexAt(x, y)
+      if (hex && hex.x >= 1 && hex.x <= MAP_CONFIG.gridW && hex.y >= 1 && hex.y <= MAP_CONFIG.gridH) {
+        this.selectedHex = hex
+        this.loadHexNotes(`${hex.x}_${hex.y}`)
+        this.requestDraw()
+      }
+    }
+    
     this.isPanning = false
+    this.initialPinchDist = null
+    this.touchStartPos = null
   }
 
-  private screenToHex(screenX: number, screenY: number): HexCoord {
-    const size = MAP_CONFIG.hexSize * this.camera.zoom
-    const rect = this.canvas.getBoundingClientRect()
-    const centerX = rect.width / 2
-    const centerY = rect.height / 2
-
-    const worldX = (screenX - centerX) / size + this.camera.x
-    const worldY = (screenY - centerY) / size + this.camera.y
-
-    // Offset coordinates for pointy-top hexes
-    const q = (worldX * Math.sqrt(3) / 3 - worldY / 3) / 0.866
-    const r = worldY * 2 / 3 / 0.866
-
-    // Round to nearest hex
-    let x = Math.round(q)
-    let y = Math.round(r)
-
+  // Match Vue's getHexCenter: flat-top hexes with offset coordinates
+  private getHexCenter(col: number, row: number): { x: number; y: number } {
+    const size = MAP_CONFIG.hexSize
+    const c = col - 1  // 0-indexed
+    const r = row - 1
+    const x = c * 1.5 * size + size * 2
+    const yOffset = (c % 2) * ((Math.sqrt(3) * size) / 2)
+    const y = r * Math.sqrt(3) * size + yOffset + size * 2
     return { x, y }
   }
 
-  private hexToScreen(hx: number, hy: number): { x: number; y: number } {
-    const size = MAP_CONFIG.hexSize * this.camera.zoom
-    const rect = this.canvas.getBoundingClientRect()
-    const centerX = rect.width / 2
-    const centerY = rect.height / 2
-
-    // Offset coordinates for pointy-top hexes
-    const x = size * 0.866 * (hx + 0.5 * (hy & 1))
-    const y = size * 0.75 * hy
-
+  private toWorld(screenX: number, screenY: number): { x: number; y: number } {
     return {
-      x: (x - this.camera.x * size + centerX),
-      y: (y - this.camera.y * size + centerY)
+      x: (screenX - this.camera.x) / this.camera.zoom,
+      y: (screenY - this.camera.y) / this.camera.zoom,
     }
+  }
+
+  private getHexAt(screenX: number, screenY: number): HexCoord | null {
+    const world = this.toWorld(screenX, screenY)
+    let closestHex: HexCoord | null = null
+    let minDistance = Infinity
+    
+    for (let col = 1; col <= MAP_CONFIG.gridW; col++) {
+      for (let row = 1; row <= MAP_CONFIG.gridH; row++) {
+        const center = this.getHexCenter(col, row)
+        const dist = Math.sqrt((world.x - center.x) ** 2 + (world.y - center.y) ** 2)
+        if (dist <= MAP_CONFIG.hexSize * 1.1 && dist < minDistance) {
+          minDistance = dist
+          closestHex = { x: col, y: row }
+        }
+      }
+    }
+    return closestHex
+  }
+
+  private fitToView() {
+    const rect = this.canvas.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+
+    const size = MAP_CONFIG.hexSize
+    const bottomRight = this.getHexCenter(MAP_CONFIG.gridW, MAP_CONFIG.gridH)
+
+    const mapLeft = -size * 2
+    const mapTop = -size
+    const mapRight = bottomRight.x + size * 2
+    const mapBottom = bottomRight.y + size * 2
+    const mapWidth = mapRight - mapLeft
+    const mapHeight = mapBottom - mapTop
+
+    const margin = 20
+    const availW = rect.width - margin * 2
+    const availH = rect.height - margin * 2
+    const zoom = Math.min(availW / mapWidth, availH / mapHeight, 2.0)
+
+    this.camera.zoom = zoom
+    this.camera.x = margin - mapLeft * zoom
+    this.camera.y = margin - mapTop * zoom
+  }
+
+  private requestDraw() {
+    if (this.animationId) return
+    this.animationId = requestAnimationFrame(() => {
+      this.animationId = null
+      this.draw()
+    })
   }
 
   private draw() {
@@ -608,74 +709,107 @@ export class WmMap extends LitElement {
     const width = rect.width
     const height = rect.height
 
+    // Reset transform and clear entire canvas
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     ctx.clearRect(0, 0, width, height)
     ctx.fillStyle = '#0a0a0a'
     ctx.fillRect(0, 0, width, height)
 
-    const size = MAP_CONFIG.hexSize * this.camera.zoom
+    // Save state and apply camera transform
+    ctx.save()
+    ctx.translate(this.camera.x, this.camera.y)
+    ctx.scale(this.camera.zoom, this.camera.zoom)
+
+    const size = MAP_CONFIG.hexSize
 
     // Draw hexes
-    for (let y = 0; y < MAP_CONFIG.gridH; y++) {
-      for (let x = 0; x < MAP_CONFIG.gridW; x++) {
-        const screen = this.hexToScreen(x, y)
+    for (let col = 1; col <= MAP_CONFIG.gridW; col++) {
+      for (let row = 1; row <= MAP_CONFIG.gridH; row++) {
+        const center = this.getHexCenter(col, row)
         
-        // Skip if off screen
-        if (screen.x < -size * 2 || screen.x > width + size * 2) continue
-        if (screen.y < -size * 2 || screen.y > height + size * 2) continue
+        // Frustum culling
+        const screenX = center.x * this.camera.zoom + this.camera.x
+        const screenY = center.y * this.camera.zoom + this.camera.y
+        if (screenX < -size * 2 || screenX > width + size * 2) continue
+        if (screenY < -size * 2 || screenY > height + size * 2) continue
 
-        const hexKey = `${x}_${y}`
+        const hexKey = `${col}_${row}`
         const data = this.hexData[hexKey]
         const terrainType = data?.type || 10
 
-        // Draw hex
-        this.drawHex(ctx, screen.x, screen.y, size * 0.9, this.terrainColors[terrainType] || '#444')
+        // Get terrain color and image
+        const color = this.terrainConfig[terrainType]?.color || 
+                      this.defaultTerrainColors[terrainType] || '#444'
+        const terrainImg = this.terrainImages[terrainType]
+
+        // Draw flat-top hex with texture or color
+        this.drawHex(ctx, center.x, center.y, size, color, terrainImg)
 
         // Highlight selected
-        if (this.selectedHex?.x === x && this.selectedHex?.y === y) {
-          this.drawHex(ctx, screen.x, screen.y, size * 0.9, 'rgba(239, 35, 60, 0.3)', true)
+        if (this.selectedHex?.x === col && this.selectedHex?.y === row) {
+          this.drawHexHighlight(ctx, center.x, center.y, size)
         }
       }
     }
 
-    // Draw location markers
-    for (const loc of this.locations) {
-      if (!loc.hexKey) continue
-      const [hx, hy] = loc.hexKey.split('_').map(Number)
-      const screen = this.hexToScreen(hx!, hy!)
-      this.drawMarker(ctx, screen.x, screen.y, '🏰', size * 0.4)
-    }
+    // Draw hex indicators (locations, features) with zoom-based scaling
+    this.drawHexIndicators(ctx, size)
 
-    // Draw feature markers
-    for (const feat of this.features) {
-      if (!feat.hexKey) continue
-      const [hx, hy] = feat.hexKey.split('_').map(Number)
-      const screen = this.hexToScreen(hx!, hy!)
-      this.drawMarker(ctx, screen.x, screen.y - size * 0.3, '📍', size * 0.3)
-    }
+    // Restore canvas state
+    ctx.restore()
   }
 
-  private drawHex(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string, strokeOnly = false) {
+  // Flat-top hex: vertices at angles 0°, 60°, 120°, 180°, 240°, 300°
+  private drawHex(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string, img?: HTMLImageElement) {
+    const angle = (2 * Math.PI) / 6
+    const drawSize = size * 1.02  // Slight overlap to avoid gaps
+
     ctx.beginPath()
     for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 180) * (60 * i - 30)
-      const px = x + size * Math.cos(angle)
-      const py = y + size * Math.sin(angle)
+      // No rotation offset - flat-top hex starts at angle 0 (right vertex)
+      const px = cx + drawSize * Math.cos(angle * i)
+      const py = cy + drawSize * Math.sin(angle * i)
       if (i === 0) ctx.moveTo(px, py)
       else ctx.lineTo(px, py)
     }
     ctx.closePath()
 
-    if (strokeOnly) {
-      ctx.strokeStyle = color
-      ctx.lineWidth = 3
-      ctx.stroke()
+    if (img) {
+      // Draw texture image clipped to hex
+      ctx.save()
+      ctx.clip()
+      const imgSize = size * 2.1
+      ctx.drawImage(img, cx - imgSize / 2, cy - imgSize / 2, imgSize, imgSize)
+      ctx.restore()
     } else {
       ctx.fillStyle = color
       ctx.fill()
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)'
-      ctx.lineWidth = 1
-      ctx.stroke()
     }
+    
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)'
+    ctx.lineWidth = 1
+    ctx.stroke()
+  }
+
+  private drawHexHighlight(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number) {
+    const angle = (2 * Math.PI) / 6
+    const drawSize = size * 1.02
+
+    ctx.beginPath()
+    for (let i = 0; i < 6; i++) {
+      const px = cx + drawSize * Math.cos(angle * i)
+      const py = cy + drawSize * Math.sin(angle * i)
+      if (i === 0) ctx.moveTo(px, py)
+      else ctx.lineTo(px, py)
+    }
+    ctx.closePath()
+
+    ctx.strokeStyle = '#ef233c'
+    ctx.lineWidth = 3
+    ctx.stroke()
+    
+    ctx.fillStyle = 'rgba(239, 35, 60, 0.2)'
+    ctx.fill()
   }
 
   private drawMarker(ctx: CanvasRenderingContext2D, x: number, y: number, emoji: string, size: number) {
@@ -685,19 +819,121 @@ export class WmMap extends LitElement {
     ctx.fillText(emoji, x, y)
   }
 
+  private drawHexIndicators(ctx: CanvasRenderingContext2D, hexSize: number) {
+    const zoom = this.camera.zoom
+
+    // Determine how many icons to show based on zoom
+    let maxIcons: number
+    if (zoom >= 5.0) maxIcons = 7
+    else if (zoom >= 3.0) maxIcons = 6
+    else if (zoom >= 1.5) maxIcons = 3
+    else maxIcons = 1
+
+    // Group markers by hex
+    const hexMarkers: Record<string, Array<{ kind: 'location' | 'feature'; type: string; name: string }>> = {}
+    
+    for (const loc of this.locations) {
+      if (!loc.hexKey) continue
+      if (!hexMarkers[loc.hexKey]) hexMarkers[loc.hexKey] = []
+      hexMarkers[loc.hexKey].push({ kind: 'location', type: loc.type, name: loc.name })
+    }
+    
+    for (const feat of this.features) {
+      if (!feat.hexKey) continue
+      if (!hexMarkers[feat.hexKey]) hexMarkers[feat.hexKey] = []
+      hexMarkers[feat.hexKey].push({ kind: 'feature', type: feat.type, name: feat.name })
+    }
+
+    // Draw markers for each hex
+    for (const [hexKey, markers] of Object.entries(hexMarkers)) {
+      const [hx, hy] = hexKey.split('_').map(Number)
+      if (!hx || !hy) continue
+      
+      const center = this.getHexCenter(hx, hy)
+      const showCount = Math.min(markers.length, maxIcons)
+      const iconsToShow = markers.slice(0, showCount)
+
+      // Determine icon size based on count
+      let iconDrawSize: number
+      if (iconsToShow.length === 1) {
+        iconDrawSize = hexSize * 1.6 * (zoom < 1.0 ? 1.0 : 0.8)
+      } else if (iconsToShow.length <= 3) {
+        iconDrawSize = hexSize * 0.7
+      } else {
+        iconDrawSize = hexSize * 0.5
+      }
+
+      // Get positions for icons
+      const positions = this.getIconPositions(center.x, center.y, iconsToShow.length, hexSize)
+
+      for (let i = 0; i < iconsToShow.length; i++) {
+        const marker = iconsToShow[i]!
+        const pos = positions[i]!
+        
+        // Try to get the icon image
+        const imgKey = marker.kind === 'location' ? `loc:${marker.type}` : `feat:${marker.type}`
+        const img = this.iconImages[imgKey]
+        
+        ctx.save()
+        ctx.shadowColor = 'rgba(0,0,0,0.6)'
+        ctx.shadowBlur = 3
+        
+        if (img) {
+          ctx.drawImage(img, pos.x - iconDrawSize / 2, pos.y - iconDrawSize / 2, iconDrawSize, iconDrawSize)
+        } else {
+          // Fallback emoji
+          const emoji = marker.kind === 'location' ? '🏰' : '📍'
+          ctx.font = `${iconDrawSize * 0.7}px sans-serif`
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(emoji, pos.x, pos.y)
+        }
+        
+        ctx.restore()
+      }
+    }
+  }
+
+  private getIconPositions(cx: number, cy: number, count: number, hexSize: number): Array<{ x: number; y: number }> {
+    if (count === 1) {
+      return [{ x: cx, y: cy }]
+    }
+    
+    const positions: Array<{ x: number; y: number }> = []
+    const angle = (2 * Math.PI) / 6
+    const dist = hexSize * 0.55
+    
+    // Place icons at hex corners
+    for (let i = 0; i < count && i < 6; i++) {
+      const cornerAngle = angle * i
+      positions.push({
+        x: cx + dist * Math.cos(cornerAngle),
+        y: cy + dist * Math.sin(cornerAngle)
+      })
+    }
+    
+    // 7th icon goes in center
+    if (count >= 7) {
+      positions.push({ x: cx, y: cy })
+    }
+    
+    return positions
+  }
+
   private zoomIn() {
     this.camera.zoom = Math.min(5, this.camera.zoom * 1.2)
-    this.draw()
+    this.requestDraw()
   }
 
   private zoomOut() {
     this.camera.zoom = Math.max(0.3, this.camera.zoom / 1.2)
-    this.draw()
+    this.requestDraw()
   }
 
   private closePanel() {
     this.selectedHex = null
     this.hexNotes = []
+    this.requestDraw()
   }
 
   private getLocationsInHex(hexKey: string): Location[] {
@@ -708,77 +944,10 @@ export class WmMap extends LitElement {
     return this.features.filter(f => f.hexKey === hexKey)
   }
 
-  private openModal(type: 'location' | 'feature' | 'note') {
-    this.modalType = type
-  }
-
-  private closeModal() {
-    this.modalType = null
-  }
-
-  private async saveLocation(e: Event) {
-    e.preventDefault()
-    const form = e.target as HTMLFormElement
-    const formData = new FormData(form)
-    
-    const data = {
-      name: formData.get('name') as string,
-      type: formData.get('type') as string,
-      description: formData.get('description') as string,
-      hexKey: this.selectedHex ? `${this.selectedHex.x}_${this.selectedHex.y}` : null,
-      hidden: formData.get('hidden') === 'on',
-      createdAt: new Date().toISOString()
-    }
-
-    const result = await firestore.createDocument('locations', data)
-    if (result) {
-      this.locations = [...this.locations, result as Location]
-      this.closeModal()
-      this.draw()
-    }
-  }
-
-  private async saveFeature(e: Event) {
-    e.preventDefault()
-    const form = e.target as HTMLFormElement
-    const formData = new FormData(form)
-    
-    const data = {
-      name: formData.get('name') as string,
-      type: formData.get('type') as string,
-      description: formData.get('description') as string,
-      hexKey: this.selectedHex ? `${this.selectedHex.x}_${this.selectedHex.y}` : null,
-      hidden: formData.get('hidden') === 'on',
-      createdAt: new Date().toISOString()
-    }
-
-    const result = await firestore.createDocument('features', data)
-    if (result) {
-      this.features = [...this.features, result as Feature]
-      this.closeModal()
-      this.draw()
-    }
-  }
-
-  private async saveNote(e: Event) {
-    e.preventDefault()
-    const form = e.target as HTMLFormElement
-    const formData = new FormData(form)
-    
-    const data = {
-      content: formData.get('content') as string,
-      isPrivate: formData.get('isPrivate') === 'on',
-      hexKey: this.selectedHex ? `${this.selectedHex.x}_${this.selectedHex.y}` : '',
-      userId: this.userId,
-      authorName: this.userName,
-      createdAt: new Date().toISOString()
-    }
-
-    const result = await firestore.createDocument('hexNotes', data)
-    if (result) {
-      this.hexNotes = [...this.hexNotes, result as HexNote]
-      this.closeModal()
-    }
+  private getTerrainName(hexKey: string): string {
+    const data = this.hexData[hexKey]
+    const typeId = data?.type || 10
+    return this.terrainConfig[typeId]?.name || `Terrain ${typeId}`
   }
 
   render() {
@@ -789,12 +958,15 @@ export class WmMap extends LitElement {
     return html`
       <div class="container">
         <div class="map-area">
+          ${this.loading ? html`<div class="loading">Loading map...</div>` : ''}
           <canvas></canvas>
           
           <div class="controls">
             <button class="control-btn" @click=${this.zoomIn}>+</button>
             <button class="control-btn" @click=${this.zoomOut}>−</button>
           </div>
+
+          <div class="zoom-indicator">${this.camera.zoom.toFixed(2)}×</div>
 
           ${this.selectedHex ? html`
             <div class="hex-info">
@@ -810,6 +982,8 @@ export class WmMap extends LitElement {
               <button class="close-btn" @click=${this.closePanel}>✕</button>
             </div>
             <div class="detail-content">
+              <div class="terrain-badge">${this.getTerrainName(hexKey!)}</div>
+
               <!-- Locations -->
               <div class="section">
                 <div class="section-title">🏰 Locations</div>
@@ -823,7 +997,6 @@ export class WmMap extends LitElement {
                     `)}
                   </div>
                 ` : html`<div class="empty-state">No locations</div>`}
-                <button class="add-btn" @click=${() => this.openModal('location')}>+ Add Location</button>
               </div>
 
               <!-- Features -->
@@ -839,154 +1012,22 @@ export class WmMap extends LitElement {
                     `)}
                   </div>
                 ` : html`<div class="empty-state">No features</div>`}
-                <button class="add-btn" @click=${() => this.openModal('feature')}>+ Add Feature</button>
               </div>
 
               <!-- Notes -->
               <div class="section">
-                <div class="section-title">📝 Notes</div>
+                <div class="section-title">📝 Notes (${this.hexNotes.length})</div>
                 ${this.hexNotes.length > 0 ? html`
-                  ${this.hexNotes.map(note => html`
-                    <div class="note">
-                      <div class="note-header">
-                        <span class="note-author">${note.authorName}</span>
-                        ${note.isPrivate ? html`<span class="note-private">Private</span>` : ''}
+                  <div class="item-list">
+                    ${this.hexNotes.map(note => html`
+                      <div class="item">
+                        <div class="item-name">${note.authorName}</div>
+                        <div class="item-type">${note.content.slice(0, 100)}${note.content.length > 100 ? '...' : ''}</div>
                       </div>
-                      <div class="note-content">${note.content}</div>
-                    </div>
-                  `)}
+                    `)}
+                  </div>
                 ` : html`<div class="empty-state">No notes</div>`}
-                <button class="add-btn" @click=${() => this.openModal('note')}>+ Add Note</button>
               </div>
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Modals -->
-        ${this.modalType === 'location' ? html`
-          <div class="modal-backdrop" @click=${this.closeModal}>
-            <div class="modal" @click=${(e: Event) => e.stopPropagation()}>
-              <div class="modal-header">
-                <span class="modal-title">Add Location</span>
-                <button class="close-btn" @click=${this.closeModal}>✕</button>
-              </div>
-              <form @submit=${this.saveLocation}>
-                <div class="modal-body">
-                  <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" name="name" required placeholder="Location name...">
-                  </div>
-                  <div class="form-group">
-                    <label>Type</label>
-                    <select name="type">
-                      <option value="city">City</option>
-                      <option value="town">Town</option>
-                      <option value="village">Village</option>
-                      <option value="castle">Castle</option>
-                      <option value="fortress">Fortress</option>
-                      <option value="ruins">Ruins</option>
-                      <option value="camp">Camp</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" placeholder="Description..."></textarea>
-                  </div>
-                  ${this.isAdmin || this.isDm ? html`
-                    <div class="form-group">
-                      <label class="checkbox-row">
-                        <input type="checkbox" name="hidden">
-                        Hidden from players
-                      </label>
-                    </div>
-                  ` : ''}
-                </div>
-                <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" @click=${this.closeModal}>Cancel</button>
-                  <button type="submit" class="btn btn-primary">Create</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        ` : ''}
-
-        ${this.modalType === 'feature' ? html`
-          <div class="modal-backdrop" @click=${this.closeModal}>
-            <div class="modal" @click=${(e: Event) => e.stopPropagation()}>
-              <div class="modal-header">
-                <span class="modal-title">Add Point of Interest</span>
-                <button class="close-btn" @click=${this.closeModal}>✕</button>
-              </div>
-              <form @submit=${this.saveFeature}>
-                <div class="modal-body">
-                  <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" name="name" required placeholder="Feature name...">
-                  </div>
-                  <div class="form-group">
-                    <label>Type</label>
-                    <select name="type">
-                      <option value="inn">Inn</option>
-                      <option value="tavern">Tavern</option>
-                      <option value="shop">Shop</option>
-                      <option value="temple">Temple</option>
-                      <option value="shrine">Shrine</option>
-                      <option value="blacksmith">Blacksmith</option>
-                      <option value="guild">Guild</option>
-                      <option value="cave">Cave</option>
-                      <option value="ruins">Ruins</option>
-                      <option value="monument">Monument</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" placeholder="Description..."></textarea>
-                  </div>
-                  ${this.isAdmin || this.isDm ? html`
-                    <div class="form-group">
-                      <label class="checkbox-row">
-                        <input type="checkbox" name="hidden">
-                        Hidden from players
-                      </label>
-                    </div>
-                  ` : ''}
-                </div>
-                <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" @click=${this.closeModal}>Cancel</button>
-                  <button type="submit" class="btn btn-primary">Create</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        ` : ''}
-
-        ${this.modalType === 'note' ? html`
-          <div class="modal-backdrop" @click=${this.closeModal}>
-            <div class="modal" @click=${(e: Event) => e.stopPropagation()}>
-              <div class="modal-header">
-                <span class="modal-title">Add Note</span>
-                <button class="close-btn" @click=${this.closeModal}>✕</button>
-              </div>
-              <form @submit=${this.saveNote}>
-                <div class="modal-body">
-                  <div class="form-group">
-                    <label>Note</label>
-                    <textarea name="content" required placeholder="Write your note..."></textarea>
-                  </div>
-                  <div class="form-group">
-                    <label class="checkbox-row">
-                      <input type="checkbox" name="isPrivate">
-                      Private (only visible to you and DMs)
-                    </label>
-                  </div>
-                </div>
-                <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" @click=${this.closeModal}>Cancel</button>
-                  <button type="submit" class="btn btn-primary">Save Note</button>
-                </div>
-              </form>
             </div>
           </div>
         ` : ''}

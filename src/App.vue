@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import AppLayout from './components/layout/AppLayout.vue'
 import MentionTooltip from './components/common/MentionTooltip.vue'
 import { showTooltip, hideTooltip } from './composables/useEntityTooltip'
 import type { MentionKind } from './lib/mentionRenderer'
 
+const route = useRoute()
 const auth = useAuthStore()
+
+// Check if current route wants no layout (fullscreen views)
+const noLayout = computed(() => route.meta.noLayout === true)
 
 // Global hover handler for v-html rendered mentions (outside MentionText)
 function onGlobalMouseOver(e: MouseEvent) {
@@ -45,6 +50,10 @@ onUnmounted(() => {
       <div class="text-zinc-600 text-xs uppercase tracking-widest font-semibold" style="font-family: Manrope, sans-serif">Loading</div>
     </div>
   </div>
+  <!-- No layout for fullscreen views -->
+  <template v-else-if="noLayout">
+    <RouterView />
+  </template>
   <AppLayout v-else>
     <RouterView />
   </AppLayout>
