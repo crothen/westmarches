@@ -1,11 +1,33 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 // @ts-ignore - virtual module from vite-plugin-pwa
 import { useRegisterSW } from 'virtual:pwa-register/vue'
+
+const JUST_UPDATED_KEY = 'pwa-just-updated'
+const COOLDOWN_MS = 10000 // 10 seconds cooldown after update
 
 const showPrompt = ref(false)
 const isUpdating = ref(false)
 const dismissed = ref(false)
+const inCooldown = ref(false)
+
+// Check if we just updated (within cooldown period)
+onMounted(() => {
+  const justUpdatedAt = sessionStorage.getItem(JUST_UPDATED_KEY)
+  if (justUpdatedAt) {
+    const elapsed = Date.now() - parseInt(justUpdatedAt, 10)
+    if (elapsed < COOLDOWN_MS) {
+      inCooldown.value = true
+      // Clear cooldown after remaining time
+      setTimeout(() => {
+        inCooldown.value = false
+        sessionStorage.removeItem(JUST_UPDATED_KEY)
+      }, COOLDOWN_MS - elapsed)
+    } else {
+      sessionStorage.removeItem(JUST_UPDATED_KEY)
+    }
+  }
+})
 
 const {
   needRefresh,
@@ -24,9 +46,9 @@ const {
   }
 })
 
-// Show prompt when update is available (unless dismissed)
-watch(needRefresh, (val) => {
-  if (val && !dismissed.value) {
+// Show prompt when update is available (unless dismissed or in cooldown)
+watch([needRefresh, inCooldown], ([needsRefresh, cooling]) => {
+  if (needsRefresh && !dismissed.value && !cooling) {
     showPrompt.value = true
   }
 }, { immediate: true })
@@ -34,6 +56,9 @@ watch(needRefresh, (val) => {
 async function handleUpdate() {
   if (isUpdating.value) return
   isUpdating.value = true
+  
+  // Mark that we're updating to prevent immediate re-trigger
+  sessionStorage.setItem(JUST_UPDATED_KEY, Date.now().toString())
   
   try {
     await updateServiceWorker(true)
