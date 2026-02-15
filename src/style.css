@@ -211,3 +211,114 @@ input[type="date"].input::-webkit-calendar-picker-indicator:hover {
 
 /* Accent text */
 .text-accent { color: var(--accent); }
+
+/* ============================================
+   PWA App-Like Enhancements
+   ============================================ */
+
+/* Disable text selection on UI elements in PWA mode */
+body.pwa-mode nav,
+body.pwa-mode header,
+body.pwa-mode button,
+body.pwa-mode .pwa-bottom-nav,
+body.pwa-mode .card h1,
+body.pwa-mode .card h2,
+body.pwa-mode .card h3,
+body.pwa-mode [role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Disable context menu on long press in PWA mode */
+body.pwa-mode {
+  -webkit-touch-callout: none;
+}
+
+/* Disable pull-to-refresh on Chrome (we have our own) */
+body.pwa-mode {
+  overscroll-behavior-y: contain;
+}
+
+/* Smooth momentum scrolling */
+body.pwa-mode * {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tap highlight for interactive elements */
+body.pwa-mode button,
+body.pwa-mode a,
+body.pwa-mode [role="button"],
+body.pwa-mode .card {
+  -webkit-tap-highlight-color: rgba(239, 35, 60, 0.15);
+}
+
+/* Active state feedback for buttons */
+body.pwa-mode button:active,
+body.pwa-mode .btn:active,
+body.pwa-mode .card:active {
+  transform: scale(0.98);
+  transition: transform 0.1s ease;
+}
+
+/* Faster transitions for snappier feel */
+body.pwa-mode .card {
+  transition: all 0.15s ease;
+}
+
+/* Remove hover effects on touch devices */
+@media (hover: none) {
+  body.pwa-mode .card:hover::after {
+    opacity: 0;
+  }
+  body.pwa-mode .card:hover {
+    border-color: var(--border);
+  }
+  body.pwa-mode .btn:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* Page transition animation */
+body.pwa-mode .pwa-page-enter-active,
+body.pwa-mode .pwa-page-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+body.pwa-mode .pwa-page-enter-from {
+  opacity: 0;
+  transform: translateX(10px);
+}
+body.pwa-mode .pwa-page-leave-to {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+/* Hide scrollbars in PWA mode for cleaner look */
+body.pwa-mode::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Larger touch targets */
+body.pwa-mode button,
+body.pwa-mode a.btn,
+body.pwa-mode [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Offline indicator */
+body.pwa-mode.offline::before {
+  content: '📡 Offline';
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ef233c;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 0 0 8px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 99999;
+}

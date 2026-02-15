@@ -22,8 +22,14 @@ const displayModeQuery = window.matchMedia('(display-mode: standalone)')
 displayModeQuery.addEventListener('change', checkPwaMode)
 
 // Listen for online/offline
-window.addEventListener('online', () => isOnline.value = true)
-window.addEventListener('offline', () => isOnline.value = false)
+window.addEventListener('online', () => {
+  isOnline.value = true
+  document.body.classList.remove('offline')
+})
+window.addEventListener('offline', () => {
+  isOnline.value = false
+  document.body.classList.add('offline')
+})
 
 // Capture install prompt
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -36,6 +42,25 @@ window.addEventListener('appinstalled', () => {
   canInstall.value = false
   deferredPrompt = null
 })
+
+// Haptic feedback (light tap)
+function haptic(style: 'light' | 'medium' | 'heavy' = 'light') {
+  if (!isPwa.value) return
+  if ('vibrate' in navigator) {
+    const patterns = { light: 10, medium: 20, heavy: 30 }
+    navigator.vibrate(patterns[style])
+  }
+}
+
+// Setup haptic feedback on button clicks in PWA mode
+if (isPwa.value) {
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement
+    if (target.closest('button, a, [role="button"]')) {
+      haptic('light')
+    }
+  }, { passive: true })
+}
 
 export function usePwa() {
   async function promptInstall() {
@@ -51,6 +76,7 @@ export function usePwa() {
     isPwa,
     isOnline,
     canInstall,
-    promptInstall
+    promptInstall,
+    haptic
   }
 }

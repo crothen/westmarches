@@ -74,16 +74,28 @@ onUnmounted(() => {
   
   <!-- No layout for fullscreen views -->
   <template v-else-if="noLayout">
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <transition :name="isPwa ? 'pwa-page' : ''" mode="out-in">
+        <component :is="Component" />
+      </transition>
+    </RouterView>
   </template>
   
   <!-- PWA map - no app layout, map handles itself -->
   <template v-else-if="isPwaMapRoute">
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <transition :name="isPwa ? 'pwa-page' : ''" mode="out-in">
+        <component :is="Component" />
+      </transition>
+    </RouterView>
   </template>
   
   <AppLayout v-else :class="{ 'pwa-layout': isPwa }">
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <transition :name="isPwa ? 'pwa-page' : ''" mode="out-in">
+        <component :is="Component" />
+      </transition>
+    </RouterView>
   </AppLayout>
   
   <!-- PWA Bottom Navigation -->
