@@ -9,6 +9,7 @@ import PwaBottomNav from './components/layout/PwaBottomNav.vue'
 import PwaSplash from './components/layout/PwaSplash.vue'
 import PwaPullRefresh from './components/layout/PwaPullRefresh.vue'
 import PwaHeader from './components/layout/PwaHeader.vue'
+import PwaUpdatePrompt from './components/layout/PwaUpdatePrompt.vue'
 import { showTooltip, hideTooltip } from './composables/useEntityTooltip'
 import type { MentionKind } from './lib/mentionRenderer'
 
@@ -102,6 +103,9 @@ onUnmounted(() => {
   </AppLayout>
   
   <MentionTooltip />
+  
+  <!-- PWA Update Prompt -->
+  <PwaUpdatePrompt v-if="isPwa" />
 </template>
 
 <style>
