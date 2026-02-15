@@ -1,229 +1,173 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick, type Component } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Home, Settings, Star } from 'lucide-vue-next'
+import { Home, Globe, Compass, Star, X } from 'lucide-vue-next'
 import GameIcon from '../icons/GameIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
-const navRef = ref<HTMLElement | null>(null)
-const centerIndex = ref(0)
-const isTouching = ref(false)
-const navigatingFromTouch = ref(false)
 
-interface NavItem {
+const activeSheet = ref<string | null>(null)
+
+interface SubItem {
   to: string
   label: string
-  icon: Component | string
+  icon: string
   isGameIcon?: boolean
 }
 
+interface NavItem {
+  id: string
+  label: string
+  icon: any
+  isGameIcon?: boolean
+  to?: string  // Direct navigation
+  items?: SubItem[]  // Submenu items
+}
+
 const navItems: NavItem[] = [
-  { to: '/', label: 'Home', icon: Home },
-  { to: '/map', label: 'Map', icon: 'compass', isGameIcon: true },
-  { to: '/sessions', label: 'Sessions', icon: 'scroll', isGameIcon: true },
-  { to: '/npcs', label: 'NPCs', icon: 'npc', isGameIcon: true },
-  { to: '/characters', label: 'Characters', icon: 'warrior', isGameIcon: true },
-  { to: '/locations', label: 'Locations', icon: 'castle', isGameIcon: true },
-  { to: '/missions', label: 'Missions', icon: 'swords', isGameIcon: true },
-  { to: '/saved', label: 'Saved', icon: Star },
-  { to: '/my-notes', label: 'Notes', icon: 'quill', isGameIcon: true },
-  { to: '/profile', label: 'Settings', icon: Settings },
+  { 
+    id: 'home',
+    label: 'Home', 
+    icon: Home,
+    to: '/'
+  },
+  { 
+    id: 'map',
+    label: 'Map', 
+    icon: Compass,
+    to: '/map'
+  },
+  { 
+    id: 'world',
+    label: 'World', 
+    icon: Globe,
+    items: [
+      { to: '/locations', label: 'Locations', icon: 'castle', isGameIcon: true },
+      { to: '/features', label: 'Points of Interest', icon: 'pin', isGameIcon: true },
+      { to: '/npcs', label: 'NPCs', icon: 'npc', isGameIcon: true },
+      { to: '/characters', label: 'Characters', icon: 'warrior', isGameIcon: true },
+      { to: '/organizations', label: 'Organizations', icon: 'guild', isGameIcon: true },
+    ]
+  },
+  { 
+    id: 'adventures',
+    label: 'Adventures', 
+    icon: 'swords',
+    isGameIcon: true,
+    items: [
+      { to: '/sessions', label: 'Sessions', icon: 'scroll', isGameIcon: true },
+      { to: '/missions', label: 'Missions', icon: 'swords', isGameIcon: true },
+      { to: '/schedule', label: 'Schedule', icon: 'calendar', isGameIcon: true },
+      { to: '/calendar', label: 'Calendar', icon: 'calendar', isGameIcon: true },
+    ]
+  },
+  { 
+    id: 'you',
+    label: 'You', 
+    icon: Star,
+    items: [
+      { to: '/saved', label: 'Saved', icon: 'star', isGameIcon: true },
+      { to: '/my-notes', label: 'My Notes', icon: 'quill', isGameIcon: true },
+      { to: '/inventory', label: 'Inventory', icon: 'chest', isGameIcon: true },
+      { to: '/profile', label: 'Settings', icon: 'gear', isGameIcon: true },
+    ]
+  },
 ]
 
-// Triple the items for infinite loop illusion
-const loopedItems = [...navItems, ...navItems, ...navItems]
-const baseOffset = navItems.length
-
-function getActiveIndex(): number {
+function isActive(item: NavItem): boolean {
   const path = route.path
-  const idx = navItems.findIndex(item => {
+  
+  // Direct nav item
+  if (item.to) {
     if (item.to === '/') return path === '/'
     return path.startsWith(item.to)
-  })
-  return idx >= 0 ? idx : 0
+  }
+  
+  // Check if any sub-item matches
+  if (item.items) {
+    return item.items.some(sub => path.startsWith(sub.to))
+  }
+  
+  return false
 }
 
-const activeIndex = ref(getActiveIndex())
-
-watch(() => route.path, () => {
-  const oldIndex = activeIndex.value
-  activeIndex.value = getActiveIndex()
-  const newIndex = activeIndex.value
-  
-  // Skip scroll animation if navigation came from touch (touch handler handles it)
-  if (navigatingFromTouch.value) {
-    navigatingFromTouch.value = false
-    return
-  }
-  
-  // Calculate shortest path considering the loop
-  const diff = newIndex - oldIndex
-  const itemCount = navItems.length
-  
-  // Determine target copy to minimize scroll distance
-  let targetIndex = newIndex + baseOffset
-  
-  // If wrapping from end to start (e.g., 9 → 0), scroll forward to next copy
-  if (diff < -(itemCount / 2)) {
-    targetIndex = newIndex + baseOffset + itemCount
-  }
-  // If wrapping from start to end (e.g., 0 → 9), scroll backward to previous copy
-  else if (diff > (itemCount / 2)) {
-    targetIndex = newIndex + baseOffset - itemCount
-  }
-  
-  scrollToIndex(targetIndex, true)
-  
-  // After animation, silently reset to center copy
-  setTimeout(() => {
-    scrollToIndex(newIndex + baseOffset, false)
-  }, 350)
-})
-
-function scrollToIndex(index: number, smooth = true) {
-  nextTick(() => {
-    if (!navRef.value) return
-    const items = navRef.value.children
-    const targetEl = items[index] as HTMLElement
-    if (!targetEl) return
-    
-    const navWidth = navRef.value.offsetWidth
-    const itemLeft = targetEl.offsetLeft
-    const itemWidth = targetEl.offsetWidth
-    const scrollPos = itemLeft - (navWidth / 2) + (itemWidth / 2)
-    
-    navRef.value.scrollTo({
-      left: scrollPos,
-      behavior: smooth ? 'smooth' : 'instant'
-    })
-  })
-}
-
-function updateCenterItem() {
-  if (!navRef.value) return
-  
-  const navRect = navRef.value.getBoundingClientRect()
-  const centerX = navRect.left + navRect.width / 2
-  
-  let closestIndex = 0
-  let closestDist = Infinity
-  
-  const items = navRef.value.children
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i] as HTMLElement
-    const rect = item.getBoundingClientRect()
-    const itemCenterX = rect.left + rect.width / 2
-    const dist = Math.abs(itemCenterX - centerX)
-    
-    // Calculate scale based on distance from center
-    const maxDist = 100
-    const scale = Math.max(0.75, 1 - (dist / maxDist) * 0.25)
-    item.style.transform = `scale(${scale})`
-    
-    if (dist < closestDist) {
-      closestDist = dist
-      closestIndex = i
-    }
-  }
-  
-  centerIndex.value = closestIndex
-}
-
-function handleTouchEnd() {
-  if (!navRef.value || !isTouching.value) return
-  isTouching.value = false
-  
-  updateCenterItem()
-  
-  const currentCenter = centerIndex.value
-  const realIndex = currentCenter % navItems.length
-  const item = navItems[realIndex]
-  
-  // Snap to the current center item (smooth scroll)
-  scrollToIndex(currentCenter, true)
-  
-  // Navigate if needed
-  if (item && realIndex !== activeIndex.value) {
-    navigatingFromTouch.value = true
-    activeIndex.value = realIndex
+function handleNavClick(item: NavItem) {
+  if (item.to) {
+    // Direct navigation
     router.push(item.to)
+    activeSheet.value = null
+  } else if (item.items) {
+    // Toggle submenu
+    activeSheet.value = activeSheet.value === item.id ? null : item.id
   }
-  
-  // After snap animation completes, silently reset to center copy if we're in an edge copy
-  setTimeout(() => {
-    const needsReset = currentCenter < navItems.length || currentCenter >= navItems.length * 2
-    if (needsReset) {
-      scrollToIndex(realIndex + baseOffset, false)
-      centerIndex.value = realIndex + baseOffset
-    }
-  }, 350)
 }
 
-function onTouchStart() {
-  isTouching.value = true
+function navigateToSub(to: string) {
+  router.push(to)
+  activeSheet.value = null
 }
 
-function onScroll() {
-  updateCenterItem()
+function closeSheet() {
+  activeSheet.value = null
 }
 
-function navigate(index: number) {
-  const realIndex = index % navItems.length
-  const item = navItems[realIndex]
-  if (!item) return
-  activeIndex.value = realIndex
-  router.push(item.to)
-}
-
-function isActive(index: number): boolean {
-  return (index % navItems.length) === activeIndex.value
-}
-
-function isCenter(index: number): boolean {
-  return index === centerIndex.value
-}
-
-onMounted(() => {
-  scrollToIndex(activeIndex.value + baseOffset, false)
-  
-  const el = navRef.value
-  if (el) {
-    el.addEventListener('scroll', onScroll, { passive: true })
-    el.addEventListener('touchstart', onTouchStart, { passive: true })
-    el.addEventListener('touchend', handleTouchEnd, { passive: true })
-  }
-  
-  setTimeout(updateCenterItem, 100)
-})
-
-onUnmounted(() => {
-  const el = navRef.value
-  if (el) {
-    el.removeEventListener('scroll', onScroll)
-    el.removeEventListener('touchstart', onTouchStart)
-    el.removeEventListener('touchend', handleTouchEnd)
-  }
+const currentSheet = computed(() => {
+  if (!activeSheet.value) return null
+  return navItems.find(item => item.id === activeSheet.value)
 })
 </script>
 
 <template>
   <nav class="pwa-bottom-nav">
-    <div ref="navRef" class="pwa-nav-scroll">
+    <div class="pwa-nav-items">
       <button
-        v-for="(item, index) in loopedItems"
-        :key="`${item.to}-${index}`"
-        @click="navigate(index)"
-        :class="['pwa-nav-item', { active: isActive(index), center: isCenter(index) }]"
+        v-for="item in navItems"
+        :key="item.id"
+        @click="handleNavClick(item)"
+        :class="['pwa-nav-item', { 
+          active: isActive(item),
+          open: activeSheet === item.id 
+        }]"
       >
         <span class="pwa-nav-icon">
-          <GameIcon v-if="item.isGameIcon" :name="item.icon as string" :size="26" />
-          <component v-else :is="item.icon" :size="26" :stroke-width="1.5" />
+          <GameIcon v-if="item.isGameIcon" :name="item.icon as string" :size="24" />
+          <component v-else :is="item.icon" :size="24" :stroke-width="1.5" />
         </span>
         <span class="pwa-nav-label">{{ item.label }}</span>
       </button>
     </div>
   </nav>
+
+  <!-- Submenu Sheet -->
+  <Teleport to="body">
+    <Transition name="sheet">
+      <div v-if="activeSheet" class="pwa-sheet-overlay" @click.self="closeSheet">
+        <div class="pwa-sheet">
+          <div class="pwa-sheet-handle" @click="closeSheet"></div>
+          <div class="pwa-sheet-header">
+            <h3>{{ currentSheet?.label }}</h3>
+            <button @click="closeSheet" class="pwa-sheet-close">
+              <X :size="20" />
+            </button>
+          </div>
+          <div class="pwa-sheet-items">
+            <button
+              v-for="sub in currentSheet?.items"
+              :key="sub.to"
+              @click="navigateToSub(sub.to)"
+              :class="['pwa-sheet-item', { active: route.path.startsWith(sub.to) }]"
+            >
+              <span class="pwa-sheet-icon">
+                <GameIcon v-if="sub.isGameIcon" :name="sub.icon" :size="22" />
+              </span>
+              <span class="pwa-sheet-label">{{ sub.label }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -232,84 +176,196 @@ onUnmounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  height: calc(88px + env(safe-area-inset-bottom, 0px));
+  height: calc(72px + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: linear-gradient(to top, rgba(0, 0, 0, 1), rgba(10, 10, 10, 0.98));
+  background: rgba(10, 10, 10, 0.98);
   backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.pwa-nav-scroll {
+.pwa-nav-items {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 calc(50vw - 28px);
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  height: 88px;
-  scroll-behavior: auto;
-}
-
-.pwa-nav-scroll::-webkit-scrollbar {
-  display: none;
+  justify-content: space-around;
+  height: 72px;
+  padding: 0 8px;
 }
 
 .pwa-nav-item {
-  flex-shrink: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 56px;
+  gap: 4px;
   height: 64px;
-  border-radius: 12px;
+  max-width: 80px;
+  border-radius: 16px;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  transition: color 0.15s;
-  transform-origin: center;
-  position: relative;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.pwa-nav-item.center {
-  color: rgba(255, 255, 255, 0.9);
+.pwa-nav-item:active {
+  transform: scale(0.95);
 }
 
-.pwa-nav-item.center .pwa-nav-label {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* Active item highlight with glow */
 .pwa-nav-item.active {
   color: #ef233c;
 }
 
 .pwa-nav-item.active .pwa-nav-icon {
-  filter: drop-shadow(0 0 8px rgba(239, 35, 60, 0.6)) drop-shadow(0 0 16px rgba(239, 35, 60, 0.3));
+  filter: drop-shadow(0 0 8px rgba(239, 35, 60, 0.5));
+}
+
+.pwa-nav-item.open {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .pwa-nav-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s;
+  height: 28px;
 }
 
 .pwa-nav-label {
   font-size: 11px;
   font-weight: 600;
-  margin-top: 6px;
-  opacity: 0;
-  transform: translateY(-4px);
-  transition: all 0.15s ease;
-  white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 
+/* Sheet styles */
+.pwa-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+}
+
+.pwa-sheet {
+  width: 100%;
+  background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px 24px 0 0;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+
+.pwa-sheet-handle {
+  width: 36px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  margin: 12px auto;
+  cursor: pointer;
+}
+
+.pwa-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px 16px;
+}
+
+.pwa-sheet-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+}
+
+.pwa-sheet-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.pwa-sheet-items {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+.pwa-sheet-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pwa-sheet-item:active {
+  transform: scale(0.97);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.pwa-sheet-item.active {
+  background: rgba(239, 35, 60, 0.15);
+  border-color: rgba(239, 35, 60, 0.3);
+  color: #ef233c;
+}
+
+.pwa-sheet-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+
+.pwa-sheet-item.active .pwa-sheet-icon {
+  background: rgba(239, 35, 60, 0.2);
+}
+
+.pwa-sheet-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Sheet animation */
+.sheet-enter-active,
+.sheet-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.sheet-enter-active .pwa-sheet,
+.sheet-leave-active .pwa-sheet {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sheet-enter-from,
+.sheet-leave-to {
+  opacity: 0;
+}
+
+.sheet-enter-from .pwa-sheet,
+.sheet-leave-to .pwa-sheet {
+  transform: translateY(100%);
+}
 </style>

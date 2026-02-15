@@ -120,7 +120,7 @@ body.pwa-mode {
 /* PWA main content area */
 .pwa-main {
   padding-top: calc(56px + env(safe-area-inset-top, 0px));
-  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   min-height: 100vh;
   padding-left: 16px;
   padding-right: 16px;
